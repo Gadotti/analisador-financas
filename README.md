@@ -7,13 +7,26 @@ diária de mercado gerada por IA com busca web.
 Tudo roda na sua máquina: os dados ficam em arquivos JSON locais e o servidor da interface
 escuta apenas em `127.0.0.1`.
 
+O projeto tem duas metades, cada uma na linguagem que lhe cai melhor:
+
+| Parte | Linguagem | Papel |
+|---|---|---|
+| **Análise** (`analise/` + `scripts/analisar.py`) | Python | Cotações, marcação a mercado, alertas, IA e Telegram |
+| **Aplicação** (`src/` + `web/`) | Node.js | Cadastro da carteira, interface web e API local |
+
+A interface **dispara o script Python** quando você aperta o botão; o mesmo script roda
+sozinho pelo Agendador de Tarefas ou pelo terminal.
+
 ---
 
 ## Instalação
 
+Requer **Python 3.10+** e **Node.js 20.11+**.
+
 ```powershell
-cd e:\Eduardo\Sistemas\fii-analyzer
+cd e:\Eduardo\Sistemas\analisador-financas
 pip install -r requirements.txt
+npm install
 copy .env.example .env
 ```
 
@@ -27,31 +40,25 @@ análise de mercado por IA fica indisponível.
 | `ANTHROPIC_MODEL` / `ANTHROPIC_EFFORT` | Modelo e profundidade da análise (padrão: `claude-opus-5` / `medium`) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Envio do relatório ao Telegram |
 | `BRAPI_TOKEN` | Fonte alternativa de cotações |
+| `PYTHON_BIN` | Interpretador Python que a interface deve chamar (útil com venv) |
 
 ---
 
 ## Como usar
 
-### Interface web
+### Análise por linha de comando
 
 ```powershell
-python server.py
+python scripts/analisar.py                  # análise completa no terminal
+python scripts/analisar.py --sem-ia         # somente cálculos, sem chamar a API
+python scripts/analisar.py --telegram       # envia o relatório ao Telegram
+python scripts/analisar.py --json           # saída bruta em JSON
+python scripts/analisar.py --enviar-ultima  # reenvia ao Telegram a última análise
+python scripts/analisar.py --testar-telegram
+python scripts/analisar.py --help
 ```
 
-Ou dê duplo clique em **`iniciar_interface.bat`**. O navegador abre em `http://127.0.0.1:8765`.
-
-Pela interface você cadastra posições, edita e exclui ativos, dispara a análise e vê o
-resultado na tela.
-
-### Linha de comando
-
-```powershell
-python run_analysis.py               # análise completa no terminal
-python run_analysis.py --sem-ia      # somente cálculos, sem chamar a API
-python run_analysis.py --telegram    # envia o relatório ao Telegram
-python run_analysis.py --json        # saída bruta em JSON
-python run_analysis.py --testar-telegram
-```
+Ou dê duplo clique em **`analisar.bat`**.
 
 ### Agendamento diário
 
@@ -65,6 +72,34 @@ Registra a tarefa no Agendador de Tarefas do Windows, no contexto do seu usuári
 (não exige administrador). A saída de cada execução é gravada em `analise.log`.
 
 Para testar imediatamente: `Start-ScheduledTask -TaskName PortfolioAnalyzer`
+
+### Interface web
+
+```powershell
+npm start
+```
+
+Ou dê duplo clique em **`iniciar_interface.bat`**. O navegador abre em `http://127.0.0.1:8765`.
+
+Pela interface você cadastra posições, edita e exclui ativos, dispara a análise (que executa
+o script Python por baixo) e vê o resultado na tela.
+
+```powershell
+npm start -- --porta 9000        # outra porta
+npm start -- --sem-navegador     # não abre o navegador
+```
+
+### Testes
+
+```powershell
+npm test           # Jest — aplicação Node (servidor, carteira, ponte com o script)
+npm run coverage   # Jest com relatório de cobertura
+npm run test:python
+python -m pytest   # pytest — motor de análise (cálculos, IA, Telegram, CLI)
+```
+
+Nenhuma das duas suítes faz chamada de rede: cotações, Banco Central, Telegram e a API da
+Anthropic são todos substituídos por dublês.
 
 ---
 
@@ -115,28 +150,64 @@ Cotações ficam em cache por 15 minutos e indicadores por 12 horas, em `data/ca
 ## Estrutura
 
 ```
-core/
-  portfolio.py      persistência e validação da carteira (JSON)
-  market.py         cotações e indicadores macro, com cache
-  fixed_income.py   marcação a mercado de CDBs, dias úteis e IR
-  analysis.py       consolidação da carteira e alertas (sem IA)
-  ai_insights.py    análise qualitativa via Claude + busca web
-  report.py         formatação para terminal e Telegram
-  notifier.py       envio ao Telegram
-  runner.py         orquestração e persistência do histórico
+analise/                 MOTOR DE ANÁLISE (Python)
+  portfolio.py           leitura da carteira
+  market.py              cotações e indicadores macro, com cache
+  fixed_income.py        marcação a mercado de CDBs, dias úteis e IR
+  analysis.py            consolidação da carteira e alertas (sem IA)
+  fundamentals.py        métricas agregadas a partir das fichas da IA
+  ai_insights.py         análise qualitativa via Claude + busca web
+  notifier.py            envio ao Telegram
+  report.py              formatação para terminal e Telegram
+  runner.py              orquestração e persistência
+scripts/analisar.py      script isolado: terminal, agendador e interface
+
+src/                     APLICAÇÃO WEB (Node.js)
+  config/paths.js        caminhos do projeto
+  core/portfolio.js      cadastro e validação das posições
+  core/storage.js        leitura da última análise e do histórico
+  server/app.js          servidor HTTP e rotas da API
+  server/analiseExterna.js  ponte que dispara o script Python
+  server/ambiente.js     checagem de IA e Telegram configurados
+  server/index.js        inicialização (porta, navegador, sinais)
+  util/                  datas e leitura do .env
+web/                     interface (HTML, CSS e JavaScript sem dependências)
+
 data/
-  portfolio.json    sua carteira
-  last_analysis.json  última análise executada
-  history/          uma análise por dia, para acompanhar a evolução
-web/                interface (HTML, CSS e JavaScript sem dependências)
-server.py           servidor local da interface + API
-run_analysis.py     análise por linha de comando (usada pelo agendador)
-agendar_tarefa.ps1  registra a tarefa no Agendador do Windows
-legado/             versão anterior, somente FIIs — pode ser apagada
+  portfolio.json         sua carteira            (escrita pelo Node)
+  last_analysis.json     última análise          (escrita pelo Python)
+  history/               uma análise por dia     (escrita pelo Python)
+  cache.json             cache de cotações       (escrita pelo Python)
+
+test/                    testes da aplicação Node (Jest)
+tests_analise/           testes do motor de análise (pytest)
+agendar_tarefa.ps1       registra a tarefa no Agendador do Windows
 ```
 
-O `server.py` usa apenas a biblioteca padrão do Python: não há Flask nem qualquer framework
-web para instalar.
+O servidor usa apenas os módulos internos do Node: não há Express nem qualquer framework
+web, e o Node não tem dependências de produção. Todas as bibliotecas externas do projeto
+(`requests`, `anthropic`, `python-dotenv`) são do lado Python.
+
+### Por que a análise fica isolada em um script
+
+`scripts/analisar.py` é o **único ponto do sistema que fala com a API da Anthropic e com o
+Telegram**. Ele roda de três formas, sempre com o mesmo resultado:
+
+1. Direto no terminal;
+2. Pelo Agendador de Tarefas do Windows;
+3. Como processo filho do servidor web, que lê o JSON do stdout.
+
+Assim a interface fica livre de credenciais e de chamadas caras, a análise agendada e a
+disparada pelo botão são exatamente a mesma coisa, e o script continua funcionando
+sozinho mesmo que a interface não esteja aberta.
+
+### Quem escreve o quê
+
+Para que não existam duas regras para o mesmo arquivo, cada metade tem sua responsabilidade:
+
+- **O Node escreve `portfolio.json`** (cadastro, validação, migração de formato) e apenas
+  lê os resultados.
+- **O Python lê `portfolio.json`** e escreve `last_analysis.json`, `history/` e `cache.json`.
 
 ---
 
@@ -151,10 +222,11 @@ O servidor expõe uma API própria, útil para integrar com outras ferramentas:
 | `PUT` | `/api/posicoes/{id}` | Atualiza uma posição |
 | `DELETE` | `/api/posicoes/{id}` | Remove uma posição |
 | `POST` | `/api/config` | Salva perfil e limites de alerta |
-| `POST` | `/api/analise?ia=1` | Executa a análise (`ia=0` pula a IA) |
+| `POST` | `/api/analise?ia=1` | Executa o script Python (`ia=0` pula a IA) |
 | `GET` | `/api/analise` | Última análise executada |
 | `GET` | `/api/historico?limite=60` | Série histórica do valor da carteira |
 | `POST` | `/api/telegram` | Envia a última análise ao Telegram |
+| `POST` | `/api/telegram/testar` | Testa a conexão com o bot |
 | `GET` | `/api/status` | Disponibilidade de IA e Telegram |
 
 ---

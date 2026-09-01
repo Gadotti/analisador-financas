@@ -1,8 +1,20 @@
+# Dependências
+node_modules/
+
+# Credenciais
 .env
+
+# Dados locais da carteira
 data/portfolio.json
 data/cache.json
 data/last_analysis.json
 data/history/
+
+# Python
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Cobertura e logs
+coverage/
 *.log

@@ -17,7 +17,7 @@ from datetime import date, datetime
 
 import requests
 
-from .paths import CACHE_FILE
+from .paths import cache_file, garantir_diretorios
 
 TIMEOUT = 15
 UA = {"User-Agent": "Mozilla/5.0 (compatible; PortfolioAnalyzer/1.0)"}
@@ -37,7 +37,7 @@ SGS_IPCA_MES = 433     # IPCA - variação mensal (%)
 
 def _cache_ler() -> dict:
     try:
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+        with open(cache_file(), "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
@@ -45,7 +45,8 @@ def _cache_ler() -> dict:
 
 def _cache_gravar(cache: dict) -> None:
     try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        garantir_diretorios()
+        with open(cache_file(), "w", encoding="utf-8") as f:
             json.dump(cache, f, ensure_ascii=False)
     except OSError:
         pass

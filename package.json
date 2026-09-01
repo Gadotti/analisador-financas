@@ -1,0 +1,22 @@
+{
+  "name": "analisador-financas",
+  "version": "2.0.0",
+  "description": "Acompanhamento e analise de carteira de investimentos (FIIs, acoes e CDBs) com cotacoes reais da B3, marcacao a mercado de renda fixa, alertas e leitura de mercado por IA.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.11"
+  },
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "analisar": "python scripts/analisar.py",
+    "test": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "coverage": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:python": "python -m pytest -q"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
+  }
+}

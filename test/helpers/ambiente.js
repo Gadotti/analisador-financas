@@ -1,0 +1,97 @@
+/** Utilitários compartilhados pelos testes da aplicação Node. */
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+/**
+ * Aponta PORTFOLIO_DATA_DIR para um diretório temporário exclusivo do teste
+ * e devolve uma função que restaura o ambiente e apaga os arquivos.
+ */
+export function dataDirTemporario() {
+  const anterior = process.env.PORTFOLIO_DATA_DIR;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "analisador-"));
+  fs.mkdirSync(path.join(dir, "history"), { recursive: true });
+  process.env.PORTFOLIO_DATA_DIR = dir;
+
+  return {
+    dir,
+    limpar() {
+      if (anterior === undefined) delete process.env.PORTFOLIO_DATA_DIR;
+      else process.env.PORTFOLIO_DATA_DIR = anterior;
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/** Define variáveis de ambiente e devolve um restaurador. */
+export function comEnv(valores) {
+  const anteriores = {};
+  for (const [chave, valor] of Object.entries(valores)) {
+    anteriores[chave] = process.env[chave];
+    if (valor === undefined) delete process.env[chave];
+    else process.env[chave] = valor;
+  }
+  return () => {
+    for (const [chave, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  };
+}
+
+/** Snapshot no formato que o script Python grava, para alimentar os testes. */
+export function snapshotExemplo(sobrescreve = {}) {
+  return {
+    gerado_em: "2026-09-01T10:30:00",
+    data: "2026-09-01",
+    perfil: "Renda mensal com risco moderado.",
+    totais: {
+      valor_investido: 20000,
+      valor_atual: 22000,
+      resultado: 2000,
+      resultado_pct: 10,
+      resultado_dia: 35.5,
+      posicoes: 2,
+    },
+    classes: {
+      fii: {
+        rotulo: "FIIs",
+        posicoes: 1,
+        valor_investido: 10000,
+        valor_atual: 12000,
+        resultado: 2000,
+        resultado_pct: 20,
+        peso_pct: 54.55,
+      },
+    },
+    posicoes: [],
+    alertas: [],
+    saude_carteira: "boa",
+    destaques: { melhores: [], piores: [] },
+    macro: {
+      cdi_anual_pct: { valor: 14.9 },
+      selic_meta_pct: { valor: 15 },
+      ipca_12m_pct: { valor: 4.2 },
+      indices: {},
+    },
+    ...sobrescreve,
+  };
+}
+
+/** Grava um registro de análise como o script Python faria. */
+export function gravarAnalise(dir, snapshot) {
+  const registro = {
+    gerado_em: snapshot.gerado_em,
+    snapshot,
+    ia: null,
+    fundamentos: null,
+    ia_erro: null,
+    ia_solicitada: false,
+  };
+  const conteudo = JSON.stringify(registro, null, 2);
+  fs.mkdirSync(path.join(dir, "history"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "last_analysis.json"), conteudo, "utf8");
+  fs.writeFileSync(path.join(dir, "history", `${snapshot.data}.json`), conteudo, "utf8");
+  return registro;
+}

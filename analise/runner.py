@@ -1,7 +1,8 @@
 """Orquestra a análise completa e persiste o resultado.
 
-Usado tanto pelo CLI (`run_analysis.py`, agendador de tarefas) quanto pelo
-servidor da interface web — garantindo que ambos produzam o mesmo resultado.
+Chamado pelo script isolado `scripts/analisar.py`, seja no terminal, pelo
+agendador de tarefas ou disparado pela interface web — de modo que as três
+origens produzam exatamente o mesmo resultado.
 """
 
 from __future__ import annotations
@@ -10,10 +11,16 @@ import json
 from datetime import datetime
 
 from . import ai_insights, analysis, fundamentals, portfolio
-from .paths import HISTORY_DIR, LAST_ANALYSIS_FILE
+from .paths import garantir_diretorios, history_dir, last_analysis_file
 
 
-def executar(*, usar_ia: bool = True, usar_cache: bool = True, salvar: bool = True) -> dict:
+def executar(
+    *,
+    usar_ia: bool = True,
+    usar_cache: bool = True,
+    salvar: bool = True,
+    analisar_com_ia=None,
+) -> dict:
     """Roda a análise da carteira.
 
     A parte determinística sempre roda. A análise por IA é opcional e, se
@@ -35,7 +42,8 @@ def executar(*, usar_ia: bool = True, usar_cache: bool = True, salvar: bool = Tr
             resultado["ia_erro"] = "Carteira vazia — nada a analisar."
         else:
             try:
-                resultado["ia"] = ai_insights.analisar(snapshot, carteira["config"])
+                analisador = analisar_com_ia or ai_insights.analisar
+                resultado["ia"] = analisador(snapshot, carteira["config"])
             except ai_insights.IAIndisponivel as exc:
                 resultado["ia_erro"] = str(exc)
             except Exception as exc:  # falha inesperada não derruba o relatório
@@ -45,27 +53,30 @@ def executar(*, usar_ia: bool = True, usar_cache: bool = True, salvar: bool = Tr
     resultado["fundamentos"] = fundamentals.consolidar(snapshot, resultado["ia"])
 
     if salvar:
-        _persistir(resultado)
+        persistir(resultado)
 
     return resultado
 
 
-def _persistir(resultado: dict) -> None:
+def persistir(resultado: dict) -> dict:
     registro = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
         **resultado,
     }
-    with open(LAST_ANALYSIS_FILE, "w", encoding="utf-8") as f:
+    garantir_diretorios()
+    with open(last_analysis_file(), "w", encoding="utf-8") as f:
         json.dump(registro, f, ensure_ascii=False, indent=2)
 
-    arquivo = HISTORY_DIR / f"{resultado['snapshot']['data']}.json"
+    arquivo = history_dir() / f"{resultado['snapshot']['data']}.json"
     with open(arquivo, "w", encoding="utf-8") as f:
         json.dump(registro, f, ensure_ascii=False, indent=2)
+
+    return registro
 
 
 def ultima_analise() -> dict | None:
     try:
-        with open(LAST_ANALYSIS_FILE, "r", encoding="utf-8") as f:
+        with open(last_analysis_file(), "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return None
@@ -73,7 +84,7 @@ def ultima_analise() -> dict | None:
 
 def historico(limite: int = 60) -> list[dict]:
     """Série histórica do valor da carteira, da data mais antiga para a mais recente."""
-    arquivos = sorted(HISTORY_DIR.glob("*.json"))[-limite:]
+    arquivos = sorted(history_dir().glob("*.json"))[-limite:]
     serie = []
     for arquivo in arquivos:
         try:

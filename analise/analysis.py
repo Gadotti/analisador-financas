@@ -1,7 +1,7 @@
 """Consolidação da carteira: posições marcadas a mercado, alocação e alertas.
 
 Esta camada é 100% determinística (sem IA) e não exige chave de API.
-A análise qualitativa por IA vive em `core.ai_insights` e é opcional.
+A análise qualitativa por IA vive em `analise.ai_insights` e é opcional.
 """
 
 from __future__ import annotations

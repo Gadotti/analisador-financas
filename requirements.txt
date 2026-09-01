@@ -6,3 +6,6 @@ anthropic>=0.116.0
 
 # Opcional — carregar o arquivo .env automaticamente
 python-dotenv>=1.0.0
+
+# Desenvolvimento — testes do motor de análise
+pytest>=8.0.0

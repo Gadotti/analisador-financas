@@ -1,11 +1,11 @@
 """Análise qualitativa e fundamentalista da carteira via Claude + busca web.
 
 Camada OPCIONAL: exige `anthropic` instalado e ANTHROPIC_API_KEY configurada.
-A análise determinística (core.analysis) funciona sem nada disso.
+A análise determinística (analise.analysis) funciona sem nada disso.
 
 A IA levanta os fundamentos de cada ativo (segmento, P/VP, DY, patrimônio,
 gestora) e escreve a leitura qualitativa. Os números agregados da carteira
-— médias ponderadas e concentrações — são calculados em core.fundamentals
+— médias ponderadas e concentrações — são calculados em analise.fundamentals
 a partir dessas fichas, e não estimados pelo modelo.
 """
 
@@ -17,9 +17,18 @@ from datetime import datetime
 
 from . import portfolio
 
-MODELO = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
-EFFORT = os.getenv("ANTHROPIC_EFFORT", "medium")
+MODELO_PADRAO = "claude-opus-5"
+EFFORT_PADRAO = "medium"
 MAX_TOKENS = 16000
+
+
+def modelo() -> str:
+    """Modelo configurado. Lido a cada chamada para respeitar o .env carregado."""
+    return os.getenv("ANTHROPIC_MODEL") or MODELO_PADRAO
+
+
+def effort() -> str:
+    return os.getenv("ANTHROPIC_EFFORT") or EFFORT_PADRAO
 
 # O parâmetro `fallbacks` (retomar automaticamente em outro modelo quando os
 # classificadores de segurança recusam o pedido) só existe nestas famílias.
@@ -27,8 +36,8 @@ MAX_TOKENS = 16000
 FAMILIAS_COM_FALLBACK = ("claude-opus-5", "claude-fable-5", "claude-mythos-5")
 
 
-def _suporta_fallback(modelo: str) -> bool:
-    return modelo.startswith(FAMILIAS_COM_FALLBACK)
+def suporta_fallback(nome_modelo: str) -> bool:
+    return nome_modelo.startswith(FAMILIAS_COM_FALLBACK)
 
 
 SYSTEM_PROMPT = """Você é um analista de investimentos brasileiro, especialista em fundos
@@ -312,7 +321,7 @@ def montar_prompt(snapshot: dict, config: dict) -> str:
 # Chamada à API
 # ─────────────────────────────────────────────
 
-def _extrair_json(blocos) -> dict:
+def extrair_json(blocos) -> dict:
     """Pega o último bloco de texto da resposta e converte em dict."""
     textos = [b.text for b in blocos if b.type == "text" and b.text.strip()]
     if not textos:
@@ -328,22 +337,38 @@ def _extrair_json(blocos) -> dict:
         raise IAIndisponivel(f"A IA não retornou JSON válido: {exc}") from None
 
 
-def analisar(snapshot: dict, config: dict) -> dict:
-    """Executa a análise qualitativa. Levanta IAIndisponivel em caso de falha."""
+def _cliente_padrao():
+    """Cria o cliente oficial. Import tardio: o SDK só carrega quando é usado."""
+    import anthropic
+
+    return anthropic.Anthropic()
+
+
+def analisar(snapshot: dict, config: dict, *, criar_cliente=None) -> dict:
+    """Executa a análise qualitativa. Levanta IAIndisponivel em caso de falha.
+
+    `criar_cliente` permite injetar um cliente alternativo nos testes.
+    """
     ok, motivo = disponivel()
     if not ok:
         raise IAIndisponivel(motivo)
 
-    import anthropic
+    try:
+        client = (criar_cliente or _cliente_padrao)()
+    except ImportError as exc:
+        raise IAIndisponivel(
+            f"Pacote 'anthropic' nao instalado (pip install -r requirements.txt): {exc}"
+        ) from None
 
-    client = anthropic.Anthropic()
+    nome_modelo = modelo()
+    nivel_effort = effort()
 
     parametros = {
-        "model": MODELO,
+        "model": nome_modelo,
         "max_tokens": MAX_TOKENS,
         "system": SYSTEM_PROMPT,
         "output_config": {
-            "effort": EFFORT,
+            "effort": nivel_effort,
             "format": {"type": "json_schema", "schema": SCHEMA},
         },
         "tools": [{"type": "web_search_20260209", "name": "web_search"}],
@@ -351,7 +376,7 @@ def analisar(snapshot: dict, config: dict) -> dict:
     }
 
     try:
-        if _suporta_fallback(MODELO):
+        if suporta_fallback(nome_modelo):
             # Se os classificadores recusarem, a própria API refaz o pedido
             # no modelo de retaguarda recomendado, na mesma chamada.
             resposta = client.beta.messages.create(
@@ -361,25 +386,29 @@ def analisar(snapshot: dict, config: dict) -> dict:
             )
         else:
             resposta = client.messages.create(**parametros)
-    except anthropic.APIStatusError as exc:
-        raise IAIndisponivel(f"Erro da API Anthropic ({exc.status_code}): {exc.message}") from None
-    except anthropic.APIConnectionError:
-        raise IAIndisponivel("Falha de conexão com a API Anthropic.") from None
+    except Exception as exc:
+        status = getattr(exc, "status_code", None)
+        if status is not None:
+            mensagem = getattr(exc, "message", None) or str(exc)
+            raise IAIndisponivel(f"Erro da API Anthropic ({status}): {mensagem}") from None
+        raise IAIndisponivel(f"Falha de conexão com a API Anthropic: {exc}") from None
 
     if resposta.stop_reason == "refusal":
-        raise IAIndisponivel("A IA recusou responder a esta solicitação.")
+        categoria = getattr(getattr(resposta, "stop_details", None), "category", None)
+        sufixo = f" ({categoria})" if categoria else ""
+        raise IAIndisponivel(f"A IA recusou responder a esta solicitação{sufixo}.")
     if resposta.stop_reason == "max_tokens":
         raise IAIndisponivel(
             "A resposta da IA foi truncada por limite de tokens. "
-            "Reduza o número de posições ou aumente MAX_TOKENS em core/ai_insights.py."
+            "Reduza o número de posições ou aumente MAX_TOKENS em analise/ai_insights.py."
         )
 
-    dados = _extrair_json(resposta.content)
+    dados = extrair_json(resposta.content)
     dados["_meta"] = {
         "modelo": resposta.model,
-        "effort": EFFORT,
-        "tokens_entrada": resposta.usage.input_tokens,
-        "tokens_saida": resposta.usage.output_tokens,
+        "effort": nivel_effort,
+        "tokens_entrada": getattr(resposta.usage, "input_tokens", None),
+        "tokens_saida": getattr(resposta.usage, "output_tokens", None),
         "buscas_web": getattr(
             getattr(resposta.usage, "server_tool_use", None), "web_search_requests", None
         ),
