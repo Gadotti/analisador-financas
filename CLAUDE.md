@@ -35,6 +35,25 @@ npm run coverage
 npm test -- test/server.test.js        # um arquivo só
 ```
 
+## Code Standards
+
+### Style
+
+- Functions: 4–20 lines. Files: under 500 lines. Split by responsibility.
+- Names: specific and unique. Avoid `data`, `handler`, `Manager`. Prefer names that return <5 grep hits.
+- Early returns over nested ifs.
+- Exception messages must include the offending value and expected shape.
+- No code duplication. Extract shared logic into a function/module.
+- Se baseie em boas práticas do Clean Code e do SOLID
+
+### Test-after-change workflow
+
+After every code change, run `npm test` and inspect the output. If any test fails:
+1. Read the failure message and identify the root cause.
+2. Fix the code. If the code it's not the problem, fix the test itself if necessary (never disable or delete the failing test).
+3. Run `npm test` again.
+4. Repeat until all tests pass before considering the task done.
+
 ## Arquitetura
 
 ### A regra central: a análise é um script Python isolado
