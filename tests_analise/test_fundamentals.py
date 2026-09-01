@@ -6,15 +6,20 @@ from analise import fundamentals
 
 
 def snapshot_dois(snapshot_exemplo):
-    """Snapshot com dois FIIs de pesos diferentes: 75% e 25%."""
+    """Dois FIIs (30 mil e 10 mil) numa carteira de 50 mil.
+
+    Os 10 mil restantes não têm ficha — é o que exercita a base da carteira
+    nos recortes e a linha "não coberto".
+    """
     base = copy.deepcopy(snapshot_exemplo)
+    base["totais"]["valor_atual"] = 50000.0
     base["posicoes"] = [
         {
             "id": "a1",
             "tipo": "fii",
             "ticker": "MXRF11",
             "valor_atual": 30000.0,
-            "peso_pct": 75.0,
+            "peso_pct": 60.0,
             "resultado_pct": 10.0,
             "preco_atual": 12.0,
             "preco_medio": 10.0,
@@ -25,7 +30,7 @@ def snapshot_dois(snapshot_exemplo):
             "tipo": "fii",
             "ticker": "HGLG11",
             "valor_atual": 10000.0,
-            "peso_pct": 25.0,
+            "peso_pct": 20.0,
             "resultado_pct": -5.0,
             "preco_atual": 150.0,
             "preco_medio": 158.0,
@@ -116,8 +121,31 @@ def test_agrupamentos_ordenados_por_valor(snapshot_exemplo):
 
     assert [g["nome"] for g in f["por_classificacao"]] == ["Papel", "Tijolo"]
     assert f["por_segmento"][0]["nome"] == "Recebíveis"
-    assert f["por_segmento"][0]["peso_pct"] == 75.0
     assert f["por_gestora"][0]["ativos"] == ["MXRF11"]
+
+
+def test_peso_dos_recortes_e_sobre_a_carteira_inteira(snapshot_exemplo):
+    f = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())
+
+    # 30000 / 50000 — e não 30000 / 40000, que seria a base da renda variável.
+    assert f["por_segmento"][0]["peso_pct"] == 60.0
+    assert f["valor_total_carteira"] == 50000.0
+    assert sum(g["peso_pct"] for g in f["por_segmento"]) == 80.0
+
+
+def test_parte_da_carteira_sem_ficha_e_declarada(snapshot_exemplo):
+    f = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())
+
+    assert f["nao_coberto"] == {"valor": 10000.0, "peso_pct": 20.0}
+
+
+def test_grupo_carrega_o_tipo_dominante(snapshot_exemplo):
+    f = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())
+
+    assert {g["nome"]: g["tipo"] for g in f["por_classificacao"]} == {
+        "Papel": "fii",
+        "Tijolo": "fii",
+    }
 
 
 def test_campo_vazio_vira_nao_informado(snapshot_exemplo):
@@ -141,7 +169,7 @@ def test_ficha_enriquecida_com_os_numeros_da_posicao(snapshot_exemplo):
     mxrf = next(x for x in f["fichas"] if x["ticker"] == "MXRF11")
 
     assert mxrf["valor_atual"] == 30000
-    assert mxrf["peso_pct"] == 75.0
+    assert mxrf["peso_pct"] == 60.0
     assert mxrf["quantidade"] == 2500
     assert mxrf["classificacao_rotulo"] == "Papel"
 

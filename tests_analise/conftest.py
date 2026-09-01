@@ -167,6 +167,17 @@ def snapshot_exemplo():
                 "aviso": None,
             },
         ],
+        "limite_concentracao_pct": 25.0,
+        "emissores_renda_fixa": [
+            {
+                "nome": "Inter",
+                "valor": 10000.0,
+                "peso_pct": 45.45,
+                "fgc_limite": 250000.0,
+                "fgc_uso_pct": 4.0,
+                "acima_do_fgc": False,
+            }
+        ],
         "alertas": [
             {
                 "severidade": "atencao",

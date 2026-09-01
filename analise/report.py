@@ -75,6 +75,23 @@ def _secao(titulo: str) -> list[str]:
 # Terminal
 # ─────────────────────────────────────────────
 
+def _emissores_rf(snapshot: dict) -> list[str]:
+    """Exposição por banco emissor — o lado de renda fixa do recorte por emissor."""
+    emissores = snapshot["emissores_renda_fixa"]
+    if not emissores:
+        return []
+
+    linhas = ["", "  Por emissor de renda fixa (% da carteira)"]
+    for e in emissores:
+        marcador = "  ⚠ acima do FGC" if e["acima_do_fgc"] else ""
+        linhas.append(
+            f"  {e['nome'][:28]:<28} {_pct(e['peso_pct'], 1, sinal=False):>6}"
+            f"  {moeda(e['valor']):>15}  {_pct(e['fgc_uso_pct'], 0, sinal=False)} do FGC"
+            f"{marcador}"
+        )
+    return linhas
+
+
 def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
     borda = "═" * LARGURA
     t = snapshot["totais"]
@@ -146,6 +163,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         )
 
     if fundamentos:
+        limite_conc = snapshot["limite_concentracao_pct"]
         for titulo, chave in (
             ("Por classificação", "por_classificacao"),
             ("Por segmento", "por_segmento"),
@@ -154,13 +172,23 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
             grupos = fundamentos[chave]
             if len(grupos) <= 1 and chave != "por_segmento":
                 continue
-            out += ["", f"  {titulo} (renda variável)"]
+            out += ["", f"  {titulo} (% da carteira)"]
             for g in grupos:
-                marcador = "  ⚠" if g["peso_pct"] > 50 and g["quantidade"] > 1 else "   "
+                marcador = "  ⚠" if g["peso_pct"] > limite_conc else "   "
                 out.append(
                     f"  {g['nome'][:28]:<28} {_pct(g['peso_pct'], 1, sinal=False):>6}"
                     f"  {moeda(g['valor']):>15}  {', '.join(g['ativos'])}{marcador}".rstrip()
                 )
+
+        nao_coberto = fundamentos["nao_coberto"]
+        if nao_coberto["valor"]:
+            out.append(
+                f"  {'Sem ficha (renda fixa)':<28} "
+                f"{_pct(nao_coberto['peso_pct'], 1, sinal=False):>6}"
+                f"  {moeda(nao_coberto['valor']):>15}"
+            )
+
+    out += _emissores_rf(snapshot)
 
     # ── 4. Posições ──
     out += _secao("Posições")

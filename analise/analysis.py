@@ -112,6 +112,35 @@ def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
 # Alertas determinísticos
 # ─────────────────────────────────────────────
 
+def _exposicao_por_banco(posicoes: list[dict]) -> dict[str, float]:
+    """Soma o valor atual dos CDBs ainda ativos por banco emissor."""
+    por_banco: dict[str, float] = {}
+    for p in posicoes:
+        if p["tipo"] == "cdb" and not p["vencido"]:
+            por_banco[p["banco"]] = por_banco.get(p["banco"], 0.0) + p["valor_atual"]
+    return por_banco
+
+
+def _emissores_renda_fixa(posicoes: list[dict], total: float, limite_fgc: float) -> list[dict]:
+    """Exposição por banco emissor, com o consumo do teto do FGC.
+
+    É o recorte que falta em `fundamentals`, que só percorre fichas de renda
+    variável: nenhum emissor de CDB aparece lá.
+    """
+    emissores = [
+        {
+            "nome": banco,
+            "valor": round(valor, 2),
+            "peso_pct": round(valor / total * 100, 2) if total else 0.0,
+            "fgc_limite": limite_fgc,
+            "fgc_uso_pct": round(valor / limite_fgc * 100, 1) if limite_fgc else 0.0,
+            "acima_do_fgc": valor > limite_fgc,
+        }
+        for banco, valor in _exposicao_por_banco(posicoes).items()
+    ]
+    return sorted(emissores, key=lambda e: e["valor"], reverse=True)
+
+
 def _alerta(severidade: str, titulo: str, descricao: str, alvo: str = "") -> dict:
     return {
         "severidade": severidade,
@@ -153,11 +182,7 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
             ))
 
     # 2. Exposição por banco vs. teto do FGC
-    por_banco: dict[str, float] = {}
-    for p in posicoes:
-        if p["tipo"] == "cdb" and not p["vencido"]:
-            por_banco[p["banco"]] = por_banco.get(p["banco"], 0) + p["valor_atual"]
-    for banco, valor in por_banco.items():
+    for banco, valor in _exposicao_por_banco(posicoes).items():
         if valor > limite_fgc:
             alertas.append(_alerta(
                 "alerta",
@@ -286,6 +311,11 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
             "posicoes": len(posicoes),
         },
         "classes": classes,
+        # Uma régua só: todo consumidor lê daqui o limite que o usuário configurou.
+        "limite_concentracao_pct": float(config["alerta_concentracao_pct"]),
+        "emissores_renda_fixa": _emissores_renda_fixa(
+            posicoes, total_atual, float(config["limite_fgc"])
+        ),
         "posicoes": posicoes,
         "alertas": alertas,
         "saude_carteira": _saude(alertas, resultado_pct),

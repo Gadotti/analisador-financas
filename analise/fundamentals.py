@@ -32,26 +32,47 @@ def _media_ponderada(itens: list[tuple[float, float]]) -> float | None:
     return sum(valor * peso for valor, peso in itens) / total_peso
 
 
-def _agrupar(fichas: list[dict], campo: str) -> list[dict]:
-    """Soma o valor das posições por categoria (segmento, gestora, classificação)."""
-    grupos: dict[str, dict] = {}
+def _tipo_dominante(itens: list[dict]) -> str:
+    """Tipo de ativo com maior valor no grupo — define a cor da barra na interface."""
+    por_tipo: dict[str, float] = {}
+    for f in itens:
+        por_tipo[f["tipo"]] = por_tipo.get(f["tipo"], 0.0) + f["valor_atual"]
+    return max(por_tipo, key=lambda t: por_tipo[t])
+
+
+def _agrupar(fichas: list[dict], campo: str, total_carteira: float) -> list[dict]:
+    """Soma o valor das posições por categoria (segmento, gestora, classificação).
+
+    O peso é sobre o total da carteira, não sobre o total das fichas: é a mesma
+    base da alocação por classe e do limite de concentração configurado, para
+    que os dois números possam ser comparados na mesma tela.
+    """
+    grupos: dict[str, list[dict]] = {}
     for f in fichas:
         chave = (f.get(campo) or "Não informado").strip() or "Não informado"
-        grupo = grupos.setdefault(chave, {"nome": chave, "valor": 0.0, "ativos": []})
-        grupo["valor"] += f["valor_atual"]
-        grupo["ativos"].append(f["ticker"])
+        grupos.setdefault(chave, []).append(f)
 
-    total = sum(g["valor"] for g in grupos.values())
     saida = []
-    for g in grupos.values():
+    for nome, itens in grupos.items():
+        valor = sum(f["valor_atual"] for f in itens)
         saida.append({
-            "nome": g["nome"],
-            "valor": round(g["valor"], 2),
-            "peso_pct": round(g["valor"] / total * 100, 2) if total else 0.0,
-            "ativos": g["ativos"],
-            "quantidade": len(g["ativos"]),
+            "nome": nome,
+            "valor": round(valor, 2),
+            "peso_pct": round(valor / total_carteira * 100, 2) if total_carteira else 0.0,
+            "ativos": [f["ticker"] for f in itens],
+            "quantidade": len(itens),
+            "tipo": _tipo_dominante(itens),
         })
     return sorted(saida, key=lambda g: g["valor"], reverse=True)
+
+
+def _nao_coberto(total_carteira: float, valor_rv: float) -> dict:
+    """Parte da carteira que nenhum recorte alcança — o que não tem ficha."""
+    valor = max(0.0, total_carteira - valor_rv)
+    return {
+        "valor": round(valor, 2),
+        "peso_pct": round(valor / total_carteira * 100, 2) if total_carteira else 0.0,
+    }
 
 
 def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
@@ -97,6 +118,7 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
         return None
 
     valor_rv = sum(f["valor_atual"] for f in fichas)
+    total_carteira = snapshot["totais"]["valor_atual"]
 
     # ── Médias ponderadas pelo valor de mercado ──
     com_pvp = [(f["p_vp"], f["valor_atual"]) for f in fichas if f.get("p_vp")]
@@ -137,8 +159,10 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
             "maior_dy": ordenados_dy[0]["ticker"] if ordenados_dy else None,
             "menor_dy": ordenados_dy[-1]["ticker"] if ordenados_dy else None,
         },
-        "por_classificacao": _agrupar(fichas, "classificacao_rotulo"),
-        "por_segmento": _agrupar(fichas, "segmento"),
-        "por_gestora": _agrupar(fichas, "gestora"),
+        "valor_total_carteira": round(total_carteira, 2),
+        "nao_coberto": _nao_coberto(total_carteira, valor_rv),
+        "por_classificacao": _agrupar(fichas, "classificacao_rotulo", total_carteira),
+        "por_segmento": _agrupar(fichas, "segmento", total_carteira),
+        "por_gestora": _agrupar(fichas, "gestora", total_carteira),
         "sem_posicao": sem_posicao,
     }

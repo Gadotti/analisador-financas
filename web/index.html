@@ -3,206 +3,286 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Portfolio Analyzer</title>
+  <title>Analisador de carteira</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<header class="header">
-  <div>
-    <div class="eyebrow">Relatório de carteira</div>
-    <h1>Portfolio <span>Analyzer</span></h1>
+<div class="app">
+
+  <aside class="lateral">
+    <div class="marca">
+      <div class="marca-simbolo">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#0a1628" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 15V9M8 15V4M13 15v-8M18 15v-4"></path></svg>
+      </div>
+      <div>
+        <div class="marca-nome">Analisador</div>
+        <div class="marca-sub">Carteira · local</div>
+      </div>
+    </div>
+
+    <div class="grupo-nav">Carteira</div>
+    <nav class="nav" id="nav" aria-label="Seções"></nav>
+
+    <div class="rodape-nav" id="rodape-nav"></div>
+  </aside>
+
+  <div class="conteudo">
+
+    <header class="topo">
+      <div>
+        <h1 id="titulo-pagina">Visão geral</h1>
+        <div class="topo-sub" id="subtitulo-pagina"></div>
+      </div>
+      <div class="topo-acoes">
+        <span class="topo-sub" id="status-ia"></span>
+        <button class="btn btn-fantasma" id="btn-telegram">Telegram</button>
+        <button class="btn btn-fantasma" id="btn-cotacoes">Atualizar cotações</button>
+        <button class="btn btn-primario" id="btn-analise">Analisar com IA</button>
+      </div>
+    </header>
+
+    <!-- ── Visão geral ─────────────────── -->
+    <main class="pagina" id="pg-visao-geral">
+      <section class="cartao">
+        <div class="macro" id="macro"><div class="vazio">—</div></div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Posição consolidada</span>
+          <span class="cartao-meta" id="resumo-quando"></span>
+        </div>
+        <div id="sumario" class="hidden"></div>
+        <div class="indicadores" id="indicadores">
+          <div class="vazio">Nenhuma análise ainda. Cadastre suas posições e clique em “Atualizar cotações”.</div>
+        </div>
+        <div id="contexto-mercado" class="hidden"></div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Alocação e concentração</span>
+          <div class="topo-acoes" id="alocacao-base"></div>
+        </div>
+        <div id="alocacao"><div class="vazio">—</div></div>
+      </section>
+
+      <div class="grade-metades">
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Riscos e alertas</span>
+            <span class="cartao-meta" id="riscos-contagem"></span>
+          </div>
+          <div id="riscos"><div class="vazio">—</div></div>
+        </section>
+
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Fatos e observações</span>
+            <span class="cartao-meta" id="fatos-contagem"></span>
+          </div>
+          <div id="fatos"><div class="vazio">—</div></div>
+        </section>
+      </div>
+
+      <p class="rodape" id="rodape-aviso"></p>
+    </main>
+
+    <!-- ── Posições ────────────────────── -->
+    <main class="pagina hidden" id="pg-posicoes">
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Posições</span>
+          <button class="btn btn-primario btn-sm" id="btn-nova">+ Nova posição</button>
+        </div>
+        <div id="posicoes"><div class="vazio">Carregando…</div></div>
+      </section>
+      <p class="rodape" id="rodape-posicoes"></p>
+    </main>
+
+    <!-- ── Análise ─────────────────────── -->
+    <main class="pagina hidden" id="pg-analise">
+      <section class="cartao hidden" id="cartao-leitura">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Leitura da carteira</span>
+          <span class="cartao-meta" id="ia-meta"></span>
+        </div>
+        <div id="leitura"></div>
+      </section>
+
+      <section class="cartao hidden" id="cartao-fichas">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Análise por ativo</span>
+        </div>
+        <div id="fichas" class="fichas"></div>
+      </section>
+
+      <div class="vazio" id="analise-vazia">
+        Nenhuma análise por IA ainda. Use “Analisar com IA” no topo.
+      </div>
+    </main>
+
+    <!-- ── Histórico ───────────────────── -->
+    <main class="pagina hidden" id="pg-historico">
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Evolução do patrimônio</span>
+          <span class="cartao-meta" id="historico-periodo"></span>
+        </div>
+        <div id="grafico-historico"><div class="vazio">—</div></div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Execuções registradas</span>
+        </div>
+        <div id="tabela-historico"><div class="vazio">—</div></div>
+      </section>
+    </main>
+
+    <!-- ── Configurações ───────────────── -->
+    <main class="pagina hidden" id="pg-configuracoes">
+      <form id="form-config">
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Perfil da carteira</span>
+            <span class="cartao-meta">usado no prompt da IA</span>
+          </div>
+          <div class="campo">
+            <label for="c-perfil">Como você quer que a carteira seja lida</label>
+            <textarea id="c-perfil" placeholder="Ex.: Foco em renda mensal, tolerância moderada a risco, horizonte de 10 anos."></textarea>
+          </div>
+        </section>
+
+        <section class="cartao" style="margin-top:16px">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Limites de alerta</span>
+          </div>
+          <div class="grade-form">
+            <div class="campo">
+              <label for="c-fgc">Teto do FGC por banco (R$)</label>
+              <input id="c-fgc" type="number" step="any" min="0">
+            </div>
+            <div class="campo">
+              <label for="c-venc">Vencimento próximo (dias)</label>
+              <input id="c-venc" type="number" step="1" min="0">
+            </div>
+            <div class="campo">
+              <label for="c-conc">Limite de concentração (%)</label>
+              <input id="c-conc" type="number" step="any" min="0">
+            </div>
+            <div class="campo">
+              <label for="c-prej">Prejuízo relevante (%)</label>
+              <input id="c-prej" type="number" step="any" min="0">
+            </div>
+            <div class="campo">
+              <label for="c-fatos">Máx. de fatos da IA</label>
+              <input id="c-fatos" type="number" step="1" min="1">
+            </div>
+            <div class="campo">
+              <label for="c-opp">Máx. de oportunidades</label>
+              <input id="c-opp" type="number" step="1" min="1">
+            </div>
+          </div>
+          <p class="rodape" style="margin-top:12px">
+            O limite de concentração vale para cada posição e para os três recortes de
+            alocação — é o traço laranja desenhado nas barras.
+          </p>
+          <div class="acoes-form">
+            <button type="submit" class="btn btn-primario btn-sm">Salvar parâmetros</button>
+          </div>
+        </section>
+      </form>
+    </main>
+
   </div>
-  <div class="header-right">
-    <span id="status-ia" class="sub"></span>
-    <button class="btn btn-ghost btn-sm" id="btn-analise-rapida">Atualizar cotações</button>
-    <button class="btn btn-amber" id="btn-analise">Analisar com IA</button>
-    <button class="btn btn-tg" id="btn-telegram">Telegram</button>
-  </div>
-</header>
+</div>
 
-<main class="content">
-
-  <!-- 1. Sumário executivo + indicadores-chave -->
-  <section class="card">
-    <div class="card-title">
-      <span>Posição consolidada</span>
-      <span id="resumo-quando" class="sub"></span>
-    </div>
-    <div id="sumario" class="hidden"></div>
-    <div class="stats" id="stats">
-      <div class="vazio">Nenhuma análise ainda. Cadastre suas posições e clique em “Atualizar cotações”.</div>
-    </div>
-  </section>
-
-  <div class="grid-2">
-    <!-- 2. Alocação e concentrações -->
-    <section class="card">
-      <div class="card-title">Alocação e concentração</div>
-      <div id="alocacao"><div class="vazio">—</div></div>
-    </section>
-
-    <!-- 3. Riscos -->
-    <section class="card">
-      <div class="card-title">Riscos e alertas</div>
-      <div id="riscos"><div class="vazio">—</div></div>
-    </section>
+<!-- ── Painel de cadastro ──────────────── -->
+<div class="veu hidden" id="veu"></div>
+<aside class="painel hidden" id="painel" aria-labelledby="painel-titulo">
+  <div class="painel-topo">
+    <span class="cartao-titulo" id="painel-titulo">Nova posição</span>
+    <button class="btn-icone" id="btn-fechar-painel" title="Fechar" aria-label="Fechar">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+    </button>
   </div>
 
-  <!-- 4. Posições -->
-  <section class="card">
-    <div class="card-title">
-      <span>Posições</span>
-      <button class="btn btn-teal btn-sm" id="btn-nova">+ Nova posição</button>
+  <form id="form-posicao" class="painel-corpo">
+    <input type="hidden" id="f-id">
+
+    <div class="segmentado" id="seletor-tipo" role="group" aria-label="Classe do ativo">
+      <button type="button" data-tipo="fii" aria-pressed="true">FII</button>
+      <button type="button" data-tipo="acao" aria-pressed="false">Ação</button>
+      <button type="button" data-tipo="cdb" aria-pressed="false">CDB</button>
     </div>
 
-    <form id="form-posicao" class="hidden" style="margin-bottom:16px">
-      <input type="hidden" id="f-id">
-      <div class="form-grid">
-        <div class="campo">
-          <label for="f-tipo">Tipo</label>
-          <select id="f-tipo">
-            <option value="fii">FII</option>
-            <option value="acao">Ação</option>
-            <option value="cdb">CDB</option>
-          </select>
-        </div>
-
-        <!-- Renda variável -->
-        <div class="campo campo-rv">
-          <label for="f-ticker">Ticker</label>
-          <input id="f-ticker" placeholder="MXRF11" autocomplete="off">
-        </div>
-        <div class="campo campo-rv">
-          <label for="f-quantidade">Quantidade</label>
-          <input id="f-quantidade" type="number" step="any" min="0" placeholder="100">
-        </div>
-        <div class="campo campo-rv">
-          <label for="f-preco-medio">Preço médio (R$)</label>
-          <input id="f-preco-medio" type="number" step="any" min="0" placeholder="9,85">
-        </div>
-        <div class="campo campo-rv">
-          <label for="f-data-compra">Data da compra</label>
-          <input id="f-data-compra" type="date">
-        </div>
-
-        <!-- CDB -->
-        <div class="campo campo-rf hidden">
-          <label for="f-banco">Banco emissor</label>
-          <input id="f-banco" placeholder="Banco Inter" autocomplete="off">
-        </div>
-        <div class="campo campo-rf hidden">
-          <label for="f-valor-inicial">Valor aplicado (R$)</label>
-          <input id="f-valor-inicial" type="number" step="any" min="0" placeholder="10000">
-        </div>
-        <div class="campo campo-rf hidden">
-          <label for="f-indexador">Indexador</label>
-          <select id="f-indexador">
-            <option value="CDI">% do CDI</option>
-            <option value="PRE">Prefixado (% a.a.)</option>
-            <option value="IPCA">IPCA + (% a.a.)</option>
-          </select>
-        </div>
-        <div class="campo campo-rf hidden">
-          <label for="f-taxa" id="f-taxa-label">Taxa (% do CDI)</label>
-          <input id="f-taxa" type="number" step="any" min="0" placeholder="110">
-        </div>
-        <div class="campo campo-rf hidden">
-          <label for="f-data-aplicacao">Data da aplicação</label>
-          <input id="f-data-aplicacao" type="date">
-        </div>
-        <div class="campo campo-rf hidden">
-          <label for="f-data-vencimento">Data de vencimento</label>
-          <input id="f-data-vencimento" type="date">
-        </div>
-        <div class="campo campo-check campo-rf hidden">
-          <input id="f-liquidez" type="checkbox">
-          <label for="f-liquidez">Liquidez diária</label>
-        </div>
-
-        <div class="campo" style="grid-column:1/-1">
-          <label for="f-observacao">Observação (opcional)</label>
-          <input id="f-observacao" placeholder="Nota pessoal sobre esta posição">
-        </div>
+    <div class="grade-form">
+      <div class="campo campo-rv">
+        <label for="f-ticker">Ticker</label>
+        <input id="f-ticker" placeholder="MXRF11" autocomplete="off">
       </div>
-      <div class="form-acoes">
-        <button type="submit" class="btn btn-teal btn-sm" id="btn-salvar">Salvar</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-cancelar">Cancelar</button>
+      <div class="campo campo-rv">
+        <label for="f-quantidade">Quantidade</label>
+        <input id="f-quantidade" type="number" step="any" min="0" placeholder="100">
       </div>
-    </form>
+      <div class="campo campo-rv">
+        <label for="f-preco-medio">Preço médio (R$)</label>
+        <input id="f-preco-medio" type="number" step="any" min="0" placeholder="9,85">
+      </div>
+      <div class="campo campo-rv">
+        <label for="f-data-compra">Data da compra</label>
+        <input id="f-data-compra" type="date">
+      </div>
 
-    <div id="posicoes"><div class="vazio">Carregando…</div></div>
-  </section>
+      <div class="campo campo-rf hidden">
+        <label for="f-banco">Banco emissor</label>
+        <input id="f-banco" placeholder="Banco Inter" autocomplete="off">
+      </div>
+      <div class="campo campo-rf hidden">
+        <label for="f-valor-inicial">Valor aplicado (R$)</label>
+        <input id="f-valor-inicial" type="number" step="any" min="0" placeholder="10000">
+      </div>
+      <div class="campo campo-rf hidden">
+        <label for="f-indexador">Indexador</label>
+        <select id="f-indexador">
+          <option value="CDI">% do CDI</option>
+          <option value="PRE">Prefixado (% a.a.)</option>
+          <option value="IPCA">IPCA + (% a.a.)</option>
+        </select>
+      </div>
+      <div class="campo campo-rf hidden">
+        <label for="f-taxa" id="f-taxa-label">Taxa (% do CDI)</label>
+        <input id="f-taxa" type="number" step="any" min="0" placeholder="110">
+      </div>
+      <div class="campo campo-rf hidden">
+        <label for="f-data-aplicacao">Data da aplicação</label>
+        <input id="f-data-aplicacao" type="date">
+      </div>
+      <div class="campo campo-rf hidden">
+        <label for="f-data-vencimento">Data de vencimento</label>
+        <input id="f-data-vencimento" type="date">
+      </div>
+      <div class="campo campo-check campo-rf hidden campo-largo">
+        <input id="f-liquidez" type="checkbox">
+        <label for="f-liquidez">Liquidez diária</label>
+      </div>
 
-  <!-- 5. Ficha por ativo -->
-  <section class="card hidden" id="card-fichas">
-    <div class="card-title">Análise por ativo</div>
-    <div id="fichas" class="fichas"></div>
-  </section>
-
-  <!-- 6. Leitura da carteira -->
-  <section class="card hidden" id="card-leitura">
-    <div class="card-title">
-      <span>Leitura da carteira</span>
-      <span id="ia-meta" class="sub"></span>
+      <div class="campo campo-largo">
+        <label for="f-observacao">Observação (opcional)</label>
+        <input id="f-observacao" placeholder="Nota pessoal sobre esta posição">
+      </div>
     </div>
-    <div id="leitura"></div>
-  </section>
+  </form>
 
-  <!-- 7. Contexto macro -->
-  <section class="card">
-    <div class="card-title">Contexto de mercado</div>
-    <div id="macro" class="macro"><div class="vazio">—</div></div>
-  </section>
-
-  <!-- 8. Configurações -->
-  <section class="card">
-    <div class="card-title">Perfil e parâmetros de alerta</div>
-    <form id="form-config">
-      <div class="campo" style="margin-bottom:12px">
-        <label for="c-perfil">Perfil da carteira (usado no prompt da IA)</label>
-        <textarea id="c-perfil" placeholder="Ex.: Foco em renda mensal, tolerância moderada a risco, horizonte de 10 anos."></textarea>
-      </div>
-      <div class="form-grid">
-        <div class="campo">
-          <label for="c-fgc">Teto do FGC por banco (R$)</label>
-          <input id="c-fgc" type="number" step="any" min="0">
-        </div>
-        <div class="campo">
-          <label for="c-venc">Alertar vencimento em (dias)</label>
-          <input id="c-venc" type="number" step="1" min="0">
-        </div>
-        <div class="campo">
-          <label for="c-conc">Alertar concentração acima de (%)</label>
-          <input id="c-conc" type="number" step="any" min="0">
-        </div>
-        <div class="campo">
-          <label for="c-prej">Alertar prejuízo acima de (%)</label>
-          <input id="c-prej" type="number" step="any" min="0">
-        </div>
-        <div class="campo">
-          <label for="c-fatos">Máx. de fatos da IA</label>
-          <input id="c-fatos" type="number" step="1" min="1">
-        </div>
-        <div class="campo">
-          <label for="c-opp">Máx. de oportunidades da IA</label>
-          <input id="c-opp" type="number" step="1" min="1">
-        </div>
-      </div>
-      <div class="form-acoes">
-        <button type="submit" class="btn btn-ghost btn-sm">Salvar parâmetros</button>
-      </div>
-    </form>
-  </section>
-
-  <p class="rodape">
-    Valores de CDB são estimativas calculadas com o CDI vigente — o extrato do banco é a fonte oficial.<br>
-    P/VP, dividend yield, patrimônio e segmento são levantados por IA a partir de fontes públicas; confira antes de decidir.<br>
-    Este material é informativo e não constitui recomendação de investimento.
-  </p>
-</main>
+  <div class="painel-pe">
+    <button type="submit" form="form-posicao" class="btn btn-primario btn-sm">Salvar</button>
+    <button type="button" class="btn btn-fantasma btn-sm" id="btn-cancelar">Cancelar</button>
+  </div>
+</aside>
 
 <div id="toasts"></div>
-<script src="/static/app.js"></script>
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>

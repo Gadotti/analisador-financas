@@ -171,9 +171,28 @@ sobre todo o período decorrido, capitaliza em dias úteis (base 252) e aplica o
 regressivo. Não apresente esses valores como oficiais — o rodapé do relatório já avisa.
 
 **Front-end.** `web/` é HTML, CSS e JS puros, servidos como estáticos em `/static/`.
-Não introduza build step, bundler ou framework. As chaves consumidas pelo `app.js` são as
-mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
-junto.
+Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do
+navegador**: `web/app.js` é o ponto de entrada (`<script type="module">`) e só orquestra —
+carrega da API, guarda o último resultado e chama os módulos de `web/js/`, um por tela
+(`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `historico`, `configuracoes`) mais três
+de apoio (`formato`, `api`, `icones`, `navegacao`). Nenhum cálculo mora no front. As chaves
+consumidas são as mesmas do JSON que o Python produz — se mudar o formato de um snapshot,
+atualize o front junto.
+
+A interface tem cinco telas trocadas pelo hash da URL (`#posicoes`, `#historico`, …), sem
+recarregar a página e sem roteador. Ícones são SVG de traço em `web/js/icones.js` — nunca
+glifos de texto ou emoji. O gráfico do histórico é SVG desenhado à mão em
+`web/js/historico.js`; não adicione biblioteca de gráfico.
+
+**Uma base e uma régua na alocação.** Os três recortes (`por_classificacao`,
+`por_segmento`, `por_gestora`) têm `peso_pct` sobre o **total da carteira**, não sobre o
+total das fichas — é a mesma base da alocação por classe, e por isso `fundamentals`
+devolve também `nao_coberto`, a parte sem ficha (renda fixa). O limite que vale em toda a
+interface é o `alerta_concentracao_pct` do cadastro, publicado no snapshot como
+`limite_concentracao_pct` e desenhado como traço na barra. Não reintroduza um limite fixo
+no front. O recorte por emissor de renda fixa vem de `snapshot.emissores_renda_fixa`
+(calculado em `analysis.py`, com o consumo do teto do FGC), porque `fundamentals` só
+percorre fichas de renda variável.
 
 **Localizar o Python.** `src/server/analiseExterna.js` usa `PYTHON_BIN` quando definido,
 senão `python` no Windows e `python3` nos demais. Um `ENOENT` no spawn vira uma mensagem

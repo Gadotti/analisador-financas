@@ -81,12 +81,13 @@ describe("arquivos estáticos", () => {
     const { status, corpo, tipo } = await pedir("/");
     expect(status).toBe(200);
     expect(tipo).toMatch(/text\/html/);
-    expect(corpo).toMatch(/Portfolio/);
+    expect(corpo).toMatch(/<title>Analisador de carteira<\/title>/);
   });
 
   test.each([
     ["/static/style.css", /text\/css/],
     ["/static/app.js", /javascript/],
+    ["/static/js/alocacao.js", /javascript/],
   ])("serve %s", async (caminho, tipoEsperado) => {
     const { status, tipo } = await pedir(caminho);
     expect(status).toBe(200);

@@ -159,6 +159,27 @@ def test_exposicao_por_banco_soma_e_compara_com_o_fgc():
     assert "R$ 300.000,00" in fgc["descricao"]
 
 
+def test_emissores_de_renda_fixa_medem_o_consumo_do_fgc():
+    posicoes = [
+        {**CDB_BASE, "valor_atual": 200000.0, "dias_para_vencer": 999},
+        {**CDB_BASE, "banco": "BTG", "valor_atual": 50000.0, "dias_para_vencer": 999},
+    ]
+    emissores = analysis._emissores_renda_fixa(posicoes, 500000.0, 250000.0)
+
+    assert [e["nome"] for e in emissores] == ["Inter", "BTG"]
+    assert emissores[0]["peso_pct"] == 40.0
+    assert emissores[0]["fgc_uso_pct"] == 80.0
+    assert emissores[0]["acima_do_fgc"] is False
+
+
+def test_emissor_acima_do_teto_do_fgc_e_sinalizado():
+    posicoes = [{**CDB_BASE, "valor_atual": 300000.0, "dias_para_vencer": 999}]
+    emissores = analysis._emissores_renda_fixa(posicoes, 300000.0, 250000.0)
+
+    assert emissores[0]["acima_do_fgc"] is True
+    assert emissores[0]["fgc_uso_pct"] == 120.0
+
+
 def test_cdb_vencido_nao_conta_na_exposicao_do_banco():
     posicoes = [
         {**CDB_BASE, "valor_atual": 200000.0, "dias_para_vencer": 999},
