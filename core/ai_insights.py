@@ -1,0 +1,388 @@
+"""Análise qualitativa e fundamentalista da carteira via Claude + busca web.
+
+Camada OPCIONAL: exige `anthropic` instalado e ANTHROPIC_API_KEY configurada.
+A análise determinística (core.analysis) funciona sem nada disso.
+
+A IA levanta os fundamentos de cada ativo (segmento, P/VP, DY, patrimônio,
+gestora) e escreve a leitura qualitativa. Os números agregados da carteira
+— médias ponderadas e concentrações — são calculados em core.fundamentals
+a partir dessas fichas, e não estimados pelo modelo.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime
+
+from . import portfolio
+
+MODELO = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
+EFFORT = os.getenv("ANTHROPIC_EFFORT", "medium")
+MAX_TOKENS = 16000
+
+# O parâmetro `fallbacks` (retomar automaticamente em outro modelo quando os
+# classificadores de segurança recusam o pedido) só existe nestas famílias.
+# Enviá-lo para os demais modelos resulta em erro 400.
+FAMILIAS_COM_FALLBACK = ("claude-opus-5", "claude-fable-5", "claude-mythos-5")
+
+
+def _suporta_fallback(modelo: str) -> bool:
+    return modelo.startswith(FAMILIAS_COM_FALLBACK)
+
+
+SYSTEM_PROMPT = """Você é um analista de investimentos brasileiro, especialista em fundos
+imobiliários (FIIs), ações da B3 e renda fixa bancária (CDBs). Você produz relatórios de
+carteira no padrão de uma casa de análise: fundamentos levantados ativo a ativo, seguidos
+de uma leitura consolidada do conjunto.
+
+Você recebe a fotografia de uma carteira real, já marcada a mercado. Use a busca web para
+levantar, de cada ativo de renda variável:
+
+- Classificação e segmento de atuação
+- Gestora ou administradora (FIIs) / grupo controlador (ações)
+- P/VP mais recente
+- Dividend yield dos últimos 12 meses
+- Patrimônio líquido do fundo ou valor de mercado da empresa
+- Vacância física ou financeira, quando for fundo de tijolo
+- Fatos recentes: proventos, resultados, aquisições, vendas de imóveis, eventos de
+  crédito, comunicados ao mercado, mudanças de locatário
+
+E também o cenário macro brasileiro atual: Selic, IPCA, IFIX, Ibovespa, curva de juros.
+
+Regras de rigor:
+- Só afirme o que encontrou na busca. Quando um indicador não estiver disponível, use
+  null naquele campo em vez de estimar — um número inventado é pior que um campo vazio.
+- Indique em `fonte` de onde veio a informação de cada ativo.
+- Considere o peso de cada posição: um fato sobre 2% da carteira não pesa como um sobre 30%.
+- Aponte correlações entre ativos que o investidor pode não ter percebido: sobreposição de
+  segmento, concentração no mesmo gestor, exposição ao mesmo locatário ou devedor.
+- Para CDBs, considere vencimento, indexador e concentração por banco (teto do FGC de
+  R$ 250 mil por CPF/instituição). CDBs não entram na lista `ativos` — comente-os nos
+  campos de análise da carteira.
+- Ordene os riscos do mais relevante para o menos relevante.
+- Escreva em português do Brasil, objetivo e sem jargão desnecessário.
+- Você não é assessor de investimentos: descreva cenários e pontos de atenção, sem
+  recomendar compra ou venda de forma imperativa."""
+
+
+def _numero_ou_nulo(descricao: str) -> dict:
+    return {"anyOf": [{"type": "number"}, {"type": "null"}], "description": descricao}
+
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "resumo": {
+            "type": "string",
+            "description": "Sumário executivo da carteira em 3 a 5 frases.",
+        },
+        "saude_carteira": {
+            "type": "string",
+            "enum": ["otima", "boa", "atencao", "alerta"],
+        },
+        "ativos": {
+            "type": "array",
+            "description": "Ficha técnica de cada ativo de renda variável. Não inclua CDBs.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string"},
+                    "nome": {"type": "string", "description": "Nome do fundo ou da empresa."},
+                    "classificacao": {
+                        "type": "string",
+                        "enum": ["tijolo", "papel", "hibrido", "fof", "acao", "outro"],
+                    },
+                    "segmento": {
+                        "type": "string",
+                        "description": "Ex.: Logística, Agências bancárias, Lajes corporativas, Bancos.",
+                    },
+                    "gestora": {
+                        "type": "string",
+                        "description": "Gestora do FII ou grupo controlador da empresa.",
+                    },
+                    "p_vp": _numero_ou_nulo("Preço sobre valor patrimonial, ex.: 0.93."),
+                    "dy_12m_pct": _numero_ou_nulo("Dividend yield de 12 meses em %, ex.: 12.4."),
+                    "patrimonio": {
+                        "type": "string",
+                        "description": "PL do fundo ou valor de mercado, formatado. Ex.: 'R$ 7,57 bi'.",
+                    },
+                    "vacancia_pct": _numero_ou_nulo("Vacância em %, apenas para fundos de tijolo."),
+                    "comentario": {
+                        "type": "string",
+                        "description": "Dois a quatro períodos sobre a tese, o portfólio e o momento do ativo.",
+                    },
+                    "risco": {
+                        "type": "string",
+                        "description": "Principal risco específico deste ativo.",
+                    },
+                    "fonte": {"type": "string"},
+                },
+                "required": [
+                    "ticker", "nome", "classificacao", "segmento", "gestora",
+                    "p_vp", "dy_12m_pct", "patrimonio", "vacancia_pct",
+                    "comentario", "risco", "fonte",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "carteira": {
+            "type": "object",
+            "description": "Leitura do conjunto, não dos ativos isolados.",
+            "properties": {
+                "diversificacao": {
+                    "type": "string",
+                    "description": "Como a carteira se distribui entre tipos de ativo e o que isso significa.",
+                },
+                "concentracao_setorial": {
+                    "type": "string",
+                    "description": "Sobreposições de segmento e correlação entre os ativos.",
+                },
+                "concentracao_gestor": {
+                    "type": "string",
+                    "description": "Repetição de gestora, administrador, banco emissor ou locatário.",
+                },
+                "valuation": {
+                    "type": "string",
+                    "description": "Leitura dos múltiplos frente ao momento de mercado.",
+                },
+                "renda": {
+                    "type": "string",
+                    "description": "Leitura da geração de renda: yield, previsibilidade e sensibilidade a juros.",
+                },
+                "conclusao": {
+                    "type": "string",
+                    "description": "Fechamento em 2 a 4 frases: o que a carteira é hoje e o que mais merece atenção.",
+                },
+            },
+            "required": [
+                "diversificacao", "concentracao_setorial", "concentracao_gestor",
+                "valuation", "renda", "conclusao",
+            ],
+            "additionalProperties": False,
+        },
+        "riscos": {
+            "type": "array",
+            "description": "Riscos da carteira, do mais relevante para o menos relevante.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "titulo": {"type": "string"},
+                    "descricao": {"type": "string"},
+                    "severidade": {"type": "string", "enum": ["info", "atencao", "alerta"]},
+                    "ativos": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["titulo", "descricao", "severidade", "ativos"],
+                "additionalProperties": False,
+            },
+        },
+        "fatos": {
+            "type": "array",
+            "description": "Fatos recentes e datados sobre os ativos da carteira.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "ativo": {"type": "string"},
+                    "titulo": {"type": "string"},
+                    "descricao": {"type": "string"},
+                    "severidade": {"type": "string", "enum": ["info", "atencao", "alerta"]},
+                    "fonte": {"type": "string"},
+                },
+                "required": ["ativo", "titulo", "descricao", "severidade", "fonte"],
+                "additionalProperties": False,
+            },
+        },
+        "oportunidades": {
+            "type": "array",
+            "description": "Pontos de observação coerentes com o perfil e a alocação atual.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "type": "string",
+                        "enum": ["compra", "monitorar", "setor", "macro", "renda_fixa", "rebalanceamento"],
+                    },
+                    "titulo": {"type": "string"},
+                    "descricao": {"type": "string"},
+                    "ativos": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["tipo", "titulo", "descricao", "ativos"],
+                "additionalProperties": False,
+            },
+        },
+        "contexto_mercado": {
+            "type": "string",
+            "description": "Cenário macro atual e seu efeito concreto sobre esta carteira.",
+        },
+    },
+    "required": [
+        "resumo", "saude_carteira", "ativos", "carteira",
+        "riscos", "fatos", "oportunidades", "contexto_mercado",
+    ],
+    "additionalProperties": False,
+}
+
+
+class IAIndisponivel(RuntimeError):
+    """A análise por IA não pôde ser executada."""
+
+
+def disponivel() -> tuple[bool, str]:
+    """Indica se a análise por IA pode ser executada e o motivo em caso negativo."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return False, "ANTHROPIC_API_KEY nao configurada (veja o arquivo .env)."
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        return False, "Pacote 'anthropic' nao instalado (pip install anthropic)."
+    return True, ""
+
+
+# ─────────────────────────────────────────────
+# Montagem do prompt
+# ─────────────────────────────────────────────
+
+def _resumo_posicoes(snapshot: dict) -> str:
+    linhas = []
+    for p in snapshot["posicoes"]:
+        if p["tipo"] in portfolio.TIPOS_VARIAVEL:
+            rotulo = "FII" if p["tipo"] == "fii" else "Ação"
+            linhas.append(
+                f"- [{rotulo}] {p['ticker']}: {p['quantidade']:g} cotas, "
+                f"PM R$ {p['preco_medio']:.2f}, cotação R$ {p['preco_atual'] or 0:.2f}, "
+                f"resultado {p['resultado_pct']:+.1f}%, peso {p['peso_pct']:.1f}% da carteira"
+            )
+        else:
+            venc = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
+            linhas.append(
+                f"- [CDB] {p['banco']} — {p['rotulo_taxa']}, aplicado R$ {p['valor_investido']:,.2f}, "
+                f"valor atual R$ {p['valor_atual']:,.2f}, {venc}, peso {p['peso_pct']:.1f}% da carteira"
+            )
+    return "\n".join(linhas)
+
+
+def _resumo_alertas(snapshot: dict) -> str:
+    alertas = snapshot["alertas"]
+    if not alertas:
+        return "Nenhum alerta automático foi gerado pelos cálculos."
+    return "\n".join(f"- [{a['severidade']}] {a['titulo']}: {a['descricao']}" for a in alertas)
+
+
+def montar_prompt(snapshot: dict, config: dict) -> str:
+    hoje = datetime.now().strftime("%d/%m/%Y")
+    t = snapshot["totais"]
+    macro = snapshot["macro"]
+
+    classes = " | ".join(
+        f"{c['rotulo']} {c['peso_pct']:.1f}%" for c in snapshot["classes"].values()
+    )
+    tickers = [p["ticker"] for p in snapshot["posicoes"] if p["tipo"] in portfolio.TIPOS_VARIAVEL]
+
+    return (
+        f"Data de hoje: {hoje}\n\n"
+        f"## Carteira (valores já calculados, não recalcule)\n"
+        f"Total investido: R$ {t['valor_investido']:,.2f}\n"
+        f"Valor atual: R$ {t['valor_atual']:,.2f} ({t['resultado_pct']:+.2f}%)\n"
+        f"Alocação: {classes}\n\n"
+        f"### Posições\n{_resumo_posicoes(snapshot)}\n\n"
+        f"### Perfil declarado pelo investidor\n"
+        f"{snapshot.get('perfil') or 'Não informado.'}\n\n"
+        f"### Alertas automáticos já detectados pelo sistema\n{_resumo_alertas(snapshot)}\n\n"
+        f"### Indicadores de referência já coletados\n"
+        f"CDI: {macro['cdi_anual_pct']['valor']}% a.a. | "
+        f"Selic meta: {macro['selic_meta_pct']['valor']}% a.a. | "
+        f"IPCA 12m: {macro['ipca_12m_pct'].get('valor')}%\n\n"
+        f"## Sua tarefa\n"
+        f"1. Levante a ficha técnica de cada um destes {len(tickers)} ativos de renda "
+        f"variável: {', '.join(tickers) or 'nenhum'}. Um item em `ativos` por ticker, "
+        f"na mesma ordem.\n"
+        f"2. Escreva a análise consolidada da carteira em `carteira`, tratando "
+        f"diversificação, concentração setorial, concentração de gestor ou emissor, "
+        f"valuation, geração de renda e a conclusão.\n"
+        f"3. Liste os riscos em ordem de relevância.\n"
+        f"4. Traga no máximo {int(config['max_fatos'])} fatos recentes e no máximo "
+        f"{int(config['max_oportunidades'])} pontos de observação.\n"
+        f"5. Feche com a leitura do contexto macro conectada a esta carteira.\n\n"
+        f"Não repita os alertas automáticos acima — o investidor já os viu; use-os apenas "
+        f"como contexto."
+    )
+
+
+# ─────────────────────────────────────────────
+# Chamada à API
+# ─────────────────────────────────────────────
+
+def _extrair_json(blocos) -> dict:
+    """Pega o último bloco de texto da resposta e converte em dict."""
+    textos = [b.text for b in blocos if b.type == "text" and b.text.strip()]
+    if not textos:
+        raise IAIndisponivel("A resposta da IA não trouxe nenhum bloco de texto.")
+    bruto = textos[-1].strip()
+    if bruto.startswith("```"):
+        bruto = bruto.split("```")[1]
+        bruto = bruto[4:] if bruto.startswith("json") else bruto
+        bruto = bruto.strip()
+    try:
+        return json.loads(bruto)
+    except json.JSONDecodeError as exc:
+        raise IAIndisponivel(f"A IA não retornou JSON válido: {exc}") from None
+
+
+def analisar(snapshot: dict, config: dict) -> dict:
+    """Executa a análise qualitativa. Levanta IAIndisponivel em caso de falha."""
+    ok, motivo = disponivel()
+    if not ok:
+        raise IAIndisponivel(motivo)
+
+    import anthropic
+
+    client = anthropic.Anthropic()
+
+    parametros = {
+        "model": MODELO,
+        "max_tokens": MAX_TOKENS,
+        "system": SYSTEM_PROMPT,
+        "output_config": {
+            "effort": EFFORT,
+            "format": {"type": "json_schema", "schema": SCHEMA},
+        },
+        "tools": [{"type": "web_search_20260209", "name": "web_search"}],
+        "messages": [{"role": "user", "content": montar_prompt(snapshot, config)}],
+    }
+
+    try:
+        if _suporta_fallback(MODELO):
+            # Se os classificadores recusarem, a própria API refaz o pedido
+            # no modelo de retaguarda recomendado, na mesma chamada.
+            resposta = client.beta.messages.create(
+                **parametros,
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            )
+        else:
+            resposta = client.messages.create(**parametros)
+    except anthropic.APIStatusError as exc:
+        raise IAIndisponivel(f"Erro da API Anthropic ({exc.status_code}): {exc.message}") from None
+    except anthropic.APIConnectionError:
+        raise IAIndisponivel("Falha de conexão com a API Anthropic.") from None
+
+    if resposta.stop_reason == "refusal":
+        raise IAIndisponivel("A IA recusou responder a esta solicitação.")
+    if resposta.stop_reason == "max_tokens":
+        raise IAIndisponivel(
+            "A resposta da IA foi truncada por limite de tokens. "
+            "Reduza o número de posições ou aumente MAX_TOKENS em core/ai_insights.py."
+        )
+
+    dados = _extrair_json(resposta.content)
+    dados["_meta"] = {
+        "modelo": resposta.model,
+        "effort": EFFORT,
+        "tokens_entrada": resposta.usage.input_tokens,
+        "tokens_saida": resposta.usage.output_tokens,
+        "buscas_web": getattr(
+            getattr(resposta.usage, "server_tool_use", None), "web_search_requests", None
+        ),
+        "gerado_em": datetime.now().isoformat(timespec="seconds"),
+    }
+    return dados

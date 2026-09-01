@@ -1,0 +1,8 @@
+.env
+data/portfolio.json
+data/cache.json
+data/last_analysis.json
+data/history/
+__pycache__/
+*.pyc
+*.log

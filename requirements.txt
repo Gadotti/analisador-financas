@@ -1,0 +1,8 @@
+# Obrigatório (cotações e indicadores)
+requests>=2.31.0
+
+# Opcional — análise de mercado por IA
+anthropic>=0.116.0
+
+# Opcional — carregar o arquivo .env automaticamente
+python-dotenv>=1.0.0
