@@ -58,7 +58,7 @@ After every code change, run `npm test` and inspect the output. If any test fail
 
 ### A regra central: a análise é um script Python isolado
 
-`scripts/analisar.py` é o **único ponto do sistema que chama a API da Anthropic e o
+`scripts/analisar.py` é o **único ponto do sistema que chama a API de IA e o
 Telegram**. Roda de três formas, sempre com o mesmo resultado:
 
 1. Direto no terminal;
@@ -71,8 +71,9 @@ o stderr. Se você adicionar saída ao script, respeite essa separação — é 
 servidor. Erros são devolvidos como `{"erro": "..."}` no stdout com código de saída 1.
 
 **O Node nunca importa o pacote `analise/`** e não tem SDK da Anthropic instalado. Para
-saber se os botões devem ficar habilitados ele usa `src/server/ambiente.js`, que só lê
-variáveis de ambiente.
+saber se os botões devem ficar habilitados ele usa `src/server/ambiente.js`, que apenas
+confere a configuração declarada no `.env` (via `src/config/configIa.js`) e as variáveis
+do Telegram.
 
 ### Quem escreve cada arquivo de dados
 
@@ -95,6 +96,8 @@ Dois pontos de extensão existem para permitir testes sem rede:
 
 - `analise/runner.py` → `executar(analisar_com_ia=...)` substitui o analisador de IA.
 - `analise/ai_insights.py` → `analisar(..., criar_cliente=...)` substitui o cliente da API.
+- `analise/config_ia.py` e `src/config/configIa.js` → `IA_ENV_FILE` aponta para outro
+  arquivo `.env`, isolando a configuração de IA da máquina do usuário.
 - `src/server/app.js` → `criarServidor(servicos)` substitui a ponte com o script.
 - `src/server/analiseExterna.js` → `rodarScript(args, { script, python })` aponta para
   outro script ou interpretador.
@@ -130,15 +133,19 @@ Duas suítes, uma por metade. Nenhuma toca a rede.
 `import { jest } from "@jest/globals"` — `describe`/`test`/`expect` são globais.
 Helpers em `test/helpers/ambiente.js`: `dataDirTemporario()` isola o disco via
 `PORTFOLIO_DATA_DIR`, `comEnv()` isola variáveis de ambiente (devolve um restaurador —
-chame-o num `finally`), `gravarAnalise()` simula o que o Python grava.
+chame-o num `finally`), `envIaTemporario()` isola a configuração de IA num `.env`
+temporário apontado por `IA_ENV_FILE`, `gravarAnalise()` simula o que o Python grava.
 A ponte com o Python é testada disparando **scripts Python mínimos** escritos num
 diretório temporário, nunca o script real.
 
-**pytest (`tests_analise/`)** — motor de análise. Fixtures em `conftest.py`: `dados_temp`
-aponta `PORTFOLIO_DATA_DIR` para um `tmp_path`, `rede` substitui `requests.get` por uma
-tabela de rotas, `mercado_padrao` já traz os indicadores macro, `snapshot_exemplo` e
+**pytest (`tests_analise/`)** — motor de análise. Fixtures em `conftest.py`: `env_ia` é
+**autouse** e aponta `IA_ENV_FILE` para um `.env` temporário (sem isso os testes leriam a
+chave e o modelo reais do usuário) — ela devolve um escritor de variáveis; `dados_temp`
+aponta `PORTFOLIO_DATA_DIR` para um `tmp_path`; `rede` substitui `requests.get` por uma
+tabela de rotas; `mercado_padrao` já traz os indicadores macro; `snapshot_exemplo` e
 `ia_exemplo` alimentam relatório e fundamentos. Os testes do CLI rodam o script de verdade
-em subprocesso, com a rede substituída por um `sitecustomize.py` temporário.
+em subprocesso, com a rede substituída por um `sitecustomize.py` temporário e um
+`ia.env` próprio.
 
 Cobertura Jest: ~97% de linhas. Ao mexer em `analise/` ou `src/core/`, mantenha o módulo
 alterado coberto.
@@ -153,13 +160,32 @@ alterado coberto.
 `last_analysis.json` e `history/` são pessoais e estão no `.gitignore`. Nunca sobrescreva
 esses arquivos ao testar — use `PORTFOLIO_DATA_DIR`, respeitado pelas duas linguagens.
 
-**Chamada à Anthropic.** Está em `analise/ai_insights.py` e usa o SDK oficial Python:
+**Chamada à IA.** Está em `analise/ai_insights.py` e usa o SDK oficial Python da Anthropic:
 `output_config` com `effort` e `format: {"type": "json_schema", "schema": SCHEMA}`, a
 ferramenta de servidor `web_search_20260209`, e — só nas famílias Opus 5 / Fable 5 —
 `client.beta.messages.create` com `betas=["server-side-fallback-2026-07-01"]` e
 `fallbacks="default"`. Enviar `fallbacks` para outros modelos devolve 400: a checagem está
-em `suporta_fallback()`. Trate `stop_reason` (`refusal`, `max_tokens`) antes de ler o
-conteúdo.
+em `config_ia.suporta_fallback()`. Trate `stop_reason` (`refusal`, `max_tokens`) antes de
+ler o conteúdo.
+
+**Nada de modelo ou esforço fixo no código.** Toda a configuração da IA sai do `.env`, lido
+por `analise/config_ia.py` (Python) e `src/config/configIa.js` (Node) — os dois com as
+mesmas regras, porque leem o **mesmo** arquivo:
+
+- o `.env` tem **precedência** sobre variáveis já presentes no ambiente (o inverso de
+  `carregarEnv`, que só preenche o que falta em `process.env`);
+- `IA_PROVEDOR` escolhe o bloco, e o nome vira o prefixo em maiúsculas: `kimi` lê
+  `KIMI_MODEL`, `KIMI_EFFORT`, `KIMI_BASE_URL`, `KIMI_FALLBACK`, `KIMI_BUSCA_WEB`,
+  `KIMI_MAX_TOKENS`. Um novo provedor compatível com a API da Anthropic entra só no `.env`;
+- `<PREFIXO>MODEL` e `<PREFIXO>EFFORT` são **obrigatórios** — sem padrão em lugar nenhum.
+  `EFFORT=nenhum` omite o campo (é o caso do Kimi, que não o usa);
+- `<PREFIXO>ORIGEM_CHAVE` declara de onde vem a credencial: `arquivo` lê **somente**
+  `<PREFIXO>API_KEY` do `.env` e falha se faltar; `ambiente` lê **somente** a variável de
+  ambiente cujo nome está em `<PREFIXO>VARIAVEL_CHAVE`. Não misture as duas fontes.
+
+Ao acrescentar uma opção de provedor, ela entra em `configuracao()` (Python) e, se a
+interface precisar dela, em `configuracaoIa()` (Node) — nunca como constante no meio da
+chamada. O Node **não** devolve a chave: `conferirChave()` só verifica a presença.
 
 **Os números agregados não vêm do modelo.** A IA devolve as fichas por ativo (P/VP, DY,
 segmento, gestora); as médias ponderadas, a renda estimada e as concentrações são

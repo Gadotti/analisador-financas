@@ -1,5 +1,6 @@
 """Fixtures compartilhadas pelos testes do motor de análise."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +24,24 @@ class RespostaFalsa:
 
     def json(self):
         return self._corpo
+
+
+@pytest.fixture(autouse=True)
+def env_ia(tmp_path, monkeypatch):
+    """Isola a configuracao de IA num .env temporario.
+
+    Autouse de proposito: sem isso os testes leriam o .env real do projeto,
+    com a chave e o modelo do usuario. Devolve um escritor de variaveis.
+    """
+    arquivo = tmp_path / "ia.env"
+    monkeypatch.setenv("IA_ENV_FILE", str(arquivo))
+
+    def escrever(**variaveis):
+        linhas = [f"{chave}={valor}" for chave, valor in variaveis.items()]
+        arquivo.write_text(os.linesep.join(linhas), encoding="utf-8")
+        return arquivo
+
+    return escrever
 
 
 @pytest.fixture

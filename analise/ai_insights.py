@@ -1,7 +1,12 @@
-"""Análise qualitativa e fundamentalista da carteira via Claude + busca web.
+"""Análise qualitativa e fundamentalista da carteira via IA + busca web.
 
-Camada OPCIONAL: exige `anthropic` instalado e ANTHROPIC_API_KEY configurada.
-A análise determinística (analise.analysis) funciona sem nada disso.
+Camada OPCIONAL: exige o pacote `anthropic` instalado e o bloco do provedor
+preenchido no `.env` (veja analise.config_ia). A análise determinística
+(analise.analysis) funciona sem nada disso.
+
+Provedor, modelo, esforço, endereço da API e origem da chave saem todos do
+`.env` — nada disso é fixo aqui. Como Kimi e outros provedores expõem a mesma
+API da Anthropic, basta apontar `<PREFIXO>BASE_URL` para eles.
 
 A IA levanta os fundamentos de cada ativo (segmento, P/VP, DY, patrimônio,
 gestora) e escreve a leitura qualitativa. Os números agregados da carteira
@@ -12,32 +17,23 @@ a partir dessas fichas, e não estimados pelo modelo.
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 
-from . import portfolio
+from . import config_ia, portfolio
+from .config_ia import ConfiguracaoIAError, suporta_fallback  # noqa: F401
 
-MODELO_PADRAO = "claude-opus-5"
-EFFORT_PADRAO = "medium"
-MAX_TOKENS = 16000
+FERRAMENTA_BUSCA = {"type": "web_search_20260209", "name": "web_search"}
+BETA_FALLBACK = "server-side-fallback-2026-07-01"
 
 
 def modelo() -> str:
-    """Modelo configurado. Lido a cada chamada para respeitar o .env carregado."""
-    return os.getenv("ANTHROPIC_MODEL") or MODELO_PADRAO
+    """Modelo configurado no .env. Lido a cada chamada, sem valor padrão no código."""
+    return config_ia.configuracao(exigir_chave=False)["modelo"]
 
 
-def effort() -> str:
-    return os.getenv("ANTHROPIC_EFFORT") or EFFORT_PADRAO
-
-# O parâmetro `fallbacks` (retomar automaticamente em outro modelo quando os
-# classificadores de segurança recusam o pedido) só existe nestas famílias.
-# Enviá-lo para os demais modelos resulta em erro 400.
-FAMILIAS_COM_FALLBACK = ("claude-opus-5", "claude-fable-5", "claude-mythos-5")
-
-
-def suporta_fallback(nome_modelo: str) -> bool:
-    return nome_modelo.startswith(FAMILIAS_COM_FALLBACK)
+def effort() -> str | None:
+    """Esforço configurado no .env. None quando o provedor não deve recebê-lo."""
+    return config_ia.configuracao(exigir_chave=False)["effort"]
 
 
 SYSTEM_PROMPT = """Você é um analista de investimentos brasileiro, especialista em fundos
@@ -238,8 +234,10 @@ class IAIndisponivel(RuntimeError):
 
 def disponivel() -> tuple[bool, str]:
     """Indica se a análise por IA pode ser executada e o motivo em caso negativo."""
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        return False, "ANTHROPIC_API_KEY nao configurada (veja o arquivo .env)."
+    try:
+        config_ia.configuracao()
+    except ConfiguracaoIAError as exc:
+        return False, str(exc)
     try:
         import anthropic  # noqa: F401
     except ImportError:
@@ -337,11 +335,70 @@ def extrair_json(blocos) -> dict:
         raise IAIndisponivel(f"A IA não retornou JSON válido: {exc}") from None
 
 
-def _cliente_padrao():
-    """Cria o cliente oficial. Import tardio: o SDK só carrega quando é usado."""
+def _cliente_padrao(cfg: dict):
+    """Cria o cliente oficial. Import tardio: o SDK só carrega quando é usado.
+
+    `base_url` vem do .env — é o que permite apontar para um provedor
+    compatível com a API da Anthropic (Kimi, por exemplo) sem tocar no código.
+    """
     import anthropic
 
-    return anthropic.Anthropic()
+    argumentos = {"api_key": cfg["chave"]}
+    if cfg["base_url"]:
+        argumentos["base_url"] = cfg["base_url"]
+    return anthropic.Anthropic(**argumentos)
+
+
+def montar_parametros(snapshot: dict, config: dict, cfg: dict) -> dict:
+    """Corpo da requisição, montado a partir da configuração do provedor."""
+    output_config: dict = {"format": {"type": "json_schema", "schema": SCHEMA}}
+    if cfg["effort"]:
+        output_config["effort"] = cfg["effort"]
+
+    parametros = {
+        "model": cfg["modelo"],
+        "max_tokens": cfg["max_tokens"],
+        "system": SYSTEM_PROMPT,
+        "output_config": output_config,
+        "messages": [{"role": "user", "content": montar_prompt(snapshot, config)}],
+    }
+    if cfg["busca_web"]:
+        parametros["tools"] = [FERRAMENTA_BUSCA]
+    return parametros
+
+
+def _criar_resposta(client, parametros: dict, cfg: dict):
+    """Dispara a chamada e traduz qualquer falha em IAIndisponivel."""
+    try:
+        if cfg["fallback"]:
+            # Se os classificadores recusarem, a própria API refaz o pedido
+            # no modelo de retaguarda recomendado, na mesma chamada.
+            return client.beta.messages.create(
+                **parametros, betas=[BETA_FALLBACK], fallbacks="default"
+            )
+        return client.messages.create(**parametros)
+    except Exception as exc:
+        status = getattr(exc, "status_code", None)
+        if status is not None:
+            mensagem = getattr(exc, "message", None) or str(exc)
+            raise IAIndisponivel(
+                f"Erro da API de IA ({cfg['provedor']}, HTTP {status}): {mensagem}"
+            ) from None
+        raise IAIndisponivel(
+            f"Falha de conexão com a API de IA ({cfg['provedor']}): {exc}"
+        ) from None
+
+
+def _conferir_parada(resposta, cfg: dict) -> None:
+    if resposta.stop_reason == "refusal":
+        categoria = getattr(getattr(resposta, "stop_details", None), "category", None)
+        sufixo = f" ({categoria})" if categoria else ""
+        raise IAIndisponivel(f"A IA recusou responder a esta solicitação{sufixo}.")
+    if resposta.stop_reason == "max_tokens":
+        raise IAIndisponivel(
+            "A resposta da IA foi truncada por limite de tokens. Reduza o número "
+            f"de posições ou aumente {cfg['prefixo']}MAX_TOKENS no arquivo .env."
+        )
 
 
 def analisar(snapshot: dict, config: dict, *, criar_cliente=None) -> dict:
@@ -353,60 +410,24 @@ def analisar(snapshot: dict, config: dict, *, criar_cliente=None) -> dict:
     if not ok:
         raise IAIndisponivel(motivo)
 
+    cfg = config_ia.configuracao()
+
     try:
-        client = (criar_cliente or _cliente_padrao)()
+        client = (criar_cliente or (lambda: _cliente_padrao(cfg)))()
     except ImportError as exc:
         raise IAIndisponivel(
             f"Pacote 'anthropic' nao instalado (pip install -r requirements.txt): {exc}"
         ) from None
 
-    nome_modelo = modelo()
-    nivel_effort = effort()
-
-    parametros = {
-        "model": nome_modelo,
-        "max_tokens": MAX_TOKENS,
-        "system": SYSTEM_PROMPT,
-        "output_config": {
-            "effort": nivel_effort,
-            "format": {"type": "json_schema", "schema": SCHEMA},
-        },
-        "tools": [{"type": "web_search_20260209", "name": "web_search"}],
-        "messages": [{"role": "user", "content": montar_prompt(snapshot, config)}],
-    }
-
-    try:
-        if suporta_fallback(nome_modelo):
-            # Se os classificadores recusarem, a própria API refaz o pedido
-            # no modelo de retaguarda recomendado, na mesma chamada.
-            resposta = client.beta.messages.create(
-                **parametros,
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
-            )
-        else:
-            resposta = client.messages.create(**parametros)
-    except Exception as exc:
-        status = getattr(exc, "status_code", None)
-        if status is not None:
-            mensagem = getattr(exc, "message", None) or str(exc)
-            raise IAIndisponivel(f"Erro da API Anthropic ({status}): {mensagem}") from None
-        raise IAIndisponivel(f"Falha de conexão com a API Anthropic: {exc}") from None
-
-    if resposta.stop_reason == "refusal":
-        categoria = getattr(getattr(resposta, "stop_details", None), "category", None)
-        sufixo = f" ({categoria})" if categoria else ""
-        raise IAIndisponivel(f"A IA recusou responder a esta solicitação{sufixo}.")
-    if resposta.stop_reason == "max_tokens":
-        raise IAIndisponivel(
-            "A resposta da IA foi truncada por limite de tokens. "
-            "Reduza o número de posições ou aumente MAX_TOKENS em analise/ai_insights.py."
-        )
+    parametros = montar_parametros(snapshot, config, cfg)
+    resposta = _criar_resposta(client, parametros, cfg)
+    _conferir_parada(resposta, cfg)
 
     dados = extrair_json(resposta.content)
     dados["_meta"] = {
+        "provedor": cfg["provedor"],
         "modelo": resposta.model,
-        "effort": nivel_effort,
+        "effort": cfg["effort"],
         "tokens_entrada": getattr(resposta.usage, "input_tokens", None),
         "tokens_saida": getattr(resposta.usage, "output_tokens", None),
         "buscas_web": getattr(

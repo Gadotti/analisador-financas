@@ -1,7 +1,7 @@
 /**
  * Ponte entre o servidor web e o script de análise em Python.
  *
- * O servidor nunca chama a API da Anthropic nem o Telegram: ele dispara
+ * O servidor nunca chama a API de IA nem o Telegram: ele dispara
  * `scripts/analisar.py` como processo filho e lê o JSON do stdout. Assim a
  * mesma execução vale para o agendador de tarefas, para o terminal e para o
  * botão da interface.

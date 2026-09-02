@@ -60,7 +60,8 @@ function metaDaAnalise(ia) {
   const meta = ia._meta || {};
   if (!meta.gerado_em) return "";
   const buscas = meta.buscas_web ? ` · ${meta.buscas_web} buscas` : "";
-  return `${meta.modelo || ""} · effort ${meta.effort || "—"}${buscas} · ${dataHoraBR(meta.gerado_em)}`;
+  const provedor = meta.provedor ? `${meta.provedor} · ` : "";
+  return `${provedor}${meta.modelo || ""} · effort ${meta.effort || "—"}${buscas} · ${dataHoraBR(meta.gerado_em)}`;
 }
 
 export function renderLeitura(ia, erro) {

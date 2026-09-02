@@ -37,6 +37,7 @@ function servicosFalsos() {
     statusIa: () => ({ ok: true, motivo: "" }),
     telegramConfigurado: () => true,
     modeloIa: () => "claude-opus-5",
+    provedorIa: () => "anthropic",
   };
 }
 
@@ -139,6 +140,7 @@ describe("GET /api", () => {
       ia_motivo: "",
       telegram_configurado: true,
       modelo: "claude-opus-5",
+      provedor: "anthropic",
     });
   });
 

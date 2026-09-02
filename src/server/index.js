@@ -68,7 +68,11 @@ export function iniciar(argv = []) {
     const { ok, motivo } = ambiente.statusIa();
     process.stdout.write(`\n  Portfolio Analyzer — ${endereco}\n`);
     process.stdout.write(
-      `  Análise por IA: ${ok ? `disponível (${ambiente.modeloIa()})` : `indisponível — ${motivo}`}\n`,
+      `  Análise por IA: ${
+        ok
+          ? `disponível (${ambiente.provedorIa()} · ${ambiente.modeloIa()})`
+          : `indisponível — ${motivo}`
+      }\n`,
     );
     process.stdout.write(
       `  Telegram: ${ambiente.telegramConfigurado() ? "configurado" : "não configurado"}\n`,

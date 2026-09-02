@@ -30,17 +30,38 @@ npm install
 copy .env.example .env
 ```
 
-Edite o `.env` conforme o que pretende usar. **Nada nele é obrigatório** — sem chave de API
-o sistema continua calculando cotações, rentabilidade, alocação e alertas normalmente; só a
-análise de mercado por IA fica indisponível.
+Edite o `.env` conforme o que pretende usar. **Nada nele é obrigatório** — sem o bloco do
+provedor de IA o sistema continua calculando cotações, rentabilidade, alocação e alertas
+normalmente; só a análise de mercado por IA fica indisponível.
+
+O `.env` é quem manda: o que estiver nele tem precedência sobre variáveis já definidas no
+ambiente, e **nenhum modelo ou esforço é fixo no código**.
 
 | Variável | Para quê |
 |---|---|
-| `ANTHROPIC_API_KEY` | Análise de mercado por IA ([console.anthropic.com](https://console.anthropic.com/settings/keys)) |
-| `ANTHROPIC_MODEL` / `ANTHROPIC_EFFORT` | Modelo e profundidade da análise (padrão: `claude-opus-5` / `medium`) |
+| `IA_PROVEDOR` | Qual bloco de variáveis vale: `anthropic` (padrão) ou `kimi` |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Envio do relatório ao Telegram |
 | `BRAPI_TOKEN` | Fonte alternativa de cotações |
 | `PYTHON_BIN` | Interpretador Python que a interface deve chamar (útil com venv) |
+
+O nome em `IA_PROVEDOR` vira o prefixo das variáveis do provedor (`anthropic` →
+`ANTHROPIC_*`, `kimi` → `KIMI_*`). Cada bloco aceita:
+
+| Variável | Para quê |
+|---|---|
+| `<P>_MODEL` | Modelo da análise. **Obrigatória** |
+| `<P>_EFFORT` | Profundidade: `low`, `medium`, `high`, `xhigh`, `max` ou `nenhum` para não enviar o campo. **Obrigatória** |
+| `<P>_ORIGEM_CHAVE` | Onde buscar a chave: `arquivo` (padrão) ou `ambiente` |
+| `<P>_API_KEY` | A chave, quando a origem é `arquivo` — lida **somente** daqui |
+| `<P>_VARIAVEL_CHAVE` | O **nome** da variável de ambiente que guarda a chave, quando a origem é `ambiente` |
+| `<P>_BASE_URL` | Endereço da API, para provedores compatíveis com a API da Anthropic |
+| `<P>_FALLBACK` | `auto` (pela família do modelo), `sim` ou `nao` |
+| `<P>_BUSCA_WEB` | `sim` (padrão) ou `nao` — ferramenta de busca do servidor |
+| `<P>_MAX_TOKENS` | Teto de tokens da resposta (padrão: 16000) |
+
+Trocar de provedor é, portanto, uma edição no `.env`: o `.env.example` já traz o bloco do
+Kimi pronto, comentado — ele expõe a mesma API da Anthropic, então o mesmo SDK atende
+mudando só `KIMI_BASE_URL`.
 
 ---
 
@@ -98,8 +119,9 @@ npm run test:python
 python -m pytest   # pytest — motor de análise (cálculos, IA, Telegram, CLI)
 ```
 
-Nenhuma das duas suítes faz chamada de rede: cotações, Banco Central, Telegram e a API da
-Anthropic são todos substituídos por dublês.
+Nenhuma das duas suítes faz chamada de rede: cotações, Banco Central, Telegram e a API de
+IA são todos substituídos por dublês. As duas isolam a configuração de IA num `.env`
+temporário (via `IA_ENV_FILE`), para nunca ler o `.env` real do projeto.
 
 ---
 
@@ -141,7 +163,7 @@ sempre ancorada nos números que o sistema já calculou.
 | Cotações da B3 | Yahoo Finance (primária), brapi.dev (alternativa) |
 | CDI, Selic, IPCA | Banco Central — séries SGS 4389, 432 e 433 |
 | Ibovespa | Yahoo Finance |
-| Notícias e contexto | Claude com busca web |
+| Notícias e contexto | O provedor de IA configurado, com busca web |
 
 Cotações ficam em cache por 15 minutos e indicadores por 12 horas, em `data/cache.json`.
 
@@ -156,7 +178,8 @@ analise/                 MOTOR DE ANÁLISE (Python)
   fixed_income.py        marcação a mercado de CDBs, dias úteis e IR
   analysis.py            consolidação da carteira e alertas (sem IA)
   fundamentals.py        métricas agregadas a partir das fichas da IA
-  ai_insights.py         análise qualitativa via Claude + busca web
+  config_ia.py           provedor, modelo, esforço e chave, lidos do .env
+  ai_insights.py         análise qualitativa via IA + busca web
   notifier.py            envio ao Telegram
   report.py              formatação para terminal e Telegram
   runner.py              orquestração e persistência
@@ -169,6 +192,7 @@ src/                     APLICAÇÃO WEB (Node.js)
   server/app.js          servidor HTTP e rotas da API
   server/analiseExterna.js  ponte que dispara o script Python
   server/ambiente.js     checagem de IA e Telegram configurados
+  config/configIa.js     leitura do provedor de IA declarado no .env
   server/index.js        inicialização (porta, navegador, sinais)
   util/                  datas e leitura do .env
 web/                     interface (HTML, CSS e JavaScript sem dependências)

@@ -270,10 +270,21 @@ def rodar_cli(args, dados_dir, extra_env=None):
         encoding="utf-8",
     )
 
+    # .env próprio: modelo e esforço definidos, chave ausente. Sem isso o
+    # subprocesso leria o .env real do projeto.
+    env_ia = dados_dir / "ia.env"
+    env_ia.write_text(
+        "ANTHROPIC_ORIGEM_CHAVE=arquivo\n"
+        "ANTHROPIC_MODEL=claude-opus-5\n"
+        "ANTHROPIC_EFFORT=medium\n",
+        encoding="utf-8",
+    )
+
     ambiente = {
         **dict(__import__("os").environ),
         "PORTFOLIO_DATA_DIR": str(dados_dir),
         "PYTHONPATH": str(dados_dir),
+        "IA_ENV_FILE": str(env_ia),
         "ANTHROPIC_API_KEY": "",
         "PYTHONIOENCODING": "utf-8",
         **(extra_env or {}),

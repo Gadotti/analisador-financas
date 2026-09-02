@@ -10,7 +10,7 @@ import {
   paraISO,
   somarDias,
 } from "../src/util/datas.js";
-import { carregarEnv } from "../src/util/env.js";
+import { carregarEnv, lerArquivoEnv } from "../src/util/env.js";
 import { comEnv } from "./helpers/ambiente.js";
 
 const NL = String.fromCharCode(10);
@@ -73,6 +73,21 @@ describe("carregarEnv", () => {
 
   test("devolve false quando o arquivo não existe", () => {
     expect(carregarEnv(path.join(dir, "nao-existe"))).toBe(false);
+  });
+
+  test("lerArquivoEnv devolve o conteúdo do arquivo sem tocar em process.env", () => {
+    const arquivo = escrever(["# comentário", "SO_NO_ARQUIVO=valor"].join(NL));
+    const restaurar = comEnv({ SO_NO_ARQUIVO: undefined });
+    try {
+      expect(lerArquivoEnv(arquivo)).toEqual({ SO_NO_ARQUIVO: "valor" });
+      expect(process.env.SO_NO_ARQUIVO).toBeUndefined();
+    } finally {
+      restaurar();
+    }
+  });
+
+  test("lerArquivoEnv devolve objeto vazio quando o arquivo não existe", () => {
+    expect(lerArquivoEnv(path.join(dir, "nao-existe"))).toEqual({});
   });
 
   test("lê pares chave=valor sem sobrescrever o ambiente já definido", () => {

@@ -24,6 +24,36 @@ export function dataDirTemporario() {
   };
 }
 
+/**
+ * Isola a configuração de IA num .env temporário, apontado por IA_ENV_FILE.
+ *
+ * Sem isso os testes leriam o .env real do projeto, com a chave e o modelo do
+ * usuário. `escrever` grava as variáveis; `limpar` restaura e apaga.
+ */
+export function envIaTemporario(variaveis = null) {
+  const anterior = process.env.IA_ENV_FILE;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "analisador-ia-"));
+  const arquivo = path.join(dir, "ia.env");
+  process.env.IA_ENV_FILE = arquivo;
+
+  function escrever(valores) {
+    const linhas = Object.entries(valores).map(([chave, valor]) => `${chave}=${valor}`);
+    fs.writeFileSync(arquivo, linhas.join(os.EOL), "utf8");
+  }
+
+  if (variaveis) escrever(variaveis);
+
+  return {
+    arquivo,
+    escrever,
+    limpar() {
+      if (anterior === undefined) delete process.env.IA_ENV_FILE;
+      else process.env.IA_ENV_FILE = anterior;
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
 /** Define variáveis de ambiente e devolve um restaurador. */
 export function comEnv(valores) {
   const anteriores = {};

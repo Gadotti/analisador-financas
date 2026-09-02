@@ -1,22 +1,41 @@
 /**
  * Leitura das variáveis de ambiente que a interface precisa exibir.
  *
- * São apenas checagens locais: quem de fato conversa com a Anthropic e com o
+ * São apenas checagens locais: quem de fato conversa com a API de IA e com o
  * Telegram é o script Python. O servidor só precisa saber se os botões devem
- * ficar habilitados e qual modelo aparece no rodapé.
+ * ficar habilitados e qual provedor e modelo aparecem no rodapé — tudo isso
+ * declarado no .env (veja src/config/configIa.js).
  */
 
-export const MODELO_PADRAO = "claude-opus-5";
+import { ConfiguracaoIaError, configuracaoIa } from "../config/configIa.js";
 
-/** Modelo configurado para a análise por IA. */
+/** Descrição do provedor ativo, ou null quando o .env não a define. */
+export function descricaoIa() {
+  try {
+    return configuracaoIa({ exigirChave: false });
+  } catch (erro) {
+    if (erro instanceof ConfiguracaoIaError) return null;
+    throw erro;
+  }
+}
+
+/** Modelo configurado para a análise por IA, ou null se não houver. */
 export function modeloIa() {
-  return process.env.ANTHROPIC_MODEL || MODELO_PADRAO;
+  return descricaoIa()?.modelo ?? null;
+}
+
+/** Provedor configurado para a análise por IA, ou null se não houver. */
+export function provedorIa() {
+  return descricaoIa()?.provedor ?? null;
 }
 
 /** Indica se a análise por IA pode ser executada e o motivo em caso negativo. */
 export function statusIa() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { ok: false, motivo: "ANTHROPIC_API_KEY nao configurada (veja o arquivo .env)." };
+  try {
+    configuracaoIa();
+  } catch (erro) {
+    if (erro instanceof ConfiguracaoIaError) return { ok: false, motivo: erro.message };
+    throw erro;
   }
   return { ok: true, motivo: "" };
 }

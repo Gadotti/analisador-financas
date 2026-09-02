@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from analise import ai_insights as ia
+from analise import config_ia
 
 CONFIG = {"max_fatos": 5, "max_oportunidades": 3}
 
@@ -47,10 +48,14 @@ def resposta_valida(dados):
 
 
 @pytest.fixture
-def com_chave(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-teste")
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-opus-5")
-    monkeypatch.setenv("ANTHROPIC_EFFORT", "medium")
+def com_chave(env_ia):
+    """Bloco completo do provedor anthropic no .env temporário."""
+    env_ia(
+        ANTHROPIC_ORIGEM_CHAVE="arquivo",
+        ANTHROPIC_API_KEY="sk-ant-teste",
+        ANTHROPIC_MODEL="claude-opus-5",
+        ANTHROPIC_EFFORT="medium",
+    )
 
 
 # ─────────────────────────────────────────────
@@ -58,32 +63,49 @@ def com_chave(monkeypatch):
 # ─────────────────────────────────────────────
 
 
-def test_indisponivel_sem_chave(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_indisponivel_sem_chave(env_ia):
+    env_ia(ANTHROPIC_MODEL="claude-opus-5", ANTHROPIC_EFFORT="medium")
     ok, motivo = ia.disponivel()
 
     assert ok is False
     assert "ANTHROPIC_API_KEY" in motivo
 
 
+def test_indisponivel_sem_modelo(env_ia):
+    env_ia(ANTHROPIC_API_KEY="sk-ant-teste")
+    ok, motivo = ia.disponivel()
+
+    assert ok is False
+    assert "ANTHROPIC_MODEL" in motivo
+
+
 def test_disponivel_com_chave(com_chave):
     assert ia.disponivel() == (True, "")
 
 
-def test_modelo_e_effort_padrao(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
-    monkeypatch.delenv("ANTHROPIC_EFFORT", raising=False)
-
-    assert ia.modelo() == "claude-opus-5"
-    assert ia.effort() == "medium"
-
-
-def test_modelo_e_effort_do_ambiente(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-sonnet-5")
-    monkeypatch.setenv("ANTHROPIC_EFFORT", "high")
+def test_modelo_e_effort_vem_do_arquivo(env_ia, monkeypatch):
+    # O ambiente diz uma coisa, o arquivo outra: o arquivo é quem manda.
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-opus-5")
+    monkeypatch.setenv("ANTHROPIC_EFFORT", "low")
+    env_ia(ANTHROPIC_MODEL="claude-sonnet-5", ANTHROPIC_EFFORT="high")
 
     assert ia.modelo() == "claude-sonnet-5"
     assert ia.effort() == "high"
+
+
+def test_ambiente_atende_quando_o_arquivo_nao_define(env_ia, monkeypatch):
+    env_ia(ANTHROPIC_API_KEY="sk-ant-teste")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-fable-5")
+    monkeypatch.setenv("ANTHROPIC_EFFORT", "xhigh")
+
+    assert ia.modelo() == "claude-fable-5"
+    assert ia.effort() == "xhigh"
+
+
+def test_effort_nenhum_vira_none(env_ia):
+    env_ia(ANTHROPIC_MODEL="claude-sonnet-5", ANTHROPIC_EFFORT="nenhum")
+
+    assert ia.effort() is None
 
 
 @pytest.mark.parametrize(
@@ -177,8 +199,8 @@ def test_erra_sem_texto_ou_com_json_invalido():
 # ─────────────────────────────────────────────
 
 
-def test_recusa_sem_chave(snapshot_exemplo, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_recusa_sem_chave(snapshot_exemplo, env_ia):
+    env_ia(ANTHROPIC_MODEL="claude-opus-5", ANTHROPIC_EFFORT="medium")
 
     with pytest.raises(ia.IAIndisponivel):
         ia.analisar(snapshot_exemplo, CONFIG)
@@ -200,18 +222,23 @@ def test_usa_o_canal_beta_com_fallback(snapshot_exemplo, com_chave):
     assert parametros["output_config"]["format"]["type"] == "json_schema"
     assert parametros["output_config"]["format"]["schema"] is ia.SCHEMA
     assert parametros["tools"] == [{"type": "web_search_20260209", "name": "web_search"}]
-    assert parametros["max_tokens"] == ia.MAX_TOKENS
+    assert parametros["max_tokens"] == config_ia.MAX_TOKENS_PADRAO
     assert parametros["messages"][0]["role"] == "user"
 
     assert dados["resumo"] == "ok"
+    assert dados["_meta"]["provedor"] == "anthropic"
     assert dados["_meta"]["modelo"] == "claude-opus-5"
     assert dados["_meta"]["effort"] == "medium"
     assert dados["_meta"]["tokens_entrada"] == 1200
     assert dados["_meta"]["buscas_web"] == 6
 
 
-def test_usa_o_canal_normal_sem_fallback(snapshot_exemplo, com_chave, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+def test_usa_o_canal_normal_sem_fallback(snapshot_exemplo, env_ia):
+    env_ia(
+        ANTHROPIC_API_KEY="sk-ant-teste",
+        ANTHROPIC_MODEL="claude-sonnet-5",
+        ANTHROPIC_EFFORT="medium",
+    )
     cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
 
     ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
@@ -219,6 +246,21 @@ def test_usa_o_canal_normal_sem_fallback(snapshot_exemplo, com_chave, monkeypatc
     assert len(cliente.chamadas["normal"]) == 1
     assert cliente.chamadas["beta"] == []
     assert "fallbacks" not in cliente.chamadas["normal"][0]
+
+
+def test_fallback_pode_ser_forcado_pelo_env(snapshot_exemplo, env_ia):
+    env_ia(
+        ANTHROPIC_API_KEY="sk-ant-teste",
+        ANTHROPIC_MODEL="claude-sonnet-5",
+        ANTHROPIC_EFFORT="medium",
+        ANTHROPIC_FALLBACK="sim",
+    )
+    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+
+    ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
+
+    assert len(cliente.chamadas["beta"]) == 1
+    assert cliente.chamadas["beta"][0]["fallbacks"] == "default"
 
 
 def test_recusa_do_modelo_vira_ia_indisponivel(snapshot_exemplo, com_chave):
@@ -244,7 +286,7 @@ def test_erro_http_traz_o_status(snapshot_exemplo, com_chave):
     erro = RuntimeError("overloaded")
     erro.status_code = 529
 
-    with pytest.raises(ia.IAIndisponivel, match=r"Erro da API Anthropic \(529\)"):
+    with pytest.raises(ia.IAIndisponivel, match=r"Erro da API de IA \(anthropic, HTTP 529\)"):
         ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: ClienteFalso(falhar_com=erro))
 
 
@@ -261,6 +303,55 @@ def test_sdk_ausente_gera_mensagem_clara(snapshot_exemplo, com_chave):
 
     with pytest.raises(ia.IAIndisponivel, match="Pacote 'anthropic' nao instalado"):
         ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=sem_sdk)
+
+
+# ─────────────────────────────────────────────
+# Outro provedor pelo .env (Kimi)
+# ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def com_kimi(env_ia):
+    env_ia(
+        IA_PROVEDOR="kimi",
+        KIMI_API_KEY="sk-kimi-teste",
+        KIMI_MODEL="kimi-k2-thinking",
+        KIMI_EFFORT="nenhum",
+        KIMI_BASE_URL="https://api.moonshot.ai/anthropic",
+        KIMI_BUSCA_WEB="nao",
+        KIMI_MAX_TOKENS="8000",
+    )
+
+
+def test_kimi_usa_canal_normal_sem_effort_e_sem_busca(snapshot_exemplo, com_kimi):
+    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+
+    dados = ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
+
+    parametros = cliente.chamadas["normal"][0]
+    assert cliente.chamadas["beta"] == []
+    assert parametros["model"] == "kimi-k2-thinking"
+    assert parametros["max_tokens"] == 8000
+    assert "effort" not in parametros["output_config"]
+    assert "tools" not in parametros
+    assert dados["_meta"]["provedor"] == "kimi"
+    assert dados["_meta"]["effort"] is None
+
+
+def test_base_url_do_env_chega_ao_cliente(com_kimi):
+    cfg = config_ia.configuracao()
+
+    cliente = ia._cliente_padrao(cfg)
+
+    assert str(cliente.base_url).startswith("https://api.moonshot.ai/anthropic")
+
+
+def test_cliente_sem_base_url_usa_o_padrao_do_sdk(com_chave):
+    cfg = config_ia.configuracao()
+
+    cliente = ia._cliente_padrao(cfg)
+
+    assert "anthropic.com" in str(cliente.base_url)
 
 
 # ─────────────────────────────────────────────

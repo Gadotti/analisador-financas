@@ -34,6 +34,7 @@ const SERVICOS_PADRAO = {
   statusIa: ambiente.statusIa,
   telegramConfigurado: ambiente.telegramConfigurado,
   modeloIa: ambiente.modeloIa,
+  provedorIa: ambiente.provedorIa,
 };
 
 function responderJson(res, dados, status = 200) {
@@ -154,6 +155,7 @@ export function criarServidor(servicos = {}) {
             ia_motivo: motivo,
             telegram_configurado: svc.telegramConfigurado(),
             modelo: svc.modeloIa(),
+            provedor: svc.provedorIa(),
           });
           return;
         }
