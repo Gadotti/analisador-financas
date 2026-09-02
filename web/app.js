@@ -53,14 +53,15 @@ function renderAnalise() {
   }
 
   const { snapshot, ia, ia_erro: iaErro, fundamentos } = resultado;
+  const herdadaDe = resultado.ia_reaproveitada_de || null;
   renderMacro(snapshot);
-  renderResumo(snapshot, ia, fundamentos);
+  renderResumo(snapshot, ia, fundamentos, herdadaDe);
   renderAlocacao(snapshot, fundamentos, limiteConcentracao());
   renderRiscos(snapshot, ia);
   renderFatos(ia);
   renderPosicoes(estado.carteira.posicoes, snapshot, fundamentos, acoesDaTabela);
   renderFichas(fundamentos);
-  renderLeitura(ia, iaErro);
+  renderLeitura(ia, iaErro, herdadaDe);
   renderAnaliseVazia();
 
   definirContagem("posicoes", snapshot.totais.posicoes);

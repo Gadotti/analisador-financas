@@ -36,11 +36,16 @@ function indicadoresDeFicha(metricas) {
   return linhas;
 }
 
-export function renderResumo(snapshot, ia, fundamentos) {
+/**
+ * @param {string|null} herdadaDe Quando o texto da IA vem de uma análise
+ *   anterior — só as cotações são desta execução.
+ */
+export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
   const t = snapshot.totais;
   const saude = snapshot.saude_carteira;
 
-  $("#resumo-quando").textContent = "atualizado em " + dataHoraBR(snapshot.gerado_em);
+  const origem = herdadaDe ? ` · leitura por IA de ${dataHoraBR(herdadaDe)}` : "";
+  $("#resumo-quando").textContent = "atualizado em " + dataHoraBR(snapshot.gerado_em) + origem;
   $("#sumario").innerHTML = ia?.resumo ? `<p class="sumario-texto">${esc(ia.resumo)}</p>` : "";
   mostrar("#sumario", !!ia?.resumo);
 

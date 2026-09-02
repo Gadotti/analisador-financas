@@ -25,6 +25,8 @@ def executar(
 
     A parte determinística sempre roda. A análise por IA é opcional e, se
     falhar, o resultado ainda é devolvido com o campo `ia_erro` preenchido.
+    Sem leitura nova, as fichas da última análise salva são herdadas — ver
+    `_reaproveitar_ia`.
     """
     carteira = portfolio.load()
     snapshot = analysis.consolidar(carteira, usar_cache=usar_cache)
@@ -35,19 +37,15 @@ def executar(
         "fundamentos": None,
         "ia_erro": None,
         "ia_solicitada": usar_ia,
+        "ia_reaproveitada_de": None,
     }
 
     if usar_ia:
-        if not snapshot["posicoes"]:
-            resultado["ia_erro"] = "Carteira vazia — nada a analisar."
-        else:
-            try:
-                analisador = analisar_com_ia or ai_insights.analisar
-                resultado["ia"] = analisador(snapshot, carteira["config"])
-            except ai_insights.IAIndisponivel as exc:
-                resultado["ia_erro"] = str(exc)
-            except Exception as exc:  # falha inesperada não derruba o relatório
-                resultado["ia_erro"] = f"Falha inesperada na analise por IA: {exc}"
+        resultado["ia"], resultado["ia_erro"] = _analisar_com_ia(
+            snapshot, carteira["config"], analisar_com_ia
+        )
+    if resultado["ia"] is None:
+        _reaproveitar_ia(resultado)
 
     # Métricas derivadas das fichas: aritmética local, não estimativa do modelo.
     resultado["fundamentos"] = fundamentals.consolidar(snapshot, resultado["ia"])
@@ -56,6 +54,38 @@ def executar(
         persistir(resultado)
 
     return resultado
+
+
+def _analisar_com_ia(snapshot: dict, config: dict, analisador) -> tuple[dict | None, str | None]:
+    """Chama a IA e devolve `(leitura, erro)` — a falha nunca derruba o relatório."""
+    if not snapshot["posicoes"]:
+        return None, "Carteira vazia — nada a analisar."
+    try:
+        return (analisador or ai_insights.analisar)(snapshot, config), None
+    except ai_insights.IAIndisponivel as exc:
+        return None, str(exc)
+    except Exception as exc:  # falha inesperada não derruba o relatório
+        return None, f"Falha inesperada na analise por IA: {exc}"
+
+
+def _reaproveitar_ia(resultado: dict) -> None:
+    """Herda a leitura da última análise salva quando esta execução não tem uma.
+
+    Uma execução sem IA (`--sem-ia`, o botão "Atualizar cotações") ou uma
+    tentativa que falhou grava por cima do registro do dia. Sem esta herança o
+    arquivo ficaria sem fichas e a alocação por classificação, segmento e
+    gestora — além da tela de análise — sumiria da interface, mesmo havendo uma
+    leitura válida em disco.
+
+    As fichas são herdadas cruas: `fundamentals` recalcula pesos e valores com o
+    snapshot de agora. `ia_reaproveitada_de` carrega a data de origem para que
+    interface e relatório não apresentem a leitura antiga como recém-feita.
+    """
+    ia = (ultima_analise() or {}).get("ia")
+    if not ia or not ia.get("ativos"):
+        return
+    resultado["ia"] = ia
+    resultado["ia_reaproveitada_de"] = (ia.get("_meta") or {}).get("gerado_em")
 
 
 def persistir(resultado: dict) -> dict:

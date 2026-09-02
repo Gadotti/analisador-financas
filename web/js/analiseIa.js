@@ -64,7 +64,23 @@ function metaDaAnalise(ia) {
   return `${provedor}${meta.modelo || ""} · effort ${meta.effort || "—"}${buscas} · ${dataHoraBR(meta.gerado_em)}`;
 }
 
-export function renderLeitura(ia, erro) {
+/** Aviso de que a leitura veio de uma análise anterior, e não desta execução. */
+function avisoHerdada(herdadaDe, erro) {
+  if (!herdadaDe) return "";
+  const motivo = erro ? esc(erro) : "Esta execução atualizou apenas as cotações.";
+  return cartaoAlerta(
+    "info",
+    "Leitura herdada da análise anterior",
+    `${motivo} As fichas e os comentários são de ${dataHoraBR(herdadaDe)}; ` +
+      "pesos, valores e concentrações foram recalculados com as cotações de agora."
+  );
+}
+
+/**
+ * @param {string|null} herdadaDe Data da análise de origem, quando a leitura
+ *   não foi produzida por esta execução.
+ */
+export function renderLeitura(ia, erro, herdadaDe = null) {
   if (erro && !ia) {
     mostrar("#cartao-leitura", true);
     $("#ia-meta").textContent = "";
@@ -93,7 +109,7 @@ export function renderLeitura(ia, erro) {
     : "";
 
   // Fatos, pontos de observação e contexto de mercado moram na Visão geral.
-  const corpo = blocos + conclusao;
+  const corpo = avisoHerdada(herdadaDe, erro) + blocos + conclusao;
 
   // Sem nenhum bloco preenchido o cartão ficaria como uma moldura vazia.
   mostrar("#cartao-leitura", corpo !== "");

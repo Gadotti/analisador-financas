@@ -92,6 +92,19 @@ def _emissores_rf(snapshot: dict) -> list[str]:
     return linhas
 
 
+def _leitura_herdada(snapshot: dict, ia: dict | None) -> str:
+    """Data da análise que produziu as fichas, ou "" quando é a desta execução.
+
+    Uma execução sem IA herda a leitura da anterior (ver `runner._reaproveitar_ia`);
+    sem esta marca o relatório apresentaria comentários antigos como se fossem
+    de agora.
+    """
+    gerado_em = ((ia or {}).get("_meta") or {}).get("gerado_em") or ""
+    if not gerado_em or gerado_em[:10] == snapshot["data"]:
+        return ""
+    return datetime.fromisoformat(gerado_em).strftime("%d/%m/%Y às %H:%M")
+
+
 def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
     borda = "═" * LARGURA
     t = snapshot["totais"]
@@ -330,6 +343,11 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         m = ia["_meta"]
         buscas = f" · {m['buscas_web']} buscas web" if m.get("buscas_web") else ""
         out += ["", f"  Análise gerada por {m.get('modelo', '?')} (effort {m.get('effort')}){buscas}."]
+        herdada = _leitura_herdada(snapshot, ia)
+        if herdada:
+            out.append(
+                f"  Leitura herdada da análise de {herdada} — esta execução não chamou a IA."
+            )
 
     out += [
         "",
@@ -419,6 +437,11 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
 
     if ia and (ia.get("carteira") or {}).get("conclusao"):
         linhas += ["", "━━━━━━━━━━━━━━━━", "🎯 <b>CONCLUSÃO</b>", _esc(ia["carteira"]["conclusao"])]
+
+    herdada = _leitura_herdada(snapshot, ia)
+    if herdada:
+        linhas += ["", f"<i>🕓 Leitura herdada da análise de {herdada} — "
+                       "esta execução não chamou a IA.</i>"]
 
     linhas += [
         "",

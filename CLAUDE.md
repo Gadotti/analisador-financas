@@ -192,6 +192,15 @@ segmento, gestora); as médias ponderadas, a renda estimada e as concentrações
 calculadas em `analise/fundamentals.py`. Mantenha essa divisão: pedir totais ao modelo
 introduz erro aritmético.
 
+**Uma execução sem IA herda a leitura anterior.** `persistir` grava por cima do registro
+do dia, então `--sem-ia` (o botão "Atualizar cotações") ou uma tentativa que falhou
+apagariam as fichas já salvas — e com elas a alocação por classificação, segmento e
+gestora, além da tela de análise. `runner._reaproveitar_ia` herda o bloco `ia` da última
+análise em disco, de qualquer data, e `fundamentals` recalcula pesos e valores com o
+snapshot de agora; a origem vai em `ia_reaproveitada_de` (o `_meta.gerado_em` herdado).
+Interface e relatórios marcam essa data — nunca apresente a leitura herdada como se fosse
+desta execução.
+
 **O nome da gestora é normalizado sem IA.** O modelo escreve a mesma casa de formas
 diferentes a cada execução ("XP Asset Management (XP Vista)" e "XP Vista Asset
 Management (administração BTG Pactual)"), o que quebraria a concentração real em duas

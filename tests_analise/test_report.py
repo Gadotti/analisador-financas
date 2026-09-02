@@ -106,6 +106,19 @@ def test_ibovespa_formatado(snapshot_exemplo):
     assert "Ibovespa 145.200 pts (+0,42% no dia)" in report.texto(snapshot_exemplo)
 
 
+def test_marca_a_leitura_herdada_de_outra_data(snapshot_exemplo, ia_exemplo):
+    """Herdada de outro dia, a leitura não pode passar por recém-feita."""
+    ia = {**ia_exemplo, "_meta": {**ia_exemplo["_meta"], "gerado_em": "2026-08-28T09:00:00"}}
+
+    assert "Leitura herdada da análise de 28/08/2026 às 09:00" in report.texto(snapshot_exemplo, ia)
+    assert "Leitura herdada" in report.telegram(snapshot_exemplo, ia)
+
+
+def test_leitura_do_proprio_dia_nao_e_marcada(snapshot_exemplo, ia_exemplo):
+    assert "Leitura herdada" not in report.texto(snapshot_exemplo, ia_exemplo)
+    assert "Leitura herdada" not in report.telegram(snapshot_exemplo, ia_exemplo)
+
+
 def test_linhas_nao_estouram_a_largura(snapshot_exemplo, ia_exemplo):
     saida = report.texto(snapshot_exemplo, ia_exemplo, fundamentos(snapshot_exemplo, ia_exemplo))
     excedentes = [l for l in saida.split("\n") if len(l) > report.LARGURA + 25]

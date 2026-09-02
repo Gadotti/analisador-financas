@@ -100,8 +100,47 @@ def test_executa_a_parte_deterministica_sem_ia(carteira, mercado):
     assert resultado["ia"] is None
     assert resultado["ia_erro"] is None
     assert resultado["ia_solicitada"] is False
+    assert resultado["ia_reaproveitada_de"] is None, "sem análise anterior, nada a herdar"
     assert resultado["fundamentos"] is None
     assert resultado["snapshot"]["totais"]["valor_atual"] == 12000
+
+
+def test_sem_ia_herda_as_fichas_da_analise_anterior(carteira, mercado, ia_exemplo):
+    """Atualizar só as cotações não pode apagar a leitura já gravada no dia."""
+    runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+
+    resultado = runner.executar(usar_ia=False)
+
+    assert resultado["ia_solicitada"] is False
+    assert resultado["ia_reaproveitada_de"] == "2026-09-01T10:30:00"
+    assert resultado["ia"]["ativos"][0]["ticker"] == "MXRF11"
+    assert len(resultado["fundamentos"]["fichas"]) == 1
+    assert resultado["fundamentos"]["por_segmento"][0]["nome"] == "Recebíveis"
+
+
+def test_herança_recalcula_os_pesos_com_a_cotação_de_agora(carteira, mercado, ia_exemplo):
+    """As fichas são herdadas cruas; a aritmética é sempre do snapshot novo."""
+    runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+    mercado.rotas["MXRF11.SA"] = chart_yahoo(15, 12.0, "Maxi Renda")
+
+    resultado = runner.executar(usar_ia=False, usar_cache=False)
+
+    assert resultado["fundamentos"]["fichas"][0]["valor_atual"] == 15000
+    assert resultado["fundamentos"]["valor_renda_variavel"] == 15000
+
+
+def test_falha_da_ia_também_herda_a_leitura_anterior(carteira, mercado, ia_exemplo):
+    """O erro continua visível, mas o registro do dia não fica sem fichas."""
+    runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+
+    def analisador(_snapshot, _config):
+        raise ai_insights.IAIndisponivel("sem crédito na conta")
+
+    resultado = runner.executar(analisar_com_ia=analisador)
+
+    assert resultado["ia_erro"] == "sem crédito na conta"
+    assert resultado["ia_reaproveitada_de"] == "2026-09-01T10:30:00"
+    assert resultado["fundamentos"]["fichas"]
 
 
 def test_usa_o_analisador_injetado_e_cruza_fundamentos(carteira, mercado, ia_exemplo):
