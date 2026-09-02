@@ -2,6 +2,7 @@
 
 import { cartaoAlertaRecolhido, listaAlertas } from "./alertas.js";
 import { $, classeSinal, dataHoraBR, esc, moeda, mostrar, num, pct } from "./formato.js";
+import { icone } from "./icones.js";
 
 const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
 
@@ -25,7 +26,20 @@ function indicadoresDeFicha(metricas) {
   }
   if (metricas.dy_medio_pct) {
     linhas.push(
-      indicador("DY médio", pct(metricas.dy_medio_pct, 2, false), `cobertura ${metricas.dy_cobertura}`),
+      indicador("DY médio", pct(metricas.dy_medio_pct, 2, false), `cobertura ${metricas.dy_cobertura}`)
+    );
+    // O YoC mede a mesma renda contra o que foi pago; sem o rótulo da base os
+    // dois números pareceriam divergir sobre a mesma coisa.
+    if (metricas.yoc_medio_pct) {
+      linhas.push(
+        indicador(
+          "YoC médio",
+          pct(metricas.yoc_medio_pct, 2, false),
+          `sobre o preço médio · cobertura ${metricas.yoc_cobertura}`
+        )
+      );
+    }
+    linhas.push(
       indicador(
         "Renda estimada",
         moeda(metricas.renda_mensal_estimada),
@@ -73,11 +87,15 @@ export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
   renderContexto(ia);
 }
 
+/** Recolhido por padrão: o texto corrido só aparece a quem for atrás dele. */
 const blocoContexto = (titulo, texto) => `
-  <div class="bloco-contexto">
-    <div class="bloco-titulo">${titulo}</div>
+  <details class="bloco-contexto">
+    <summary>
+      <span class="bloco-titulo">${titulo}</span>
+      <span class="bloco-seta">${icone("seta", 16)}</span>
+    </summary>
     <p>${esc(texto)}</p>
-  </div>`;
+  </details>`;
 
 /** As leituras de cenário e de carteira da IA, ao pé da posição consolidada. */
 function renderContexto(ia) {

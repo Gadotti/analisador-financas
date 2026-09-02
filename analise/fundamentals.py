@@ -5,9 +5,11 @@ gestora). Este módulo cruza essas fichas com o peso real de cada posição e
 calcula os números do conjunto — médias ponderadas, renda estimada e
 concentrações. Toda a aritmética acontece aqui, não no modelo.
 
-Ponderação: pelo valor atual de mercado da posição, não pelo valor investido.
-Ativos sem o indicador ficam de fora daquela média específica, e a cobertura
-resultante é informada para que o número possa ser lido com o devido peso.
+Ponderação: pelo valor atual de mercado da posição, não pelo valor investido —
+a exceção é o yield on cost, cuja base é o custo e que por isso pondera pelo
+valor investido. Ativos sem o indicador ficam de fora daquela média
+específica, e a cobertura resultante é informada para que o número possa ser
+lido com o devido peso.
 """
 
 from __future__ import annotations
@@ -30,6 +32,25 @@ def _media_ponderada(itens: list[tuple[float, float]]) -> float | None:
     if not total_peso:
         return None
     return sum(valor * peso for valor, peso in itens) / total_peso
+
+
+def _yield_on_cost(ficha: dict) -> float | None:
+    """Converte o DY de mercado para a base do preço que o investidor pagou.
+
+    O DY levantado pela IA é `proventos_12m / preço_atual`; sobre o custo médio
+    a mesma renda vira `proventos_12m / preço_médio`. Como o numerador é o
+    mesmo, basta reescalar pela razão entre os preços — nenhuma consulta nova.
+
+    Atenção à leitura: o preço médio se forma com os aportes ao longo do tempo,
+    enquanto os proventos são de doze meses fixos. Quem comprou há pouco tem um
+    YoC que projeta o ritmo atual sobre o próprio custo, não o que recebeu.
+    """
+    dy = ficha.get("dy_12m_pct")
+    preco_atual = ficha.get("preco_atual")
+    preco_medio = ficha.get("preco_medio")
+    if not dy or not preco_atual or not preco_medio:
+        return None
+    return round(dy * preco_atual / preco_medio, 2)
 
 
 def _tipo_dominante(itens: list[dict]) -> str:
@@ -113,11 +134,12 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
         if not posicao:
             sem_posicao.append(ticker)
             continue
-        fichas.append({
+        ficha = {
             **ativo,
             "ticker": ticker,
             "tipo": posicao["tipo"],
             "valor_atual": posicao["valor_atual"],
+            "valor_investido": posicao["valor_investido"],
             "peso_pct": posicao["peso_pct"],
             "resultado_pct": posicao["resultado_pct"],
             "preco_atual": posicao["preco_atual"],
@@ -126,7 +148,9 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
             "classificacao_rotulo": CLASSIFICACAO_ROTULO.get(
                 ativo.get("classificacao"), "—"
             ),
-        })
+        }
+        ficha["yoc_12m_pct"] = _yield_on_cost(ficha)
+        fichas.append(ficha)
 
     if not fichas:
         return None
@@ -140,8 +164,13 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
     com_pvp = [(f["p_vp"], f["valor_atual"]) for f in fichas if f.get("p_vp")]
     com_dy = [(f["dy_12m_pct"], f["valor_atual"]) for f in fichas if f.get("dy_12m_pct")]
 
+    # O YoC pondera pelo valor investido, e não pelo de mercado: a base do
+    # indicador é o custo, então a média precisa usar a mesma régua.
+    com_yoc = [(f["yoc_12m_pct"], f["valor_investido"]) for f in fichas if f.get("yoc_12m_pct")]
+
     p_vp_medio = _media_ponderada(com_pvp)
     dy_medio = _media_ponderada(com_dy)
+    yoc_medio = _media_ponderada(com_yoc)
 
     # ── Renda estimada (apenas ativos com DY informado) ──
     renda_anual = sum(
@@ -166,6 +195,8 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
             "p_vp_cobertura": f"{len(com_pvp)}/{len(fichas)}",
             "dy_medio_pct": round(dy_medio, 2) if dy_medio else None,
             "dy_cobertura": f"{len(com_dy)}/{len(fichas)}",
+            "yoc_medio_pct": round(yoc_medio, 2) if yoc_medio else None,
+            "yoc_cobertura": f"{len(com_yoc)}/{len(fichas)}",
             "renda_anual_estimada": round(renda_anual, 2),
             "renda_mensal_estimada": round(renda_anual / 12, 2),
             "com_desconto": sum(1 for f in fichas if f.get("p_vp") and f["p_vp"] < 1),

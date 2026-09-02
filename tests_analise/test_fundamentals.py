@@ -19,6 +19,7 @@ def snapshot_dois(snapshot_exemplo):
             "tipo": "fii",
             "ticker": "MXRF11",
             "valor_atual": 30000.0,
+            "valor_investido": 25000.0,
             "peso_pct": 60.0,
             "resultado_pct": 10.0,
             "preco_atual": 12.0,
@@ -30,6 +31,7 @@ def snapshot_dois(snapshot_exemplo):
             "tipo": "fii",
             "ticker": "HGLG11",
             "valor_atual": 10000.0,
+            "valor_investido": 10428.0,
             "peso_pct": 20.0,
             "resultado_pct": -5.0,
             "preco_atual": 150.0,
@@ -84,6 +86,46 @@ def test_medias_ponderadas_pelo_valor_de_mercado(snapshot_exemplo):
     # (12x30000 + 8x10000) / 40000 = 11
     assert f["metricas"]["dy_medio_pct"] == 11.0
     assert f["valor_renda_variavel"] == 40000
+
+
+def test_yoc_reescala_o_dy_pela_razao_entre_os_precos(snapshot_exemplo):
+    fichas = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())["fichas"]
+    por_ticker = {f["ticker"]: f for f in fichas}
+
+    # Comprado a 10,00 e cotado a 12,00: 12% x 12/10 = 14,4% sobre o custo.
+    assert por_ticker["MXRF11"]["yoc_12m_pct"] == 14.4
+    # Comprado acima da cotação de hoje, o YoC fica abaixo do DY: 8% x 150/158.
+    assert por_ticker["HGLG11"]["yoc_12m_pct"] == 7.59
+    assert por_ticker["MXRF11"]["dy_12m_pct"] == 12.0, "o DY de mercado nao muda"
+
+
+def test_yoc_medio_pondera_pelo_valor_investido(snapshot_exemplo):
+    m = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())["metricas"]
+
+    # (14.4x25000 + 7.59x10428) / 35428 = 12.397...
+    assert m["yoc_medio_pct"] == 12.4
+    assert m["yoc_cobertura"] == "2/2"
+    assert m["dy_medio_pct"] == 11.0, "a media de mercado segue na base da cotacao"
+
+
+def test_yoc_ausente_quando_falta_cotacao(snapshot_exemplo):
+    base = snapshot_dois(snapshot_exemplo)
+    base["posicoes"][1]["preco_atual"] = None
+
+    f = fundamentals.consolidar(base, ia_dois())
+
+    assert f["fichas"][1]["yoc_12m_pct"] is None
+    assert f["metricas"]["yoc_cobertura"] == "1/2"
+    assert f["metricas"]["yoc_medio_pct"] == 14.4
+
+
+def test_yoc_ausente_quando_a_ia_nao_informou_o_dy(snapshot_exemplo):
+    f = fundamentals.consolidar(
+        snapshot_dois(snapshot_exemplo), ia_dois(hglg={"dy_12m_pct": None})
+    )
+
+    assert f["fichas"][1]["yoc_12m_pct"] is None
+    assert f["metricas"]["yoc_cobertura"] == "1/2"
 
 
 def test_renda_estimada_anual_e_mensal(snapshot_exemplo):

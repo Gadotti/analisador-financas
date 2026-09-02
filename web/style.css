@@ -419,8 +419,19 @@ a:hover { color: var(--amber-forte); }
   font-size: var(--f-micro); letter-spacing: 0.8px; color: var(--amber);
   text-transform: uppercase; font-weight: 700; margin-bottom: 5px;
 }
+/* Recolhido por padrão: <details> nativo, sem JS. O summary mostra só o rótulo;
+   o texto corrido fica atrás dele. */
 .bloco-contexto { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--borda); }
-.bloco-contexto p { font-size: var(--f-dado); line-height: 1.7; color: var(--t2); text-wrap: pretty; }
+.bloco-contexto > summary {
+  display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none;
+}
+.bloco-contexto > summary::-webkit-details-marker { display: none; }
+.bloco-contexto > summary:hover .bloco-titulo { color: var(--amber-forte); }
+.bloco-contexto > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.bloco-contexto > summary .bloco-titulo { flex: 1; margin-bottom: 0; }
+.bloco-seta { flex-shrink: 0; color: var(--t3); transition: transform 0.15s ease; }
+.bloco-contexto[open] .bloco-seta { transform: rotate(180deg); }
+.bloco-contexto p { font-size: var(--f-dado); line-height: 1.7; color: var(--t2); text-wrap: pretty; margin-top: 8px; }
 .bloco-leitura p, .conclusao p { font-size: var(--f-dado); line-height: 1.7; text-wrap: pretty; }
 .conclusao { background: var(--card2); border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; margin-top: 6px; }
 

@@ -18,9 +18,10 @@ function atributos(ficha) {
     ["Gestão", ficha.gestora],
     ["Patrimônio", ficha.patrimonio],
     ["P/VP", ficha.p_vp ? num(ficha.p_vp, 2) : null],
+    ["Peso", pct(ficha.peso_pct, 1, false)],
+    ["YoC 12m", ficha.yoc_12m_pct ? pct(ficha.yoc_12m_pct, 1, false) : null],
     ["DY 12m", ficha.dy_12m_pct ? pct(ficha.dy_12m_pct, 1, false) : null],
     ["Vacância", ficha.vacancia_pct ? pct(ficha.vacancia_pct, 1, false) : null],
-    ["Peso", pct(ficha.peso_pct, 1, false)],
   ]
     .filter(([, valor]) => valor)
     .map(
