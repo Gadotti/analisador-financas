@@ -1,6 +1,6 @@
 /** Tela "Visão geral": contexto macro, posição consolidada e riscos. */
 
-import { cartaoAlerta, listaAlertas } from "./alertas.js";
+import { cartaoAlertaRecolhido, listaAlertas } from "./alertas.js";
 import { $, classeSinal, dataHoraBR, esc, moeda, mostrar, num, pct } from "./formato.js";
 
 const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
@@ -46,8 +46,6 @@ export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
 
   const origem = herdadaDe ? ` · leitura por IA de ${dataHoraBR(herdadaDe)}` : "";
   $("#resumo-quando").textContent = "atualizado em " + dataHoraBR(snapshot.gerado_em) + origem;
-  $("#sumario").innerHTML = ia?.resumo ? `<p class="sumario-texto">${esc(ia.resumo)}</p>` : "";
-  mostrar("#sumario", !!ia?.resumo);
 
   const sinal = classeSinal(t.resultado);
   const linhas = [
@@ -72,22 +70,29 @@ export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
   }
 
   $("#indicadores").innerHTML = linhas.concat(indicadoresDeFicha(fundamentos?.metricas)).join("");
-  renderContextoMercado(ia);
+  renderContexto(ia);
 }
 
-/** A leitura de cenário da IA, ao pé da posição consolidada. */
-function renderContextoMercado(ia) {
-  mostrar("#contexto-mercado", !!ia?.contexto_mercado);
-  $("#contexto-mercado").innerHTML = ia?.contexto_mercado
-    ? `<div class="bloco-contexto">
-         <div class="bloco-titulo">Contexto de mercado</div>
-         <p>${esc(ia.contexto_mercado)}</p>
-       </div>`
-    : "";
+const blocoContexto = (titulo, texto) => `
+  <div class="bloco-contexto">
+    <div class="bloco-titulo">${titulo}</div>
+    <p>${esc(texto)}</p>
+  </div>`;
+
+/** As leituras de cenário e de carteira da IA, ao pé da posição consolidada. */
+function renderContexto(ia) {
+  const blocos = [];
+  if (ia?.contexto_mercado) blocos.push(blocoContexto("Contexto de mercado", ia.contexto_mercado));
+  if (ia?.resumo) blocos.push(blocoContexto("Contexto da carteira", ia.resumo));
+
+  mostrar("#contexto-mercado", blocos.length > 0);
+  $("#contexto-mercado").innerHTML = blocos.join("");
 }
 
 export function renderMacro(snapshot) {
   const macro = snapshot.macro;
+  const consultadoEm = macro.consultado_em || snapshot.gerado_em;
+  $("#macro-quando").textContent = consultadoEm ? "atualizado em " + dataHoraBR(consultadoEm) : "";
   const itens = [
     ["CDI", `${num(macro.cdi_anual_pct.valor)}% a.a.`],
     ["Selic meta", `${num(macro.selic_meta_pct.valor)}% a.a.`],
@@ -116,7 +121,7 @@ export function renderRiscos(snapshot, ia) {
     partes.push(
       '<div class="alertas">' +
         snapshot.alertas
-          .map((a) => cartaoAlerta(a.severidade, esc(a.titulo), esc(a.descricao)))
+          .map((a) => cartaoAlertaRecolhido(a.severidade, esc(a.titulo), esc(a.descricao)))
           .join("") +
         "</div>"
     );
@@ -128,7 +133,7 @@ export function renderRiscos(snapshot, ia) {
       '<div class="alertas">' +
         ia.riscos
           .map((r, i) =>
-            cartaoAlerta(
+            cartaoAlertaRecolhido(
               r.severidade,
               `<span class="ordem">${i + 1}</span> ${esc(r.titulo)}`,
               esc(r.descricao),

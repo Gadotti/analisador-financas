@@ -20,6 +20,7 @@ const CAMINHOS = {
   atencao: '<path d="M10 3l7.5 13H2.5z"></path><path d="M10 8v3.5M10 14v.2"></path>',
   info: '<circle cx="10" cy="10" r="7.5"></circle><path d="M10 9v5M10 6.2v.2"></path>',
   escudo: '<path d="M10 2.5l6 2.4v5c0 4-2.6 6.6-6 8-3.4-1.4-6-4-6-8v-5z"></path><path d="M7.4 10.1l1.9 1.9 3.4-3.6"></path>',
+  seta: '<path d="M5.5 8l4.5 4.5L14.5 8"></path>',
   editar: '<path d="M13.5 3.5l3 3L7 16H4v-3z"></path>',
   excluir: '<path d="M4 5.5h12M8.2 5.5V3.8h3.6v1.7M5.6 5.5l.8 10.7h7.2l.8-10.7"></path>',
 };

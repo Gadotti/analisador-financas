@@ -201,13 +201,6 @@ a:hover { color: var(--amber-forte); }
 
 /* ── Indicadores da carteira ───────────── */
 
-.sumario-texto {
-  font-size: var(--f-corpo); line-height: 1.7;
-  background: var(--card2); border-left: 3px solid var(--amber);
-  border-radius: 0 8px 8px 0; padding: 13px 16px; margin-bottom: 14px;
-  text-wrap: pretty;
-}
-
 .indicadores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .indicador { display: flex; flex-direction: column; gap: 3px; }
 .indicador-hero .indicador-valor { font-size: var(--f-hero); }
@@ -293,6 +286,22 @@ a:hover { color: var(--amber-forte); }
 .alerta-desc { font-size: var(--f-apoio); color: var(--t2); line-height: 1.5; }
 .alerta-fonte { font-size: var(--f-micro); color: var(--t3); margin-top: 4px; }
 .alerta-icone { flex-shrink: 0; margin-top: 3px; }
+
+/* Variante recolhida: <details> nativo, sem JS. O summary carrega a linha do
+   título; a descrição fica alinhada ao texto, não ao ícone de severidade. */
+.alerta-recolhivel { display: block; padding: 0; overflow: hidden; }
+.alerta-recolhivel > summary {
+  display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px;
+  cursor: pointer; list-style: none;
+}
+.alerta-recolhivel > summary::-webkit-details-marker { display: none; }
+.alerta-recolhivel > summary:hover { background: var(--borda); }
+.alerta-recolhivel > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.alerta-recolhivel[open] > summary { padding-bottom: 4px; }
+.alerta-recolhivel .alerta-titulo { flex: 1; }
+.alerta-seta { flex-shrink: 0; margin-top: 2px; color: var(--t3); transition: transform 0.15s ease; }
+.alerta-recolhivel[open] .alerta-seta { transform: rotate(180deg); }
+.alerta-corpo { padding: 0 13px 12px 42px; }
 
 .subtitulo {
   font-size: var(--f-micro); font-weight: 600; letter-spacing: 0.8px;

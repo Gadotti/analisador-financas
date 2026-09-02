@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Analisador de carteira</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -45,6 +46,10 @@
     <!-- ── Visão geral ─────────────────── -->
     <main class="pagina" id="pg-visao-geral">
       <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Posição do mercado</span>
+          <span class="cartao-meta" id="macro-quando"></span>
+        </div>
         <div class="macro" id="macro"><div class="vazio">—</div></div>
       </section>
 
@@ -53,7 +58,6 @@
           <span class="cartao-titulo">Posição consolidada</span>
           <span class="cartao-meta" id="resumo-quando"></span>
         </div>
-        <div id="sumario" class="hidden"></div>
         <div class="indicadores" id="indicadores">
           <div class="vazio">Nenhuma análise ainda. Cadastre suas posições e clique em “Atualizar cotações”.</div>
         </div>
