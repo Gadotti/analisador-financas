@@ -12,7 +12,7 @@ resultante é informada para que o número possa ser lido com o devido peso.
 
 from __future__ import annotations
 
-from . import portfolio
+from . import gestoras, portfolio
 
 CLASSIFICACAO_ROTULO = {
     "tijolo": "Tijolo",
@@ -75,6 +75,20 @@ def _nao_coberto(total_carteira: float, valor_rv: float) -> dict:
     }
 
 
+def _unificar_gestoras(fichas: list[dict]) -> None:
+    """Reescreve a gestora de cada ficha com o nome canônico do seu grupo.
+
+    A IA nomeia a mesma casa de formas diferentes ("XP Asset Management (XP
+    Vista)" e "XP Vista Asset Management"); sem isso o recorte por gestora
+    quebraria a concentração real em duas linhas. Ver analise.gestoras.
+    """
+    canonico = gestoras.unificar_variantes(f.get("gestora") for f in fichas)
+    for f in fichas:
+        nome = f.get("gestora")
+        if nome in canonico:
+            f["gestora"] = canonico[nome]
+
+
 def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
     """Cruza as fichas da IA com as posições e devolve as métricas do conjunto.
 
@@ -116,6 +130,8 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
 
     if not fichas:
         return None
+
+    _unificar_gestoras(fichas)
 
     valor_rv = sum(f["valor_atual"] for f in fichas)
     total_carteira = snapshot["totais"]["valor_atual"]

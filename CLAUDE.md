@@ -166,6 +166,14 @@ segmento, gestora); as médias ponderadas, a renda estimada e as concentrações
 calculadas em `analise/fundamentals.py`. Mantenha essa divisão: pedir totais ao modelo
 introduz erro aritmético.
 
+**O nome da gestora é normalizado sem IA.** O modelo escreve a mesma casa de formas
+diferentes a cada execução ("XP Asset Management (XP Vista)" e "XP Vista Asset
+Management (administração BTG Pactual)"), o que quebraria a concentração real em duas
+linhas. `analise/gestoras.py` reduz cada nome a uma chave — sem parêntese explicativo,
+sem acento e sem os termos de razão social — e junta as chaves em que uma é prefixo da
+outra; `fundamentals` reescreve a ficha com o rótulo canônico antes de agrupar. Não peça
+essa unificação ao modelo: a saída dele não é estável entre execuções.
+
 **Marcação a mercado de CDB é estimativa.** `analise/fixed_income.py` projeta o CDI de hoje
 sobre todo o período decorrido, capitaliza em dias úteis (base 252) e aplica o IR
 regressivo. Não apresente esses valores como oficiais — o rodapé do relatório já avisa.

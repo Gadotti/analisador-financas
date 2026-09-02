@@ -184,3 +184,18 @@ def test_cdb_nao_tem_ficha(snapshot_exemplo, ia_exemplo):
 
     assert len(f["fichas"]) == 1
     assert f["fichas"][0]["ticker"] == "MXRF11"
+
+
+def test_variantes_do_nome_da_gestora_viram_uma_linha_so(snapshot_exemplo):
+    f = fundamentals.consolidar(
+        snapshot_dois(snapshot_exemplo),
+        ia_dois(
+            mxrf={"gestora": "XP Asset Management (XP Vista)"},
+            hglg={"gestora": "XP Vista Asset Management (administração BTG Pactual)"},
+        ),
+    )
+
+    assert [g["nome"] for g in f["por_gestora"]] == ["XP Asset Management"]
+    assert f["por_gestora"][0]["peso_pct"] == 80.0
+    assert f["por_gestora"][0]["ativos"] == ["MXRF11", "HGLG11"]
+    assert [ficha["gestora"] for ficha in f["fichas"]] == ["XP Asset Management"] * 2
