@@ -2,7 +2,8 @@
 
 Convenções adotadas (padrão do mercado brasileiro):
   - Rendimento capitalizado em dias úteis (base 252) para CDI e prefixado.
-  - IPCA+ usa o IPCA acumulado do período (base 360 para o spread real).
+  - IPCA+ multiplica o IPCA acumulado do período pelo juro real, este
+    também capitalizado em dias úteis (base 252).
   - IR regressivo sobre o rendimento, conforme prazo da aplicação.
 
 Os valores são ESTIMATIVAS: a taxa CDI usada é a vigente hoje, projetada
@@ -126,7 +127,7 @@ def valorizar(
         fator = (1 + taxa / 100) ** (du / 252)
     else:  # IPCA+
         taxa_efetiva = taxa
-        fator_juros = (1 + taxa / 100) ** (dc / 360)
+        fator_juros = (1 + taxa / 100) ** (du / 252)
         if ipca_fator is None:
             fator = fator_juros
             aviso = "IPCA indisponivel - considerado apenas o juro real."

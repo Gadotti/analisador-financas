@@ -99,6 +99,16 @@ def test_ipca_usa_o_fator_quando_disponivel():
     assert "IPCA indisponivel" in sem["aviso"]
 
 
+def test_juro_real_do_ipca_capitaliza_em_dias_uteis():
+    """O spread real segue a base 252, como o CDI e o prefixado."""
+    ipca = {**CDB_CDI, "indexador": "IPCA", "taxa": 6.0}
+    calc = valorizar(ipca, hoje=date(2026, 1, 2), cdi_anual_pct=15.0, ipca_fator=1.10)
+
+    esperado = 10000.0 * 1.10 * 1.06 ** (calc["dias_uteis"] / 252)
+
+    assert calc["valor_bruto"] == round(esperado, 2)
+
+
 def test_rendimento_congela_apos_o_vencimento():
     no_vencimento = valorizar(CDB_CDI, hoje=date(2027, 1, 4), cdi_anual_pct=15.0)
     bem_depois = valorizar(CDB_CDI, hoje=date(2028, 1, 4), cdi_anual_pct=15.0)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 
@@ -216,8 +216,23 @@ def selic_meta() -> dict:
     return _ultimo_valor(SGS_SELIC_META, "selic_meta", 15.0)
 
 
+def _fracao_do_mes(desde: date, referencia: str) -> float:
+    """Parcela do mês de `referencia` (dd/mm/aaaa) decorrida a partir de `desde`.
+
+    O SGS data cada IPCA mensal no dia 1º do mês de referência. Uma aplicação
+    feita no meio do mês só é corrigida pelos dias restantes, então o primeiro
+    mês entra pro rata (dias corridos, incluindo o dia da aplicação).
+    """
+    mes = datetime.strptime(referencia, "%d/%m/%Y").date()
+    if (mes.year, mes.month) != (desde.year, desde.month) or desde.day == 1:
+        return 1.0
+    dias_no_mes = (date(mes.year + mes.month // 12, mes.month % 12 + 1, 1)
+                   - timedelta(days=1)).day
+    return (dias_no_mes - desde.day + 1) / dias_no_mes
+
+
 def ipca_acumulado(desde: date) -> dict:
-    """IPCA acumulado (fator) entre `desde` e hoje."""
+    """IPCA acumulado (fator) entre `desde` e hoje, com o 1º mês pro rata."""
     chave = f"ipca_acum:{desde.isoformat()}"
     em_cache = _cache_get(chave, TTL_INDICADOR)
     if em_cache:
@@ -226,7 +241,8 @@ def ipca_acumulado(desde: date) -> dict:
         dados = _sgs(SGS_IPCA_MES, inicio=desde)
         fator = 1.0
         for item in dados:
-            fator *= 1 + float(item["valor"].replace(",", ".")) / 100
+            mensal = 1 + float(item["valor"].replace(",", ".")) / 100
+            fator *= mensal ** _fracao_do_mes(desde, item["data"])
         valor = {
             "fator": fator,
             "variacao_pct": (fator - 1) * 100,

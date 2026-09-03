@@ -121,6 +121,18 @@ def test_ipca_acumulado_compoe_o_periodo(dados_temp, rede):
     assert rede.chamadas[0]["params"]["dataInicial"] == "01/01/2026"
 
 
+def test_ipca_acumulado_aplica_o_primeiro_mes_pro_rata(dados_temp, rede):
+    """Aplicação em 04/02 só é corrigida por 25 dos 28 dias de fevereiro."""
+    rede.rotas["bcdata.sgs.433"] = RespostaFalsa(
+        [{"data": "01/02/2026", "valor": "1,00"}, {"data": "01/03/2026", "valor": "1,00"}]
+    )
+
+    ipca = market.ipca_acumulado(date(2026, 2, 4))
+
+    assert abs(ipca["fator"] - 1.01 ** (25 / 28) * 1.01) < 1e-9
+    assert ipca["meses"] == 2
+
+
 def test_ipca_12m_compoe_doze_meses(dados_temp, rede):
     rede.rotas["bcdata.sgs.433"] = RespostaFalsa([{"valor": "0,50"}] * 12)
 
