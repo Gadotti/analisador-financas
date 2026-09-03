@@ -10,7 +10,10 @@ from datetime import date, datetime
 
 from . import fixed_income, market, portfolio
 
-CLASSES = {"fii": "FIIs", "acao": "Ações", "cdb": "CDBs"}
+CLASSES = {"fii": "FIIs", "acao": "Ações", "cdb": "CDBs", "tesouro": "Tesouro Direto"}
+
+# O FGC cobre depósito bancário; título público responde pelo Tesouro Nacional.
+TIPOS_COM_FGC = ("cdb",)
 
 
 # ─────────────────────────────────────────────
@@ -71,22 +74,35 @@ def _posicao_variavel(pos: dict, cot: dict) -> dict:
     }
 
 
-def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
-    ipca_fator = None
+def _indexador_do_titulo(pos: dict, macro: dict) -> dict:
+    """Só consulta o índice que o título realmente usa — IPCA custa uma chamada."""
     if pos["indexador"] == "IPCA":
-        ipca_fator = market.ipca_acumulado(date.fromisoformat(pos["data_aplicacao"])).get("fator")
+        aplicacao = date.fromisoformat(pos["data_aplicacao"])
+        return {"ipca_fator": market.ipca_acumulado(aplicacao).get("fator")}
+    if pos["indexador"] == "SELIC":
+        return {"selic_anual_pct": macro["selic_meta_pct"]["valor"]}
+    return {}
 
+
+def _posicao_renda_fixa(pos: dict, hoje: date, macro: dict) -> dict:
+    """Marca a mercado um CDB ou um título do Tesouro Direto.
+
+    `valor_atual` e `resultado` medem só o que segue aplicado no papel: num
+    título com cupom periódico os juros já sacados aparecem à parte, em
+    `resultado_total`.
+    """
     calc = fixed_income.valorizar(
-        pos, hoje=hoje, cdi_anual_pct=cdi_pct, ipca_fator=ipca_fator
+        pos,
+        hoje=hoje,
+        cdi_anual_pct=macro["cdi_anual_pct"]["valor"],
+        **_indexador_do_titulo(pos, macro),
     )
 
-    # `valor_atual` e `resultado` medem só o que segue aplicado no título: num CDB
-    # de juros mensais os cupons já sacados aparecem à parte, em `resultado_total`.
-    return {
+    calculada = {
         "id": pos["id"],
-        "tipo": "cdb",
-        "descricao": pos.get("nome") or f"CDB {pos['banco']}",
-        "banco": pos["banco"],
+        "tipo": pos["tipo"],
+        "descricao": portfolio.descricao(pos),
+        "emissor": portfolio.emissor(pos),
         "indexador": pos["indexador"],
         "taxa": pos["taxa"],
         "rotulo_taxa": portfolio.rotulo_taxa(pos),
@@ -112,42 +128,63 @@ def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
         "taxa_efetiva_aa_pct": calc["taxa_efetiva_aa_pct"],
         "ir_aliquota_pct": calc["ir_aliquota_pct"],
         "ir_valor": calc["ir_valor"],
+        "custodia_valor": calc["custodia_valor"],
         "dias_para_vencer": calc["dias_para_vencer"],
         "vencido": calc["vencido"],
         "observacao": pos.get("observacao", ""),
         "aviso": calc["aviso"],
     }
+    # O banco emissor continua num campo próprio: o teto do FGC só vale para o
+    # CDB, e o Tesouro não tem banco algum por trás.
+    if pos["tipo"] == "cdb":
+        calculada["banco"] = pos["banco"]
+    return calculada
 
 
 # ─────────────────────────────────────────────
 # Alertas determinísticos
 # ─────────────────────────────────────────────
 
-def _exposicao_por_banco(posicoes: list[dict]) -> dict[str, float]:
-    """Soma o valor atual dos CDBs ainda ativos por banco emissor."""
-    por_banco: dict[str, float] = {}
+def _exposicao_por_emissor(posicoes: list[dict], tipos: tuple[str, ...]) -> dict[str, float]:
+    """Soma o valor atual dos títulos ainda ativos por emissor."""
+    por_emissor: dict[str, float] = {}
     for p in posicoes:
-        if p["tipo"] == "cdb" and not p["vencido"]:
-            por_banco[p["banco"]] = por_banco.get(p["banco"], 0.0) + p["valor_atual"]
-    return por_banco
+        if p["tipo"] in tipos and not p["vencido"]:
+            por_emissor[p["emissor"]] = por_emissor.get(p["emissor"], 0.0) + p["valor_atual"]
+    return por_emissor
+
+
+def _cobertura_fgc(valor: float, limite_fgc: float, *, garantido: bool) -> dict:
+    """Quanto o emissor consome do teto do FGC — nada, quando não é banco.
+
+    O Tesouro Direto não é coberto pelo FGC: quem responde pelo papel é o
+    próprio Tesouro Nacional, então não há teto a estourar.
+    """
+    if not garantido:
+        return {"garantia": portfolio.EMISSOR_TESOURO, "fgc_limite": None,
+                "fgc_uso_pct": None, "acima_do_fgc": False}
+    return {
+        "garantia": "FGC",
+        "fgc_limite": limite_fgc,
+        "fgc_uso_pct": round(valor / limite_fgc * 100, 1) if limite_fgc else 0.0,
+        "acima_do_fgc": valor > limite_fgc,
+    }
 
 
 def _emissores_renda_fixa(posicoes: list[dict], total: float, limite_fgc: float) -> list[dict]:
-    """Exposição por banco emissor, com o consumo do teto do FGC.
+    """Exposição por emissor de renda fixa, com o consumo do teto do FGC.
 
     É o recorte que falta em `fundamentals`, que só percorre fichas de renda
-    variável: nenhum emissor de CDB aparece lá.
+    variável: nenhum emissor de renda fixa aparece lá.
     """
     emissores = [
         {
-            "nome": banco,
+            "nome": nome,
             "valor": round(valor, 2),
             "peso_pct": round(valor / total * 100, 2) if total else 0.0,
-            "fgc_limite": limite_fgc,
-            "fgc_uso_pct": round(valor / limite_fgc * 100, 1) if limite_fgc else 0.0,
-            "acima_do_fgc": valor > limite_fgc,
+            **_cobertura_fgc(valor, limite_fgc, garantido=nome != portfolio.EMISSOR_TESOURO),
         }
-        for banco, valor in _exposicao_por_banco(posicoes).items()
+        for nome, valor in _exposicao_por_emissor(posicoes, portfolio.TIPOS_RENDA_FIXA).items()
     ]
     return sorted(emissores, key=lambda e: e["valor"], reverse=True)
 
@@ -170,9 +207,9 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
     limite_prej = float(config["alerta_prejuizo_pct"])
     limite_fgc = float(config["limite_fgc"])
 
-    # 1. Vencimentos de CDB
+    # 1. Vencimentos de renda fixa
     for p in posicoes:
-        if p["tipo"] != "cdb":
+        if p["tipo"] not in portfolio.TIPOS_RENDA_FIXA:
             continue
         dias = p["dias_para_vencer"]
         if p["vencido"]:
@@ -192,8 +229,8 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
                 p["descricao"],
             ))
 
-    # 2. Exposição por banco vs. teto do FGC
-    for banco, valor in _exposicao_por_banco(posicoes).items():
+    # 2. Exposição por banco vs. teto do FGC — o Tesouro não é coberto por ele
+    for banco, valor in _exposicao_por_emissor(posicoes, TIPOS_COM_FGC).items():
         if valor > limite_fgc:
             alertas.append(_alerta(
                 "alerta",
@@ -265,7 +302,6 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
     hoje = date.today()
 
     macro = market.cenario_macro()
-    cdi_pct = macro["cdi_anual_pct"]["valor"]
 
     tickers = portfolio.tickers(carteira)
     cots = market.cotacoes(tickers, usar_cache=usar_cache) if tickers else {}
@@ -275,7 +311,7 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
         if pos["tipo"] in portfolio.TIPOS_VARIAVEL:
             posicoes.append(_posicao_variavel(pos, cots.get(pos["ticker"], {})))
         else:
-            posicoes.append(_posicao_cdb(pos, hoje, cdi_pct))
+            posicoes.append(_posicao_renda_fixa(pos, hoje, macro))
 
     total_investido = sum(p["valor_investido"] for p in posicoes)
     total_atual = sum(p["valor_atual"] for p in posicoes)

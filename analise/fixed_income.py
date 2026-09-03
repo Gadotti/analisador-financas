@@ -1,16 +1,21 @@
-"""Marcação a mercado aproximada de CDBs.
+"""Marcação a mercado aproximada de renda fixa: CDBs e Tesouro Direto.
 
 Convenções adotadas (padrão do mercado brasileiro):
-  - Rendimento capitalizado em dias úteis (base 252) para CDI e prefixado.
+  - Rendimento capitalizado em dias úteis (base 252) para CDI, Selic e
+    prefixado. O CDB rende um percentual do CDI; o Tesouro Selic rende a
+    Selic mais um ágio ou deságio somado à taxa.
   - IPCA+ multiplica o IPCA acumulado do período pelo juro real, este
     também capitalizado em dias úteis (base 252).
   - IR regressivo sobre o rendimento, conforme prazo da aplicação.
-  - Com juros mensais, cada aniversário da aplicação paga o rendimento do
-    período e o principal segue intacto: não há capitalização de um mês para
-    o outro, e o IR é retido em cada pagamento pelo prazo decorrido até ele.
+  - Com cupom periódico (mensal no CDB, semestral no Tesouro), cada
+    aniversário da aplicação paga o rendimento do período e o principal segue
+    intacto: não há capitalização de um período para o outro, e o IR é retido
+    em cada pagamento pelo prazo decorrido até ele.
+  - Só o Tesouro Direto paga custódia à B3, descontada do valor líquido.
 
-Os valores são ESTIMATIVAS: a taxa CDI usada é a vigente hoje, projetada
-para todo o período decorrido. O extrato do banco é sempre a fonte oficial.
+Os valores são ESTIMATIVAS: as taxas usadas são as vigentes hoje, projetadas
+para todo o período decorrido, e o Tesouro é carregado na curva, sem a
+marcação a mercado do papel. O extrato da instituição é a fonte oficial.
 """
 
 from __future__ import annotations
@@ -19,6 +24,15 @@ from datetime import date, timedelta
 
 PAGAMENTO_VENCIMENTO = "vencimento"
 PAGAMENTO_MENSAL = "mensal"
+PAGAMENTO_SEMESTRAL = "semestral"
+
+# Meses entre um cupom e o seguinte, por forma de pagamento.
+INTERVALO_CUPOM = {PAGAMENTO_MENSAL: 1, PAGAMENTO_SEMESTRAL: 6}
+
+# Taxa de custódia da B3 sobre o Tesouro Direto, isenta na primeira faixa
+# aplicada em Tesouro Selic (a isenção é por CPF; aqui vale por posição).
+CUSTODIA_B3_AA_PCT = 0.20
+CUSTODIA_ISENTA_SELIC = 10000.0
 
 # Alíquotas de IR sobre renda fixa (dias corridos da aplicação)
 TABELA_IR = (
@@ -101,16 +115,22 @@ def somar_meses(inicio: date, meses: int) -> date:
     return date(ano, mes, min(inicio.day, ultimo_dia))
 
 
-def datas_pagamento(aplicacao: date, vencimento: date, ate: date) -> list[date]:
-    """Aniversários mensais da aplicação já pagos até `ate`, em dia útil."""
+def datas_pagamento(
+    aplicacao: date, vencimento: date, ate: date, intervalo_meses: int = 1
+) -> list[date]:
+    """Aniversários da aplicação já pagos até `ate`, em dia útil.
+
+    `intervalo_meses` é 1 para o cupom mensal do CDB e 6 para o semestral
+    do Tesouro.
+    """
     datas: list[date] = []
-    mes = 1
+    periodo = 1
     while True:
-        prevista = proximo_dia_util(somar_meses(aplicacao, mes))
+        prevista = proximo_dia_util(somar_meses(aplicacao, periodo * intervalo_meses))
         if prevista > vencimento or prevista > ate:
             return datas
         datas.append(prevista)
-        mes += 1
+        periodo += 1
 
 
 def aliquota_ir(dias_corridos: int) -> float:
@@ -124,10 +144,19 @@ def aliquota_ir(dias_corridos: int) -> float:
 # Fatores de rendimento
 # ─────────────────────────────────────────────
 
-def _taxa_efetiva(indexador: str, taxa: float, cdi_anual_pct: float) -> float:
-    """Taxa anual que de fato remunera o título, em % a.a."""
+def _taxa_efetiva(
+    indexador: str, taxa: float, cdi_anual_pct: float, selic_anual_pct: float
+) -> float:
+    """Taxa anual que de fato remunera o título, em % a.a.
+
+    O CDB rende um percentual do CDI (110% do CDI); o Tesouro Selic rende a
+    Selic mais o ágio ou deságio contratado (Selic + 0,09% a.a.). Prefixado e
+    IPCA+ usam a taxa como está.
+    """
     if indexador == "CDI":
         return cdi_anual_pct * (taxa / 100)
+    if indexador == "SELIC":
+        return selic_anual_pct + taxa
     return taxa
 
 
@@ -147,7 +176,25 @@ def _fator_periodo(
 
 
 # ─────────────────────────────────────────────
-# Juros mensais
+# Custódia
+# ─────────────────────────────────────────────
+
+def _custodia_b3(tipo: str, indexador: str, valor_bruto: float, du: int) -> float:
+    """Custódia da B3 acumulada no período, só para o Tesouro Direto.
+
+    A cobrança incide sobre o valor da posição; em Tesouro Selic, a primeira
+    faixa é isenta.
+    """
+    if tipo != "tesouro":
+        return 0.0
+    base = valor_bruto
+    if indexador == "SELIC":
+        base = max(valor_bruto - CUSTODIA_ISENTA_SELIC, 0.0)
+    return base * ((1 + CUSTODIA_B3_AA_PCT / 100) ** (du / 252) - 1)
+
+
+# ─────────────────────────────────────────────
+# Cupons periódicos
 # ─────────────────────────────────────────────
 
 def _sem_pagamentos(aplicacao: date) -> dict:
@@ -155,9 +202,11 @@ def _sem_pagamentos(aplicacao: date) -> dict:
     return {"desde": aplicacao, "quantidade": 0, "bruto": 0.0, "ir": 0.0, "proximo": None}
 
 
-def _proximo_pagamento(aplicacao: date, vencimento: date, pagos: int) -> date | None:
+def _proximo_pagamento(
+    aplicacao: date, vencimento: date, pagos: int, intervalo_meses: int
+) -> date | None:
     """Aniversário seguinte ao último pago, ou None se passa do vencimento."""
-    prevista = proximo_dia_util(somar_meses(aplicacao, pagos + 1))
+    prevista = proximo_dia_util(somar_meses(aplicacao, (pagos + 1) * intervalo_meses))
     return prevista if prevista <= vencimento else None
 
 
@@ -170,9 +219,10 @@ def _juros_recebidos(
     taxa_efetiva: float,
     correcao: float | None,
     du_total: int,
+    intervalo_meses: int,
 ) -> dict:
-    """Soma os juros já pagos nos aniversários mensais, com o IR de cada um."""
-    datas = datas_pagamento(aplicacao, vencimento, referencia)
+    """Soma os juros já pagos nos aniversários do título, com o IR de cada um."""
+    datas = datas_pagamento(aplicacao, vencimento, referencia, intervalo_meses)
     bruto = ir = 0.0
     desde = aplicacao
     for pagamento in datas:
@@ -186,7 +236,7 @@ def _juros_recebidos(
         "quantidade": len(datas),
         "bruto": bruto,
         "ir": ir,
-        "proximo": _proximo_pagamento(aplicacao, vencimento, len(datas)),
+        "proximo": _proximo_pagamento(aplicacao, vencimento, len(datas), intervalo_meses),
     }
 
 
@@ -194,50 +244,64 @@ def _juros_recebidos(
 # Valorização
 # ─────────────────────────────────────────────
 
+def _aviso_indexador(
+    indexador: str, ipca_fator: float | None, selic_anual_pct: float | None
+) -> str | None:
+    """Avisa quando o indexador do título não pôde ser consultado."""
+    if indexador == "IPCA" and ipca_fator is None:
+        return "IPCA indisponivel - considerado apenas o juro real."
+    if indexador == "SELIC" and not selic_anual_pct:
+        return "Selic indisponivel - considerado apenas o agio contratado."
+    return None
+
+
 def valorizar(
-    cdb: dict,
+    titulo: dict,
     *,
     hoje: date | None = None,
     cdi_anual_pct: float,
+    selic_anual_pct: float | None = None,
     ipca_fator: float | None = None,
 ) -> dict:
-    """Calcula o valor atual estimado de um CDB.
+    """Calcula o valor atual estimado de um título de renda fixa.
 
-    `valor_bruto` é o que ainda está aplicado no título. Num CDB de juros
-    mensais isso é o principal mais o rendimento do mês em curso — o que já
-    foi pago saiu da posição e aparece em `juros_recebidos_*`.
+    `valor_bruto` é o que ainda está aplicado no papel. Num título com cupom
+    periódico isso é o principal mais o rendimento do período em curso — o que
+    já foi pago saiu da posição e aparece em `juros_recebidos_*`.
 
     Args:
-        cdb: posição normalizada do tipo "cdb".
+        titulo: posição normalizada do tipo "cdb" ou "tesouro".
         hoje: data de referência (padrão: data corrente).
         cdi_anual_pct: CDI anualizado vigente, em % a.a.
+        selic_anual_pct: meta Selic vigente, em % a.a. (só para Tesouro Selic).
         ipca_fator: fator acumulado do IPCA desde a aplicação (só para IPCA+).
     """
     hoje = hoje or date.today()
-    aplicacao = date.fromisoformat(cdb["data_aplicacao"])
-    vencimento = date.fromisoformat(cdb["data_vencimento"])
+    aplicacao = date.fromisoformat(titulo["data_aplicacao"])
+    vencimento = date.fromisoformat(titulo["data_vencimento"])
 
     # Após o vencimento o título para de render
     referencia = min(hoje, vencimento)
 
-    principal = float(cdb["valor_inicial"])
-    indexador = cdb["indexador"]
-    taxa_efetiva = _taxa_efetiva(indexador, float(cdb["taxa"]), cdi_anual_pct)
-    correcao = ipca_fator if indexador == "IPCA" else None
-    aviso = (
-        "IPCA indisponivel - considerado apenas o juro real."
-        if indexador == "IPCA" and ipca_fator is None
-        else None
+    tipo = titulo.get("tipo") or "cdb"
+    principal = float(titulo["valor_inicial"])
+    indexador = titulo["indexador"]
+    taxa_efetiva = _taxa_efetiva(
+        indexador, float(titulo["taxa"]), cdi_anual_pct, selic_anual_pct or 0.0
     )
+    correcao = ipca_fator if indexador == "IPCA" else None
+    aviso = _aviso_indexador(indexador, ipca_fator, selic_anual_pct)
 
     du_total = dias_uteis(aplicacao, referencia)
     dc = max((referencia - aplicacao).days, 0)
-    pagamento = cdb.get("pagamento_juros") or PAGAMENTO_VENCIMENTO
+    pagamento = titulo.get("pagamento_juros") or PAGAMENTO_VENCIMENTO
+    intervalo = INTERVALO_CUPOM.get(pagamento)
 
-    if pagamento == PAGAMENTO_MENSAL:
+    if intervalo:
         recebidos = _juros_recebidos(
             principal, aplicacao, vencimento, referencia,
             taxa_efetiva=taxa_efetiva, correcao=correcao, du_total=du_total,
+            intervalo_meses=intervalo,
         )
     else:
         recebidos = _sem_pagamentos(aplicacao)
@@ -249,7 +313,8 @@ def valorizar(
     rendimento_bruto = valor_bruto - principal
     ir_pct = aliquota_ir(dc)
     ir_valor = max(rendimento_bruto, 0) * ir_pct
-    valor_liquido = valor_bruto - ir_valor
+    custodia = _custodia_b3(tipo, indexador, valor_bruto, du_total)
+    valor_liquido = valor_bruto - ir_valor - custodia
     rendimento_liquido = valor_liquido - principal
 
     recebido_liquido = recebidos["bruto"] - recebidos["ir"]
@@ -278,6 +343,7 @@ def valorizar(
         "taxa_efetiva_aa_pct": round(taxa_efetiva, 4),
         "ir_aliquota_pct": round(ir_pct * 100, 2),
         "ir_valor": round(ir_valor, 2),
+        "custodia_valor": round(custodia, 2),
         "dias_corridos": dc,
         "dias_uteis": du_total,
         "dias_para_vencer": (vencimento - hoje).days,

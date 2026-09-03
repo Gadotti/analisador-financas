@@ -22,6 +22,7 @@
   --fii: #c38600;
   --acao: #2f8fd8;
   --cdb: #00a184;
+  --tesouro: #9b83e8;
 
   /* Estados semânticos */
   --verde: #51cf66;
@@ -334,6 +335,7 @@ a:hover { color: var(--amber-forte); }
 .etiqueta-fii { background: rgba(195, 134, 0, .18); color: var(--fii); }
 .etiqueta-acao { background: rgba(47, 143, 216, .18); color: var(--acao); }
 .etiqueta-cdb { background: rgba(0, 161, 132, .18); color: var(--cdb); }
+.etiqueta-tesouro { background: rgba(155, 131, 232, .18); color: var(--tesouro); }
 
 /* ── Formulários ───────────────────────── */
 

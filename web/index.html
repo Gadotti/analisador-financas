@@ -220,6 +220,7 @@
       <button type="button" data-tipo="fii" aria-pressed="true">FII</button>
       <button type="button" data-tipo="acao" aria-pressed="false">Ação</button>
       <button type="button" data-tipo="cdb" aria-pressed="false">CDB</button>
+      <button type="button" data-tipo="tesouro" aria-pressed="false">Tesouro</button>
     </div>
 
     <div class="grade-form">
@@ -240,9 +241,13 @@
         <input id="f-data-compra" type="date">
       </div>
 
-      <div class="campo campo-rf hidden">
+      <div class="campo campo-cdb hidden">
         <label for="f-banco">Banco emissor</label>
         <input id="f-banco" placeholder="Banco Inter" autocomplete="off">
+      </div>
+      <div class="campo campo-tesouro hidden campo-largo">
+        <label for="f-nome-tesouro">Nome do título (opcional)</label>
+        <input id="f-nome-tesouro" placeholder="Gerado do indexador e do vencimento" autocomplete="off">
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-valor-inicial">Valor aplicado (R$)</label>
@@ -250,11 +255,7 @@
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-indexador">Indexador</label>
-        <select id="f-indexador">
-          <option value="CDI">% do CDI</option>
-          <option value="PRE">Prefixado (% a.a.)</option>
-          <option value="IPCA">IPCA + (% a.a.)</option>
-        </select>
+        <select id="f-indexador"></select>
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-taxa" id="f-taxa-label">Taxa (% do CDI)</label>
@@ -270,12 +271,9 @@
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-pagamento-juros">Pagamento dos juros</label>
-        <select id="f-pagamento-juros">
-          <option value="vencimento">No vencimento</option>
-          <option value="mensal">Mensal</option>
-        </select>
+        <select id="f-pagamento-juros"></select>
       </div>
-      <div class="campo campo-check campo-rf hidden campo-largo">
+      <div class="campo campo-check campo-cdb hidden campo-largo">
         <input id="f-liquidez" type="checkbox">
         <label for="f-liquidez">Liquidez diária</label>
       </div>

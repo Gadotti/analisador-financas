@@ -248,3 +248,98 @@ def test_ipca_reparte_a_correcao_entre_os_cupons():
 
     assert com["juros_recebidos_bruto"] > sem["juros_recebidos_bruto"]
     assert "IPCA indisponivel" in sem["aviso"]
+
+
+# ─────────────────────────────────────────────
+# Tesouro Direto
+# ─────────────────────────────────────────────
+
+TESOURO_SELIC = {
+    "tipo": "tesouro",
+    "nome": "Tesouro Selic 2029",
+    "valor_inicial": 30000.0,
+    "indexador": "SELIC",
+    "taxa": 0.0949,
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2029-03-01",
+    "pagamento_juros": "vencimento",
+}
+
+TESOURO_IPCA_SEMESTRAL = {
+    "tipo": "tesouro",
+    "nome": "Tesouro IPCA+ 2029 com Juros Semestrais",
+    "valor_inicial": 10000.0,
+    "indexador": "IPCA",
+    "taxa": 6.0,
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2029-05-15",
+    "pagamento_juros": "semestral",
+}
+
+
+def test_selic_soma_o_agio_a_taxa_do_indexador():
+    """Ao contrário do CDB, que rende um percentual do CDI, a Selic é somada."""
+    calc = valorizar(
+        TESOURO_SELIC, hoje=date(2026, 1, 2), cdi_anual_pct=14.9, selic_anual_pct=15.0
+    )
+
+    assert calc["taxa_efetiva_aa_pct"] == 15.0949
+    assert calc["aviso"] is None
+
+
+def test_sem_selic_o_titulo_avisa_e_rende_so_o_agio():
+    calc = valorizar(TESOURO_SELIC, hoje=date(2026, 1, 2), cdi_anual_pct=14.9)
+
+    assert calc["taxa_efetiva_aa_pct"] == 0.0949
+    assert "Selic indisponivel" in calc["aviso"]
+
+
+def test_custodia_da_b3_isenta_a_primeira_faixa_do_tesouro_selic():
+    """A isenção vale sobre os primeiros R$ 10 mil; o excedente paga 0,20% a.a."""
+    calc = valorizar(
+        TESOURO_SELIC, hoje=date(2026, 1, 2), cdi_anual_pct=14.9, selic_anual_pct=15.0
+    )
+    base = calc["valor_bruto"] - 10000.0
+    esperado = base * ((1 + 0.002) ** (calc["dias_uteis"] / 252) - 1)
+
+    assert calc["custodia_valor"] == round(esperado, 2)
+    assert calc["valor_liquido"] == round(
+        calc["valor_bruto"] - calc["ir_valor"] - calc["custodia_valor"], 2
+    )
+
+
+def test_custodia_de_titulo_nao_selic_incide_sobre_o_valor_inteiro():
+    prefixado = {**TESOURO_SELIC, "indexador": "PRE", "taxa": 13.5}
+    calc = valorizar(prefixado, hoje=date(2026, 1, 2), cdi_anual_pct=14.9)
+    esperado = calc["valor_bruto"] * ((1 + 0.002) ** (calc["dias_uteis"] / 252) - 1)
+
+    assert calc["custodia_valor"] == round(esperado, 2)
+
+
+def test_cdb_nao_paga_custodia_de_b3():
+    calc = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["custodia_valor"] == 0.0
+    assert calc["valor_liquido"] == round(calc["valor_bruto"] - calc["ir_valor"], 2)
+
+
+def test_cupom_semestral_paga_a_cada_seis_meses():
+    calc = valorizar(
+        TESOURO_IPCA_SEMESTRAL, hoje=date(2027, 1, 4), cdi_anual_pct=14.9, ipca_fator=1.08
+    )
+
+    # 02/01/2025 → cupons em jul/25, jan/26, jul/26 e jan/27 (dia útil seguinte).
+    assert calc["pagamentos_realizados"] == 4
+    assert calc["proximo_pagamento"] == "2027-07-02"
+    assert calc["juros_recebidos_bruto"] > 0
+    # O principal segue intacto: só o semestre em curso está no valor bruto.
+    assert calc["valor_bruto"] < TESOURO_IPCA_SEMESTRAL["valor_inicial"] * 1.05
+
+
+def test_datas_de_pagamento_respeitam_o_intervalo_pedido():
+    aplicacao, vencimento = date(2025, 1, 2), date(2027, 1, 4)
+    mensais = datas_pagamento(aplicacao, vencimento, date(2026, 1, 2), 1)
+    semestrais = datas_pagamento(aplicacao, vencimento, date(2026, 1, 2), 6)
+
+    assert len(mensais) == 12
+    assert semestrais == [date(2025, 7, 2), date(2026, 1, 2)]

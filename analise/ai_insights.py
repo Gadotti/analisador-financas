@@ -37,7 +37,8 @@ def effort() -> str | None:
 
 
 SYSTEM_PROMPT = """Você é um analista de investimentos brasileiro, especialista em fundos
-imobiliários (FIIs), ações da B3 e renda fixa bancária (CDBs). Você produz relatórios de
+imobiliários (FIIs), ações da B3, renda fixa bancária (CDBs) e títulos públicos
+federais (Tesouro Direto). Você produz relatórios de
 carteira no padrão de uma casa de análise: fundamentos levantados ativo a ativo, seguidos
 de uma leitura consolidada do conjunto.
 
@@ -63,8 +64,14 @@ Regras de rigor:
 - Aponte correlações entre ativos que o investidor pode não ter percebido: sobreposição de
   segmento, concentração no mesmo gestor, exposição ao mesmo locatário ou devedor.
 - Para CDBs, considere vencimento, indexador e concentração por banco (teto do FGC de
-  R$ 250 mil por CPF/instituição). CDBs não entram na lista `ativos` — comente-os nos
-  campos de análise da carteira.
+  R$ 250 mil por CPF/instituição).
+- Para títulos do Tesouro Direto, considere o indexador e o prazo diante da curva de
+  juros atual: um prefixado longo ou um IPCA+ longo oscila com a marcação a mercado, e
+  o Tesouro Selic é o que menos oscila. O Tesouro não é coberto pelo FGC — quem responde
+  pelo papel é o Tesouro Nacional, o menor risco de crédito do país, então não trate a
+  concentração nele como concentração de emissor bancário.
+- Nem CDB nem Tesouro entram na lista `ativos` — comente-os nos campos de análise da
+  carteira.
 - Ordene os riscos do mais relevante para o menos relevante.
 - Escreva em português do Brasil, objetivo e sem jargão desnecessário.
 - Você não é assessor de investimentos: descreva cenários e pontos de atenção, sem
@@ -88,7 +95,10 @@ SCHEMA = {
         },
         "ativos": {
             "type": "array",
-            "description": "Ficha técnica de cada ativo de renda variável. Não inclua CDBs.",
+            "description": (
+                "Ficha técnica de cada ativo de renda variável. "
+                "Não inclua CDBs nem títulos do Tesouro Direto."
+            ),
             "items": {
                 "type": "object",
                 "properties": {
@@ -249,6 +259,23 @@ def disponivel() -> tuple[bool, str]:
 # Montagem do prompt
 # ─────────────────────────────────────────────
 
+def _linha_renda_fixa(p: dict) -> str:
+    """Uma posição de CDB ou Tesouro descrita para o modelo.
+
+    O CDB é identificado pelo banco (é o que importa para o FGC); o título
+    público, pelo nome do papel, que já carrega família e vencimento.
+    """
+    venc = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
+    rotulo = "CDB" if p["tipo"] == "cdb" else "Tesouro"
+    identificacao = p["banco"] if p["tipo"] == "cdb" else p["descricao"]
+    cupom = f", juros {p['pagamento_juros']}" if p["pagamento_juros"] != "vencimento" else ""
+    return (
+        f"- [{rotulo}] {identificacao} — {p['rotulo_taxa']}{cupom}, "
+        f"aplicado R$ {p['valor_investido']:,.2f}, "
+        f"valor atual R$ {p['valor_atual']:,.2f}, {venc}, peso {p['peso_pct']:.1f}% da carteira"
+    )
+
+
 def _resumo_posicoes(snapshot: dict) -> str:
     linhas = []
     for p in snapshot["posicoes"]:
@@ -260,11 +287,7 @@ def _resumo_posicoes(snapshot: dict) -> str:
                 f"resultado {p['resultado_pct']:+.1f}%, peso {p['peso_pct']:.1f}% da carteira"
             )
         else:
-            venc = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
-            linhas.append(
-                f"- [CDB] {p['banco']} — {p['rotulo_taxa']}, aplicado R$ {p['valor_investido']:,.2f}, "
-                f"valor atual R$ {p['valor_atual']:,.2f}, {venc}, peso {p['peso_pct']:.1f}% da carteira"
-            )
+            linhas.append(_linha_renda_fixa(p))
     return "\n".join(linhas)
 
 

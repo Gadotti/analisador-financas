@@ -9,7 +9,12 @@
 import { $, esc, moeda, moedaCurta, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
-const COR_CLASSE = { fii: "var(--fii)", acao: "var(--acao)", cdb: "var(--cdb)" };
+const COR_CLASSE = {
+  fii: "var(--fii)",
+  acao: "var(--acao)",
+  cdb: "var(--cdb)",
+  tesouro: "var(--tesouro)",
+};
 
 const corDe = (tipo) => COR_CLASSE[tipo] || "var(--t3)";
 
@@ -83,6 +88,20 @@ function linhaDescoberto(naoCoberto, explicar) {
   </div>`;
 }
 
+/**
+ * Rodapé da linha do emissor: o consumo do teto do FGC num banco; a garantia
+ * soberana no Tesouro Direto, que o FGC não cobre — nem precisa cobrir.
+ */
+function coberturaDoEmissor(emissor) {
+  if (!emissor.fgc_limite) {
+    return `<span class="fgc">${moeda(emissor.valor)} · garantia do Tesouro Nacional</span>
+      <span class="grupo-valor mono">sem FGC</span>`;
+  }
+  return `<span class="fgc ${emissor.acima_do_fgc ? "estourado" : ""}">
+      ${moeda(emissor.valor)} de ${moedaCurta(emissor.fgc_limite)} do FGC</span>
+    <span class="grupo-valor mono">${pct(emissor.fgc_uso_pct, 0, false)}</span>`;
+}
+
 function blocoEmissores(emissores, limitePct) {
   if (!emissores?.length) return "";
 
@@ -93,11 +112,8 @@ function blocoEmissores(emissores, limitePct) {
           <span class="grupo-nome">${esc(e.nome)}</span>
           <span class="grupo-peso mono ${e.peso_pct > limitePct ? "acima" : ""}">${pct(e.peso_pct, 1, false)}</span>
         </div>
-        ${trilho(e.peso_pct, corDe("cdb"), limitePct)}
-        <div class="grupo-pe">
-          <span class="fgc ${e.acima_do_fgc ? "estourado" : ""}">${moeda(e.valor)} de ${moedaCurta(e.fgc_limite)} do FGC</span>
-          <span class="grupo-valor mono">${pct(e.fgc_uso_pct, 0, false)}</span>
-        </div>
+        ${trilho(e.peso_pct, corDe(e.fgc_limite ? "cdb" : "tesouro"), limitePct)}
+        <div class="grupo-pe">${coberturaDoEmissor(e)}</div>
       </div>`
     )
     .join("");

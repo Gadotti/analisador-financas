@@ -4,7 +4,8 @@ Orientações para o Claude Code trabalhar neste repositório.
 
 ## O que é
 
-Sistema local de análise de carteira de investimentos brasileira (FIIs, ações da B3 e CDBs).
+Sistema local de análise de carteira de investimentos brasileira (FIIs, ações da B3, CDBs e
+títulos do Tesouro Direto).
 Roda inteiramente na máquina do usuário: dados em arquivos JSON, servidor web ouvindo apenas
 em `127.0.0.1`.
 
@@ -88,7 +89,8 @@ Uma regra por arquivo, para não haver duas validações divergentes:
 
 Por isso `analise/portfolio.py` é **somente leitura** — sem CRUD, sem gravação, sem
 migração de formato. Se precisar de uma nova regra de validação de posição, ela vai em
-`src/core/portfolio.js`.
+`src/core/portfolio.js` (renda variável e CRUD), `src/core/rendaFixa.js` (CDB e Tesouro) ou
+`src/core/validacao.js` (conversão e mensagem de erro de um campo).
 
 ### Injeção de dependência
 
@@ -209,18 +211,44 @@ sem acento e sem os termos de razão social — e junta as chaves em que uma é 
 outra; `fundamentals` reescreve a ficha com o rótulo canônico antes de agrupar. Não peça
 essa unificação ao modelo: a saída dele não é estável entre execuções.
 
-**Marcação a mercado de CDB é estimativa.** `analise/fixed_income.py` projeta o CDI de hoje
-sobre todo o período decorrido, capitaliza em dias úteis (base 252) e aplica o IR
-regressivo. Não apresente esses valores como oficiais — o rodapé do relatório já avisa.
+**Marcação a mercado de renda fixa é estimativa.** `analise/fixed_income.py` projeta o CDI
+(ou a Selic) de hoje sobre todo o período decorrido, capitaliza em dias úteis (base 252) e
+aplica o IR regressivo. O Tesouro é carregado na curva, sem a marcação a mercado do papel —
+um prefixado longo pode valer bem menos que isso num resgate antecipado. Não apresente
+esses valores como oficiais; o rodapé do relatório já avisa.
 
-**CDB de juros mensais não capitaliza.** `pagamento_juros` vale `vencimento` (o padrão, e
-o que toda posição antiga já gravada assume) ou `mensal`. No modo mensal cada aniversário
-da aplicação — ajustado para o dia útil seguinte — paga os juros do período e o principal
-segue intacto, com o IR retido em cada cupom pelo prazo decorrido até ele. Por isso
-`valor_atual` e `resultado` medem só o que continua aplicado; os cupons já sacados saíram
-da carteira e vivem em `juros_recebidos_*`, com o acumulado dos dois em `resultado_total`.
-Não some cupom em `valor_atual`: os totais do snapshot são a soma dos `valor_atual` das
-posições, e a carteira deixaria de fechar.
+**Dois tipos de renda fixa, um esqueleto só.** `cdb` e `tesouro` compartilham valor
+aplicado, indexador, taxa, prazo e forma de pagamento dos juros. Divergem em três pontos,
+declarados na tabela `REGRAS` de `src/core/rendaFixa.js` (e espelhados em
+`analise/portfolio.py`):
+
+| | CDB | Tesouro |
+|---|---|---|
+| Indexadores | CDI, PRE, IPCA | SELIC, PRE, IPCA |
+| Cupom | `vencimento` ou `mensal` | `vencimento` ou `semestral` |
+| Emissor | o banco, com teto do FGC | Tesouro Nacional, sem FGC |
+
+O CDI é multiplicativo (110% do CDI); a Selic é aditiva (Selic + 0,09% a.a.) — veja
+`_taxa_efetiva`. Só o Tesouro paga custódia à B3 (0,20% a.a., isenta na primeira faixa em
+Tesouro Selic), descontada do `valor_liquido` em `_custodia_b3`. O nome padrão de um título
+sai de `nomeTesouro()` no padrão em que o Tesouro Direto o publica ("Tesouro IPCA+ 2029 com
+Juros Semestrais"); o usuário pode sobrescrevê-lo.
+
+Ao acrescentar um terceiro tipo de renda fixa, ele entra em `REGRAS` e em
+`INTERVALO_CUPOM` — não em mais um `if` espalhado pelo relatório e pelo front.
+
+**Título com cupom não capitaliza.** No modo `mensal` (CDB) ou `semestral` (Tesouro) cada
+aniversário da aplicação — ajustado para o dia útil seguinte — paga os juros do período e o
+principal segue intacto, com o IR retido em cada cupom pelo prazo decorrido até ele. Por
+isso `valor_atual` e `resultado` medem só o que continua aplicado; os cupons já sacados
+saíram da carteira e vivem em `juros_recebidos_*`, com o acumulado dos dois em
+`resultado_total`. Não some cupom em `valor_atual`: os totais do snapshot são a soma dos
+`valor_atual` das posições, e a carteira deixaria de fechar.
+
+**O FGC é do banco, não do país.** `emissores_renda_fixa` lista todo emissor de renda fixa,
+mas só o CDB consome teto do FGC (`analysis.TIPOS_COM_FGC`); a linha do Tesouro Nacional vem
+com `fgc_limite: None` e `garantia: "Tesouro Nacional"`, e nunca dispara o alerta de teto
+estourado. O alerta de concentração por posição, esse sim, vale para qualquer ativo.
 
 **Front-end.** `web/` é HTML, CSS e JS puros, servidos como estáticos em `/static/`.
 Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do

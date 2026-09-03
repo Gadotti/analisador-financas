@@ -25,6 +25,15 @@ const CDB = {
   data_vencimento: "2027-01-04",
 };
 
+const TESOURO = {
+  tipo: "tesouro",
+  valor_inicial: 20000,
+  indexador: "selic",
+  taxa: 0.0949,
+  data_aplicacao: "2025-01-02",
+  data_vencimento: "2029-03-01",
+};
+
 describe("normalizar", () => {
   test("normaliza uma posição de renda variável", () => {
     const pos = portfolio.normalizar(FII);
@@ -89,14 +98,17 @@ describe("rotuloTaxa e descricao", () => {
     [{ indexador: "CDI", taxa: 110 }, "110% do CDI"],
     [{ indexador: "PRE", taxa: 12.5 }, "12.5% a.a."],
     [{ indexador: "IPCA", taxa: 6.5 }, "IPCA + 6.5% a.a."],
-  ])("descreve %o como %s", (cdb, esperado) => {
-    expect(portfolio.rotuloTaxa(cdb)).toBe(esperado);
+    [{ indexador: "SELIC", taxa: 0.0949 }, "SELIC + 0.0949% a.a."],
+  ])("descreve %o como %s", (titulo, esperado) => {
+    expect(portfolio.rotuloTaxa(titulo)).toBe(esperado);
   });
 
   test.each([
     [{ tipo: "acao", ticker: "PETR4" }, "PETR4"],
     [{ tipo: "cdb", banco: "Inter" }, "CDB Inter"],
     [{ tipo: "cdb", nome: "CDB X", banco: "Y" }, "CDB X"],
+    [{ tipo: "tesouro", nome: "Tesouro Selic 2029" }, "Tesouro Selic 2029"],
+    [{ tipo: "tesouro" }, "Tesouro Direto"],
   ])("resolve a descrição de %o", (pos, esperado) => {
     expect(portfolio.descricao(pos)).toBe(esperado);
   });
@@ -207,5 +219,65 @@ describe("tickers", () => {
       ],
     };
     expect(portfolio.tickers(carteira)).toEqual(["MXRF11", "PETR4"]);
+  });
+});
+
+describe("títulos do Tesouro Direto", () => {
+  test("normaliza um título e gera o nome comercial do papel", () => {
+    expect(portfolio.normalizar(TESOURO)).toMatchObject({
+      tipo: "tesouro",
+      indexador: "SELIC",
+      taxa: 0.0949,
+      nome: "Tesouro Selic 2029",
+      pagamento_juros: "vencimento",
+    });
+  });
+
+  test.each([
+    [{ indexador: "pre", pagamento_juros: "vencimento" }, "Tesouro Prefixado 2029"],
+    [{ indexador: "ipca", pagamento_juros: "vencimento" }, "Tesouro IPCA+ 2029"],
+    [
+      { indexador: "ipca", pagamento_juros: "semestral" },
+      "Tesouro IPCA+ 2029 com Juros Semestrais",
+    ],
+  ])("nomeia %o como %s", (campos, esperado) => {
+    expect(portfolio.normalizar({ ...TESOURO, ...campos }).nome).toBe(esperado);
+  });
+
+  test("preserva o nome informado pelo usuário", () => {
+    const pos = portfolio.normalizar({ ...TESOURO, nome: "NTN-B Principal 2029" });
+    expect(pos.nome).toBe("NTN-B Principal 2029");
+  });
+
+  test("não exige banco emissor — quem responde é o Tesouro Nacional", () => {
+    const pos = portfolio.normalizar(TESOURO);
+    expect(pos.banco).toBeUndefined();
+    expect(portfolio.emissorDe(pos)).toBe("Tesouro Nacional");
+  });
+
+  test.each([
+    ["CDI, que é indexador de CDB", { indexador: "CDI" }, /Indexador invalido/],
+    ["cupom mensal, que é de CDB", { pagamento_juros: "mensal" }, /Pagamento de juros invalido/],
+    ["valor aplicado zerado", { valor_inicial: 0 }, /deve ser >= 0.01/],
+    ["vencimento antes da aplicação", { data_vencimento: "2024-01-01" }, /anterior a data de aplicacao/],
+  ])("rejeita %s", (_titulo, campos, mensagem) => {
+    expect(() => portfolio.normalizar({ ...TESOURO, ...campos })).toThrow(mensagem);
+  });
+
+  test("o CDB continua sem aceitar Selic nem cupom semestral", () => {
+    expect(() => portfolio.normalizar({ ...CDB, indexador: "SELIC" })).toThrow(/Indexador invalido/);
+    expect(() => portfolio.normalizar({ ...CDB, pagamento_juros: "semestral" })).toThrow(
+      /Pagamento de juros invalido/,
+    );
+  });
+
+  test("grava e relê um título junto com as demais posições", () => {
+    portfolio.adicionar(FII);
+    const titulo = portfolio.adicionar(TESOURO);
+
+    const carteira = portfolio.load();
+    expect(carteira.posicoes).toHaveLength(2);
+    expect(carteira.posicoes[1]).toMatchObject({ id: titulo.id, tipo: "tesouro" });
+    expect(portfolio.tickers(carteira)).toEqual(["MXRF11"]);
   });
 });

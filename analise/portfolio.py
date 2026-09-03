@@ -15,11 +15,16 @@ from .paths import portfolio_file
 VERSAO = 2
 
 TIPOS_VARIAVEL = ("fii", "acao")
-TIPOS_RENDA_FIXA = ("cdb",)
+TIPOS_RENDA_FIXA = ("cdb", "tesouro")
 TIPOS = TIPOS_VARIAVEL + TIPOS_RENDA_FIXA
 
-INDEXADORES = ("CDI", "PRE", "IPCA")
-PAGAMENTOS_JUROS = ("vencimento", "mensal")
+INDEXADORES_CDB = ("CDI", "PRE", "IPCA")
+INDEXADORES_TESOURO = ("SELIC", "PRE", "IPCA")
+
+PAGAMENTOS_CDB = ("vencimento", "mensal")
+PAGAMENTOS_TESOURO = ("vencimento", "semestral")
+
+EMISSOR_TESOURO = "Tesouro Nacional"
 
 CONFIG_PADRAO = {
     "max_fatos": 6,
@@ -64,26 +69,37 @@ def load() -> dict:
     return dados
 
 
-def rotulo_taxa(cdb: dict) -> str:
-    """Descrição legível da remuneração de um CDB."""
-    taxa, idx = cdb["taxa"], cdb["indexador"]
+def rotulo_taxa(titulo: dict) -> str:
+    """Descrição legível da remuneração de um título de renda fixa."""
+    taxa, idx = titulo["taxa"], titulo["indexador"]
     if idx == "CDI":
         return f"{taxa:g}% do CDI"
+    if idx == "SELIC":
+        return f"SELIC + {taxa:g}% a.a."
     if idx == "PRE":
         return f"{taxa:g}% a.a."
     return f"IPCA + {taxa:g}% a.a."
 
 
-def paga_juros_mensais(cdb: dict) -> bool:
-    """O CDB devolve os juros todo mês em vez de acumular até o vencimento?"""
-    return cdb.get("pagamento_juros") == "mensal"
+def emissor(titulo: dict) -> str:
+    """Quem responde pelo título: o banco emissor ou o Tesouro Nacional."""
+    if titulo["tipo"] == "tesouro":
+        return EMISSOR_TESOURO
+    return titulo.get("banco", "")
+
+
+def paga_cupom(titulo: dict) -> bool:
+    """O título devolve os juros no caminho em vez de acumular até o vencimento?"""
+    return titulo.get("pagamento_juros") in ("mensal", "semestral")
 
 
 def descricao(pos: dict) -> str:
     """Nome curto de exibição da posição."""
     if pos["tipo"] in TIPOS_VARIAVEL:
         return pos["ticker"]
-    return pos.get("nome") or f"CDB {pos.get('banco', '')}"
+    if pos.get("nome"):
+        return pos["nome"]
+    return "Tesouro Direto" if pos["tipo"] == "tesouro" else f"CDB {pos.get('banco', '')}"
 
 
 def tickers(carteira: dict) -> list[str]:

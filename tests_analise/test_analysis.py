@@ -30,6 +30,21 @@ CDB = {
 }
 
 
+TESOURO = {
+    "id": "c3",
+    "tipo": "tesouro",
+    "nome": "Tesouro Selic 2029",
+    "valor_inicial": 20000.0,
+    "indexador": "SELIC",
+    "taxa": 0.0949,
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2099-03-01",
+    "pagamento_juros": "vencimento",
+    "liquidez_diaria": False,
+    "observacao": "",
+}
+
+
 def carteira_com(posicoes, **config):
     return {
         "versao": 2,
@@ -146,6 +161,7 @@ CDB_BASE = {
     "tipo": "cdb",
     "descricao": "CDB Inter",
     "banco": "Inter",
+    "emissor": "Inter",
     "valor_atual": 10000.0,
     "valor_liquido": 9800.0,
     "valor_investido": 10000.0,
@@ -177,7 +193,7 @@ def test_exposicao_por_banco_soma_e_compara_com_o_fgc():
 def test_emissores_de_renda_fixa_medem_o_consumo_do_fgc():
     posicoes = [
         {**CDB_BASE, "valor_atual": 200000.0, "dias_para_vencer": 999},
-        {**CDB_BASE, "banco": "BTG", "valor_atual": 50000.0, "dias_para_vencer": 999},
+        {**CDB_BASE, "banco": "BTG", "emissor": "BTG", "valor_atual": 50000.0, "dias_para_vencer": 999},
     ]
     emissores = analysis._emissores_renda_fixa(posicoes, 500000.0, 250000.0)
 
@@ -260,3 +276,79 @@ def test_alertas_ordenados_por_severidade():
 )
 def test_saude_da_carteira(alertas, resultado_pct, esperado):
     assert analysis._saude(alertas, resultado_pct) == esperado
+
+
+# ─────────────────────────────────────────────
+# Tesouro Direto
+# ─────────────────────────────────────────────
+
+
+def test_titulo_do_tesouro_entra_como_classe_propria(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([CDB, TESOURO]), usar_cache=False)
+
+    assert snapshot["classes"]["tesouro"]["rotulo"] == "Tesouro Direto"
+    assert snapshot["classes"]["tesouro"]["posicoes"] == 1
+    assert snapshot["classes"]["cdb"]["posicoes"] == 1
+    assert snapshot["totais"]["posicoes"] == 2
+
+
+def test_tesouro_selic_usa_a_meta_selic_do_cenario_macro(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    # mercado_padrao publica Selic meta de 15,00% a.a.; a taxa soma o ágio.
+    assert titulo["taxa_efetiva_aa_pct"] == 15.0949
+    assert titulo["rotulo_taxa"] == "SELIC + 0.0949% a.a."
+    assert titulo["descricao"] == "Tesouro Selic 2029"
+    assert titulo["emissor"] == "Tesouro Nacional"
+    assert titulo["aviso"] is None
+    assert titulo["custodia_valor"] > 0
+    assert "banco" not in titulo
+
+
+def test_tesouro_aparece_entre_os_emissores_sem_teto_do_fgc(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([CDB, TESOURO]), usar_cache=False)
+    emissores = {e["nome"]: e for e in snapshot["emissores_renda_fixa"]}
+
+    assert emissores["Tesouro Nacional"]["garantia"] == "Tesouro Nacional"
+    assert emissores["Tesouro Nacional"]["fgc_limite"] is None
+    assert emissores["Tesouro Nacional"]["acima_do_fgc"] is False
+    assert emissores["Inter"]["garantia"] == "FGC"
+    assert emissores["Inter"]["fgc_limite"] == CONFIG_PADRAO["limite_fgc"]
+
+
+def test_concentracao_no_tesouro_nao_gera_alerta_de_fgc():
+    """O teto do FGC é por banco: o Tesouro Nacional não o consome."""
+    posicoes = [
+        {
+            "tipo": "tesouro",
+            "descricao": "Tesouro Selic 2029",
+            "emissor": "Tesouro Nacional",
+            "valor_atual": 900000.0,
+            "valor_liquido": 880000.0,
+            "data_vencimento": "2029-03-01",
+            "dias_para_vencer": 999,
+            "vencido": False,
+            "pagamento_juros": "vencimento",
+        }
+    ]
+    alertas = analysis._gerar_alertas(posicoes, 900000.0, CONFIG_PADRAO)
+
+    assert not any("teto do FGC" in a["titulo"] for a in alertas)
+
+
+def test_vencimento_proximo_do_tesouro_tambem_alerta():
+    titulo = {
+        "tipo": "tesouro",
+        "descricao": "Tesouro Prefixado 2026",
+        "emissor": "Tesouro Nacional",
+        "valor_atual": 10000.0,
+        "valor_liquido": 9800.0,
+        "data_vencimento": "2026-10-01",
+        "dias_para_vencer": 20,
+        "vencido": False,
+        "pagamento_juros": "vencimento",
+    }
+    alertas = analysis._gerar_alertas([titulo], 10000.0, CONFIG_PADRAO)
+
+    assert any("Tesouro Prefixado 2026 vence em 20 dias" in a["titulo"] for a in alertas)

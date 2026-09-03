@@ -206,3 +206,75 @@ def test_bloco_de_segmentos_so_com_mais_de_um(snapshot_exemplo, ia_exemplo):
     msg = report.telegram(snapshot_exemplo, ia_exemplo, f)
     assert "POR SEGMENTO" in msg
     assert "Logística: 25,0%" in msg
+
+
+# ─────────────────────────────────────────────
+# Tesouro Direto
+# ─────────────────────────────────────────────
+
+TESOURO_CALCULADO = {
+    "id": "c3",
+    "tipo": "tesouro",
+    "descricao": "Tesouro IPCA+ 2029 com Juros Semestrais",
+    "emissor": "Tesouro Nacional",
+    "indexador": "IPCA",
+    "taxa": 6.0,
+    "rotulo_taxa": "IPCA + 6% a.a.",
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2029-05-15",
+    "pagamento_juros": "semestral",
+    "pagamentos_realizados": 3,
+    "proximo_pagamento": "2026-07-01",
+    "juros_recebidos_liquido": 780.0,
+    "valor_investido": 10000.0,
+    "valor_atual": 10200.0,
+    "valor_liquido": 10050.0,
+    "resultado": 200.0,
+    "resultado_pct": 2.0,
+    "dias_para_vencer": 985,
+    "vencido": False,
+    "peso_pct": 31.0,
+    "observacao": "",
+    "aviso": None,
+}
+
+
+def com_tesouro(snapshot_exemplo):
+    """O snapshot de exemplo acrescido de um título público."""
+    snapshot = copy.deepcopy(snapshot_exemplo)
+    snapshot["posicoes"].append(TESOURO_CALCULADO)
+    snapshot["emissores_renda_fixa"].append(
+        {
+            "nome": "Tesouro Nacional",
+            "valor": 10200.0,
+            "peso_pct": 31.0,
+            "garantia": "Tesouro Nacional",
+            "fgc_limite": None,
+            "fgc_uso_pct": None,
+            "acima_do_fgc": False,
+        }
+    )
+    return snapshot
+
+
+def test_tesouro_sai_na_tabela_identificado_pelo_papel(snapshot_exemplo):
+    saida = report.texto(com_tesouro(snapshot_exemplo))
+
+    assert "[  TD] IPCA+ 2029 com Ju" in saida
+    assert "Tesouro Nacional · 15/05/2029 · vence em 985 dias" in saida
+    assert "juros semestrais · 3 pagamento(s)" in saida
+    assert "próximo em 01/07/2026" in saida
+
+
+def test_emissor_do_tesouro_nao_mostra_consumo_de_fgc(snapshot_exemplo):
+    saida = report.texto(com_tesouro(snapshot_exemplo))
+
+    assert "Tesouro Nacional" in saida
+    assert "garantia do Tesouro Nacional" in saida
+    assert "acima do FGC" not in saida
+
+
+def test_rodape_fala_de_renda_fixa_e_nao_so_de_cdb(snapshot_exemplo):
+    saida = report.texto(com_tesouro(snapshot_exemplo))
+
+    assert "Valores de renda fixa são estimados na curva" in saida

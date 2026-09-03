@@ -2,25 +2,35 @@
  * Persistência e validação da carteira em arquivo JSON.
  *
  * Tipos de posição suportados:
- *   - "fii" / "acao": ticker, quantidade, preço médio
- *   - "cdb"         : banco, valor inicial, indexador, taxa, datas e a
- *                     forma de pagamento dos juros (no vencimento ou mensal)
+ *   - "fii" / "acao" : ticker, quantidade, preço médio
+ *   - "cdb"          : banco emissor, valor aplicado, indexador, taxa e prazo
+ *   - "tesouro"      : título do Tesouro Direto, com os mesmos campos de prazo
+ *
+ * As regras dos dois tipos de renda fixa moram em `rendaFixa.js`; aqui ficam
+ * só a leitura, a gravação e o CRUD do arquivo.
  */
 
 import fs from "node:fs";
 import crypto from "node:crypto";
 
 import { garantirDiretorios, portfolioFile } from "../config/paths.js";
-import { agoraISO, paraData, paraISO } from "../util/datas.js";
+import { agoraISO } from "../util/datas.js";
+import * as rendaFixa from "./rendaFixa.js";
+import { ValidacaoError, data, numero, opcao, texto } from "./validacao.js";
+
+export { ValidacaoError } from "./validacao.js";
+export { EMISSOR_TESOURO, emissorDe, nomeTesouro, rotuloTaxa } from "./rendaFixa.js";
 
 export const VERSAO = 2;
 
 export const TIPOS_VARIAVEL = ["fii", "acao"];
-export const TIPOS_RENDA_FIXA = ["cdb"];
+export const TIPOS_RENDA_FIXA = rendaFixa.TIPOS_RENDA_FIXA;
 export const TIPOS = [...TIPOS_VARIAVEL, ...TIPOS_RENDA_FIXA];
 
-export const INDEXADORES = ["CDI", "PRE", "IPCA"];
-export const PAGAMENTOS_JUROS = ["vencimento", "mensal"];
+export const INDEXADORES_CDB = rendaFixa.INDEXADORES_CDB;
+export const INDEXADORES_TESOURO = rendaFixa.INDEXADORES_TESOURO;
+export const PAGAMENTOS_CDB = rendaFixa.PAGAMENTOS_CDB;
+export const PAGAMENTOS_TESOURO = rendaFixa.PAGAMENTOS_TESOURO;
 
 export const CONFIG_PADRAO = Object.freeze({
   max_fatos: 6,
@@ -30,14 +40,6 @@ export const CONFIG_PADRAO = Object.freeze({
   alerta_concentracao_pct: 25.0,
   alerta_prejuizo_pct: 15.0,
 });
-
-/** Erro de validação de uma posição da carteira. */
-export class ValidacaoError extends Error {
-  constructor(mensagem) {
-    super(mensagem);
-    this.name = "ValidacaoError";
-  }
-}
 
 // ─────────────────────────────────────────────
 // Leitura / escrita
@@ -117,44 +119,6 @@ export function migrar(antigo) {
   return nova;
 }
 
-// ─────────────────────────────────────────────
-// Validação / normalização
-// ─────────────────────────────────────────────
-
-function numero(valor, campo, { minimo = null } = {}) {
-  if (valor === null || valor === undefined || valor === "") {
-    throw new ValidacaoError(`Campo '${campo}' e obrigatorio.`);
-  }
-  const n = Number(String(valor).replace(",", "."));
-  if (!Number.isFinite(n)) {
-    throw new ValidacaoError(`Campo '${campo}' deve ser numerico.`);
-  }
-  if (minimo !== null && n < minimo) {
-    throw new ValidacaoError(`Campo '${campo}' deve ser >= ${minimo}.`);
-  }
-  return n;
-}
-
-function data(valor, campo, { obrigatorio = true } = {}) {
-  if (!valor) {
-    if (obrigatorio) {
-      throw new ValidacaoError(`Campo '${campo}' e obrigatorio (formato AAAA-MM-DD).`);
-    }
-    return null;
-  }
-  try {
-    return paraISO(paraData(valor));
-  } catch {
-    throw new ValidacaoError(`Campo '${campo}' invalido - use AAAA-MM-DD.`);
-  }
-}
-
-function texto(valor, campo, { obrigatorio = true } = {}) {
-  const txt = valor === null || valor === undefined ? "" : String(valor).trim();
-  if (obrigatorio && !txt) throw new ValidacaoError(`Campo '${campo}' e obrigatorio.`);
-  return txt;
-}
-
 function novoId() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }
@@ -182,58 +146,13 @@ export function normalizar(pos) {
     };
   }
 
-  // CDB
-  const indexador = texto(pos.indexador || "CDI", "indexador").toUpperCase();
-  if (!INDEXADORES.includes(indexador)) {
-    throw new ValidacaoError(
-      `Indexador invalido: '${indexador}'. Use: ${INDEXADORES.join(", ")}.`,
-    );
-  }
-
-  const dataAplicacao = data(pos.data_aplicacao, "data_aplicacao");
-  const dataVencimento = data(pos.data_vencimento, "data_vencimento");
-  if (dataVencimento < dataAplicacao) {
-    throw new ValidacaoError("Data de vencimento anterior a data de aplicacao.");
-  }
-
-  const pagamentoJuros = texto(
-    pos.pagamento_juros || "vencimento",
-    "pagamento_juros",
-  ).toLowerCase();
-  if (!PAGAMENTOS_JUROS.includes(pagamentoJuros)) {
-    throw new ValidacaoError(
-      `Pagamento de juros invalido: '${pagamentoJuros}'. Use: ${PAGAMENTOS_JUROS.join(", ")}.`,
-    );
-  }
-
-  const cdb = {
-    ...base,
-    banco: texto(pos.banco, "banco"),
-    nome: texto(pos.nome, "nome", { obrigatorio: false }),
-    valor_inicial: numero(pos.valor_inicial, "valor_inicial", { minimo: 0.01 }),
-    indexador,
-    taxa: numero(pos.taxa, "taxa", { minimo: 0 }),
-    data_aplicacao: dataAplicacao,
-    data_vencimento: dataVencimento,
-    pagamento_juros: pagamentoJuros,
-    liquidez_diaria: Boolean(pos.liquidez_diaria),
-  };
-  if (!cdb.nome) cdb.nome = `CDB ${cdb.banco} ${rotuloTaxa(cdb)}`;
-  return cdb;
-}
-
-/** Descrição legível da remuneração de um CDB. */
-export function rotuloTaxa(cdb) {
-  const taxa = String(Number(cdb.taxa));
-  if (cdb.indexador === "CDI") return `${taxa}% do CDI`;
-  if (cdb.indexador === "PRE") return `${taxa}% a.a.`;
-  return `IPCA + ${taxa}% a.a.`;
+  return rendaFixa.normalizar(tipo, pos, base);
 }
 
 /** Nome curto de exibição da posição. */
 export function descricao(pos) {
   if (TIPOS_VARIAVEL.includes(pos.tipo)) return pos.ticker;
-  return pos.nome || `CDB ${pos.banco || ""}`;
+  return rendaFixa.descricao(pos);
 }
 
 // ─────────────────────────────────────────────

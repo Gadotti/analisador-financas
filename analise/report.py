@@ -16,6 +16,7 @@ from __future__ import annotations
 import textwrap
 from datetime import datetime
 
+from . import portfolio
 from .analysis import data_br, moeda
 
 SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
@@ -29,7 +30,8 @@ OPP_ICONE = {
     "renda_fixa": "🏦",
     "rebalanceamento": "⚖️",
 }
-TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB"}
+TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB", "tesouro": "TD"}
+CUPOM_ROTULO = {"mensal": "juros mensais", "semestral": "juros semestrais"}
 
 LARGURA = 78
 
@@ -75,16 +77,39 @@ def _secao(titulo: str) -> list[str]:
 # Terminal
 # ─────────────────────────────────────────────
 
-def _juros_mensais(p: dict) -> str:
-    """Linha extra de um CDB que paga juros todo mês, com cupons e o próximo."""
+def _cupons(p: dict) -> str:
+    """Linha extra de um título que paga juros no caminho, com o próximo cupom."""
     proximo = (
         f"próximo em {data_br(p['proximo_pagamento'])}"
         if p.get("proximo_pagamento") else "sem novos pagamentos"
     )
     return (
-        f"         juros mensais · {p['pagamentos_realizados']} pagamento(s) · "
+        f"         {CUPOM_ROTULO[p['pagamento_juros']]} · {p['pagamentos_realizados']} pagamento(s) · "
         f"{moeda(p['juros_recebidos_liquido'])} líquidos recebidos · {proximo}"
     )
+
+
+def _nome_na_tabela(p: dict) -> str:
+    """Coluna ATIVO de um título: o banco no CDB, o papel no Tesouro.
+
+    O prefixo "Tesouro" sai porque a coluna do tipo já traz "TD"; o que
+    identifica o papel é a família e o ano de vencimento.
+    """
+    if p["tipo"] == "cdb":
+        return p["banco"]
+    return p["descricao"].removeprefix("Tesouro ")
+
+
+def _linha_renda_fixa(p: dict) -> list[str]:
+    """Detalhe abaixo da linha da posição: emissor, prazo e valor líquido."""
+    situacao = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
+    linhas = [
+        f"         {p['emissor']} · {data_br(p['data_vencimento'])} · {situacao}"
+        f" · líquido estimado {moeda(p['valor_liquido'])}"
+    ]
+    if p["pagamento_juros"] != "vencimento":
+        linhas.append(_cupons(p))
+    return linhas
 
 
 def _emissores_rf(snapshot: dict) -> list[str]:
@@ -96,10 +121,13 @@ def _emissores_rf(snapshot: dict) -> list[str]:
     linhas = ["", "  Por emissor de renda fixa (% da carteira)"]
     for e in emissores:
         marcador = "  ⚠ acima do FGC" if e["acima_do_fgc"] else ""
+        cobertura = (
+            f"{_pct(e['fgc_uso_pct'], 0, sinal=False)} do FGC"
+            if e["fgc_limite"] else "garantia do Tesouro Nacional"
+        )
         linhas.append(
             f"  {e['nome'][:28]:<28} {_pct(e['peso_pct'], 1, sinal=False):>6}"
-            f"  {moeda(e['valor']):>15}  {_pct(e['fgc_uso_pct'], 0, sinal=False)} do FGC"
-            f"{marcador}"
+            f"  {moeda(e['valor']):>15}  {cobertura}{marcador}"
         )
     return linhas
 
@@ -180,7 +208,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     for classe in snapshot["classes"].values():
         barra = "█" * max(int(classe["peso_pct"] / 3), 1)
         out.append(
-            f"  {classe['rotulo']:<8} {_pct(classe['peso_pct'], 1, sinal=False):>6}  {barra}"
+            f"  {classe['rotulo']:<15} {_pct(classe['peso_pct'], 1, sinal=False):>6}  {barra}"
         )
         out.append(
             f"           {moeda(classe['valor_atual'])}  ({_pct(classe['resultado_pct'], 1)})"
@@ -218,7 +246,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     # ── 4. Posições ──
     out += _secao("Posições")
     cabecalho = (
-        f"  {'':>6} {'ATIVO':<12} {'SEGMENTO':<19} {'P/VP':>6} {'DY 12M':>8} "
+        f"  {'':>6} {'ATIVO':<18} {'SEGMENTO':<21} {'P/VP':>6} {'DY 12M':>8} "
         f"{'VALOR':>14} {'RESULT.':>9} {'PESO':>6}"
     )
     out += [cabecalho, "  " + "·" * (LARGURA - 2)]
@@ -229,30 +257,24 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         rotulo = TIPO_ROTULO[p["tipo"]]
         ficha = fichas.get(p.get("ticker", ""))
 
-        if p["tipo"] == "cdb":
-            nome = p["banco"][:12]
-            segmento = f"CDB {p['rotulo_taxa']}"[:19]
+        if p["tipo"] in portfolio.TIPOS_RENDA_FIXA:
+            nome = _nome_na_tabela(p)[:18]
+            segmento = p["rotulo_taxa"][:21]
             pvp = dy = "—"
         else:
             nome = p["ticker"]
-            segmento = (ficha["segmento"][:19] if ficha else "—")
+            segmento = (ficha["segmento"][:21] if ficha else "—")
             pvp = _num(ficha["p_vp"], 2) if ficha and ficha.get("p_vp") else "—"
             dy = _pct(ficha["dy_12m_pct"], 1, sinal=False) if ficha and ficha.get("dy_12m_pct") else "—"
 
         out.append(
-            f"  [{rotulo:>4}] {nome:<12} {segmento:<19} {pvp:>6} {dy:>8} "
+            f"  [{rotulo:>4}] {nome:<18} {segmento:<21} {pvp:>6} {dy:>8} "
             f"{moeda(p['valor_atual']):>14} {_pct(p['resultado_pct'], 1):>9} "
             f"{_pct(p['peso_pct'], 1, sinal=False):>6}"
         )
 
-        if p["tipo"] == "cdb":
-            situacao = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
-            out.append(
-                f"         {p['banco']} · {data_br(p['data_vencimento'])} · {situacao}"
-                f" · líquido estimado {moeda(p['valor_liquido'])}"
-            )
-            if p.get("pagamento_juros") == "mensal":
-                out.append(_juros_mensais(p))
+        if p["tipo"] in portfolio.TIPOS_RENDA_FIXA:
+            out += _linha_renda_fixa(p)
         else:
             preco = moeda(p["preco_atual"]) if p["preco_atual"] else "sem cotação"
             out.append(f"         {p['quantidade']:g} × {preco} · PM {moeda(p['preco_medio'])}")
@@ -366,7 +388,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     out += [
         "",
         borda,
-        "  Valores de CDB são estimativas; o extrato do banco é a fonte oficial.",
+        "  Valores de renda fixa são estimados na curva; o extrato é a fonte oficial.",
         "  Indicadores de mercado levantados por IA — confira antes de decidir.",
         "  Este material é informativo e não constitui recomendação de investimento.",
         borda,
@@ -459,7 +481,7 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
 
     linhas += [
         "",
-        "<i>⚠️ Valores de CDB são estimativas e indicadores foram levantados por IA. "
+        "<i>⚠️ Valores de renda fixa são estimativas e indicadores foram levantados por IA. "
         "Material informativo, não é recomendação de investimento.</i>",
     ]
 

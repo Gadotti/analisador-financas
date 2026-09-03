@@ -22,7 +22,7 @@ import {
 import { renderFatos, renderMacro, renderResumo, renderRiscos } from "./js/visaoGeral.js";
 
 const AVISOS = [
-  "Valores de CDB são estimativas calculadas com o CDI vigente — o extrato do banco é a fonte oficial.",
+  "Valores de renda fixa são estimados na curva, com o CDI e a Selic vigentes — o extrato da instituição é a fonte oficial.",
   "P/VP, dividend yield, patrimônio e segmento são levantados por IA a partir de fontes públicas; confira antes de decidir.",
   "Este material é informativo e não constitui recomendação de investimento.",
 ];
