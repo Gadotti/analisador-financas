@@ -130,14 +130,23 @@ temporário (via `IA_ENV_FILE`), para nunca ler o `.env` real do projeto.
 **FIIs e ações** — ticker, quantidade e preço médio (data da compra é opcional).
 A cotação atual é buscada automaticamente.
 
-**CDBs** — banco emissor, valor aplicado, indexador, taxa, data de aplicação e data de
-vencimento.
+**CDBs** — banco emissor, valor aplicado, indexador, taxa, data de aplicação, data de
+vencimento e a forma de pagamento dos juros.
 
 | Indexador | O que informar na taxa | Exemplo |
 |---|---|---|
 | `CDI` | Percentual do CDI | `110` = 110% do CDI |
 | `PRE` | Taxa prefixada ao ano | `12.5` = 12,5% a.a. |
 | `IPCA` | Spread real sobre o IPCA | `6.5` = IPCA + 6,5% a.a. |
+
+| Pagamento dos juros | Como o título se comporta |
+|---|---|
+| `No vencimento` (padrão) | O rendimento capitaliza e sai tudo no resgate |
+| `Mensal` | Todo aniversário da aplicação paga os juros do mês e o principal segue intacto |
+
+Num CDB de juros mensais, o valor da posição é só o que continua aplicado — o principal
+mais o rendimento do mês em curso. Os cupons já sacados aparecem à parte, líquidos de IR,
+na linha da posição e no relatório.
 
 ---
 
@@ -148,6 +157,8 @@ vencimento.
 - Valor atual, resultado acumulado e variação do dia de cada posição
 - Marcação a mercado de CDBs em dias úteis (base 252) com o CDI vigente, incluindo o
   IR regressivo para estimar o valor líquido
+- Cronograma de cupons dos CDBs de juros mensais: quanto já foi recebido líquido, quantos
+  pagamentos ocorreram e a data do próximo (sempre em dia útil)
 - Alocação por classe e peso de cada ativo na carteira
 - Alertas de vencimento de CDB, exposição por banco acima do teto do FGC,
   concentração excessiva em um ativo e prejuízo relevante em renda variável
@@ -261,7 +272,9 @@ O servidor expõe uma API própria, útil para integrar com outras ferramentas:
   decorrido e não considera carência, IOF nos primeiros 30 dias nem eventuais taxas. O
   extrato do banco é sempre a fonte oficial.
 - **IPCA+ usa o índice divulgado**, que tem defasagem de algumas semanas em relação ao mês
-  corrente.
+  corrente. Num CDB IPCA+ de juros mensais, a correção acumulada é repartida entre os
+  cupons na proporção dos dias úteis de cada um — uma aproximação, já que o índice não é
+  linear no tempo.
 - **O histórico começa hoje.** A série em `data/history/` é construída a partir das análises
   executadas — não há reconstrução retroativa.
 - A análise por IA depende de busca web e pode não encontrar notícias sobre ativos de baixa

@@ -80,6 +80,8 @@ def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
         pos, hoje=hoje, cdi_anual_pct=cdi_pct, ipca_fator=ipca_fator
     )
 
+    # `valor_atual` e `resultado` medem só o que segue aplicado no título: num CDB
+    # de juros mensais os cupons já sacados aparecem à parte, em `resultado_total`.
     return {
         "id": pos["id"],
         "tipo": "cdb",
@@ -91,6 +93,7 @@ def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
         "data_aplicacao": pos["data_aplicacao"],
         "data_vencimento": pos["data_vencimento"],
         "liquidez_diaria": pos.get("liquidez_diaria", False),
+        "pagamento_juros": calc["pagamento_juros"],
         "valor_investido": calc["valor_inicial"],
         "valor_atual": calc["valor_bruto"],
         "valor_liquido": calc["valor_liquido"],
@@ -98,6 +101,14 @@ def _posicao_cdb(pos: dict, hoje: date, cdi_pct: float) -> dict:
         "resultado_pct": calc["rentabilidade_bruta_pct"],
         "resultado_liquido": calc["rendimento_liquido"],
         "resultado_liquido_pct": calc["rentabilidade_liquida_pct"],
+        "pagamentos_realizados": calc["pagamentos_realizados"],
+        "proximo_pagamento": calc["proximo_pagamento"],
+        "juros_recebidos_bruto": calc["juros_recebidos_bruto"],
+        "juros_recebidos_liquido": calc["juros_recebidos_liquido"],
+        "resultado_total": calc["rendimento_total_bruto"],
+        "resultado_total_pct": calc["rentabilidade_total_bruta_pct"],
+        "resultado_total_liquido": calc["rendimento_total_liquido"],
+        "resultado_total_liquido_pct": calc["rentabilidade_total_liquida_pct"],
         "taxa_efetiva_aa_pct": calc["taxa_efetiva_aa_pct"],
         "ir_aliquota_pct": calc["ir_aliquota_pct"],
         "ir_valor": calc["ir_valor"],

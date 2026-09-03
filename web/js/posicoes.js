@@ -14,12 +14,24 @@ const ROTULO_TAXA = {
 const indexar = (itens, chave) =>
   Object.fromEntries((itens || []).map((item) => [item[chave], item]));
 
+/** Cupons já pagos e a data do próximo, num CDB de juros mensais. */
+function detalheJurosMensais(calculada) {
+  const proximo = calculada.proximo_pagamento
+    ? `próximo em ${dataBR(calculada.proximo_pagamento)}`
+    : "sem novos pagamentos";
+  return `juros mensais · ${moeda(calculada.juros_recebidos_liquido)} recebidos · ${proximo}`;
+}
+
 function detalheCdb(posicao, calculada) {
-  if (!calculada) return `vence ${dataBR(posicao.data_vencimento)}`;
+  const mensal = posicao.pagamento_juros === "mensal";
+  if (!calculada) {
+    return `vence ${dataBR(posicao.data_vencimento)}${mensal ? " · juros mensais" : ""}`;
+  }
   const situacao = calculada.vencido
     ? '<strong class="neg">vencido</strong>'
     : `vence em ${calculada.dias_para_vencer} dias`;
-  return `${dataBR(posicao.data_vencimento)} · ${situacao} · líquido ${moeda(calculada.valor_liquido)}`;
+  const prazo = `${dataBR(posicao.data_vencimento)} · ${situacao} · líquido ${moeda(calculada.valor_liquido)}`;
+  return mensal ? `${prazo}<br>${detalheJurosMensais(calculada)}` : prazo;
 }
 
 function detalheVariavel(posicao, calculada) {
@@ -129,6 +141,7 @@ function preencherCampos(posicao) {
     $("#f-taxa").value = posicao.taxa ?? "";
     $("#f-data-aplicacao").value = posicao.data_aplicacao || "";
     $("#f-data-vencimento").value = posicao.data_vencimento || "";
+    $("#f-pagamento-juros").value = posicao.pagamento_juros || "vencimento";
     $("#f-liquidez").checked = !!posicao.liquidez_diaria;
     return;
   }
@@ -174,6 +187,7 @@ export function coletarPainel() {
       taxa: $("#f-taxa").value,
       data_aplicacao: $("#f-data-aplicacao").value,
       data_vencimento: $("#f-data-vencimento").value,
+      pagamento_juros: $("#f-pagamento-juros").value,
       liquidez_diaria: $("#f-liquidez").checked,
     };
   }

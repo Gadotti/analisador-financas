@@ -3,7 +3,8 @@
  *
  * Tipos de posição suportados:
  *   - "fii" / "acao": ticker, quantidade, preço médio
- *   - "cdb"         : banco, valor inicial, indexador, taxa, datas
+ *   - "cdb"         : banco, valor inicial, indexador, taxa, datas e a
+ *                     forma de pagamento dos juros (no vencimento ou mensal)
  */
 
 import fs from "node:fs";
@@ -19,6 +20,7 @@ export const TIPOS_RENDA_FIXA = ["cdb"];
 export const TIPOS = [...TIPOS_VARIAVEL, ...TIPOS_RENDA_FIXA];
 
 export const INDEXADORES = ["CDI", "PRE", "IPCA"];
+export const PAGAMENTOS_JUROS = ["vencimento", "mensal"];
 
 export const CONFIG_PADRAO = Object.freeze({
   max_fatos: 6,
@@ -194,6 +196,16 @@ export function normalizar(pos) {
     throw new ValidacaoError("Data de vencimento anterior a data de aplicacao.");
   }
 
+  const pagamentoJuros = texto(
+    pos.pagamento_juros || "vencimento",
+    "pagamento_juros",
+  ).toLowerCase();
+  if (!PAGAMENTOS_JUROS.includes(pagamentoJuros)) {
+    throw new ValidacaoError(
+      `Pagamento de juros invalido: '${pagamentoJuros}'. Use: ${PAGAMENTOS_JUROS.join(", ")}.`,
+    );
+  }
+
   const cdb = {
     ...base,
     banco: texto(pos.banco, "banco"),
@@ -203,6 +215,7 @@ export function normalizar(pos) {
     taxa: numero(pos.taxa, "taxa", { minimo: 0 }),
     data_aplicacao: dataAplicacao,
     data_vencimento: dataVencimento,
+    pagamento_juros: pagamentoJuros,
     liquidez_diaria: Boolean(pos.liquidez_diaria),
   };
   if (!cdb.nome) cdb.nome = `CDB ${cdb.banco} ${rotuloTaxa(cdb)}`;

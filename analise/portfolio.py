@@ -19,6 +19,7 @@ TIPOS_RENDA_FIXA = ("cdb",)
 TIPOS = TIPOS_VARIAVEL + TIPOS_RENDA_FIXA
 
 INDEXADORES = ("CDI", "PRE", "IPCA")
+PAGAMENTOS_JUROS = ("vencimento", "mensal")
 
 CONFIG_PADRAO = {
     "max_fatos": 6,
@@ -71,6 +72,11 @@ def rotulo_taxa(cdb: dict) -> str:
     if idx == "PRE":
         return f"{taxa:g}% a.a."
     return f"IPCA + {taxa:g}% a.a."
+
+
+def paga_juros_mensais(cdb: dict) -> bool:
+    """O CDB devolve os juros todo mês em vez de acumular até o vencimento?"""
+    return cdb.get("pagamento_juros") == "mensal"
 
 
 def descricao(pos: dict) -> str:

@@ -213,6 +213,15 @@ essa unificação ao modelo: a saída dele não é estável entre execuções.
 sobre todo o período decorrido, capitaliza em dias úteis (base 252) e aplica o IR
 regressivo. Não apresente esses valores como oficiais — o rodapé do relatório já avisa.
 
+**CDB de juros mensais não capitaliza.** `pagamento_juros` vale `vencimento` (o padrão, e
+o que toda posição antiga já gravada assume) ou `mensal`. No modo mensal cada aniversário
+da aplicação — ajustado para o dia útil seguinte — paga os juros do período e o principal
+segue intacto, com o IR retido em cada cupom pelo prazo decorrido até ele. Por isso
+`valor_atual` e `resultado` medem só o que continua aplicado; os cupons já sacados saíram
+da carteira e vivem em `juros_recebidos_*`, com o acumulado dos dois em `resultado_total`.
+Não some cupom em `valor_atual`: os totais do snapshot são a soma dos `valor_atual` das
+posições, e a carteira deixaria de fechar.
+
 **Front-end.** `web/` é HTML, CSS e JS puros, servidos como estáticos em `/static/`.
 Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do
 navegador**: `web/app.js` é o ponto de entrada (`<script type="module">`) e só orquestra —

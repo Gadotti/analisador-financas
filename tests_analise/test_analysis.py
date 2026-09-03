@@ -101,6 +101,21 @@ def test_ipca_consultado_apenas_para_cdb_indexado(dados_temp, mercado_padrao):
     assert snapshot["posicoes"][0]["valor_atual"] > 10000
 
 
+def test_cdb_de_juros_mensais_separa_o_que_ja_foi_pago(dados_temp, mercado_padrao):
+    """Os cupons sacados ficam fora de `valor_atual` e aparecem à parte."""
+    mensal = {**CDB, "pagamento_juros": "mensal", "data_aplicacao": "2020-01-02"}
+
+    snapshot = analysis.consolidar(carteira_com([mensal]), usar_cache=False)
+    pos = snapshot["posicoes"][0]
+
+    assert pos["pagamento_juros"] == "mensal"
+    assert pos["pagamentos_realizados"] > 12
+    assert pos["proximo_pagamento"] > snapshot["data"]
+    assert pos["juros_recebidos_liquido"] > 0
+    assert pos["valor_atual"] < pos["valor_investido"] * 1.1, "o principal segue intacto"
+    assert pos["resultado_total"] > pos["resultado"]
+
+
 def test_destaques_ordenados_do_melhor_para_o_pior(dados_temp, mercado_padrao):
     mercado_padrao.rotas["MXRF11.SA"] = chart_yahoo(11, 10)
     mercado_padrao.rotas["HGLG11.SA"] = chart_yahoo(8, 8)

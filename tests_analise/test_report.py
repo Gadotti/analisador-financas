@@ -36,6 +36,35 @@ def test_emissor_de_renda_fixa_sai_mesmo_sem_ia(snapshot_exemplo):
     assert "4% do FGC" in saida
 
 
+def test_cdb_de_juros_mensais_ganha_uma_linha_de_cupons(snapshot_exemplo):
+    base = copy.deepcopy(snapshot_exemplo)
+    cdb = next(p for p in base["posicoes"] if p["tipo"] == "cdb")
+    cdb.update({
+        "pagamento_juros": "mensal",
+        "pagamentos_realizados": 8,
+        "proximo_pagamento": "2026-10-02",
+        "juros_recebidos_liquido": 812.34,
+    })
+
+    saida = report.texto(base)
+
+    assert "juros mensais · 8 pagamento(s) · R$ 812,34 líquidos recebidos" in saida
+    assert "próximo em 02/10/2026" in saida
+
+
+def test_cdb_de_juros_mensais_no_vencimento_nao_tem_proximo(snapshot_exemplo):
+    base = copy.deepcopy(snapshot_exemplo)
+    cdb = next(p for p in base["posicoes"] if p["tipo"] == "cdb")
+    cdb.update({
+        "pagamento_juros": "mensal",
+        "pagamentos_realizados": 24,
+        "proximo_pagamento": None,
+        "juros_recebidos_liquido": 2100.0,
+    })
+
+    assert "sem novos pagamentos" in report.texto(base)
+
+
 def test_emissor_acima_do_fgc_e_marcado(snapshot_exemplo):
     base = copy.deepcopy(snapshot_exemplo)
     base["emissores_renda_fixa"][0]["acima_do_fgc"] = True

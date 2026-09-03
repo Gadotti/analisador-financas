@@ -7,8 +7,11 @@ import pytest
 from analise.fixed_income import (
     _pascoa,
     aliquota_ir,
+    datas_pagamento,
     dias_uteis,
     feriados_nacionais,
+    proximo_dia_util,
+    somar_meses,
     valorizar,
 )
 
@@ -131,3 +134,117 @@ def test_sem_rendimento_nao_cobra_ir():
     assert calc["valor_bruto"] == 10000
     assert calc["ir_valor"] == 0
     assert calc["rentabilidade_liquida_pct"] == 0
+
+
+# ─────────────────────────────────────────────
+# Juros mensais
+# ─────────────────────────────────────────────
+
+CDB_MENSAL = {**CDB_CDI, "pagamento_juros": "mensal"}
+
+
+def test_pagamento_no_vencimento_e_o_padrao():
+    """Uma posição sem o campo se comporta como sempre se comportou."""
+    calc = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["pagamento_juros"] == "vencimento"
+    assert calc["pagamentos_realizados"] == 0
+    assert calc["juros_recebidos_bruto"] == 0
+    assert calc["proximo_pagamento"] is None
+    assert calc["rendimento_total_bruto"] == calc["rendimento_bruto"]
+    assert calc["rendimento_total_liquido"] == calc["rendimento_liquido"]
+
+
+@pytest.mark.parametrize(
+    "dia,esperado",
+    [
+        (date(2026, 1, 5), date(2026, 1, 5)),   # segunda comum
+        (date(2026, 1, 3), date(2026, 1, 5)),   # sábado
+        (date(2026, 1, 1), date(2026, 1, 2)),   # feriado
+        (date(2025, 12, 25), date(2025, 12, 26)),
+    ],
+)
+def test_proximo_dia_util(dia, esperado):
+    assert proximo_dia_util(dia) == esperado
+
+
+@pytest.mark.parametrize(
+    "inicio,meses,esperado",
+    [
+        (date(2025, 1, 2), 1, date(2025, 2, 2)),
+        (date(2025, 1, 31), 1, date(2025, 2, 28)),   # fevereiro é curto
+        (date(2025, 1, 31), 2, date(2025, 3, 31)),   # e o dia original volta
+        (date(2025, 12, 15), 1, date(2026, 1, 15)),  # vira o ano
+        (date(2025, 12, 31), 12, date(2026, 12, 31)),
+    ],
+)
+def test_somar_meses(inicio, meses, esperado):
+    assert somar_meses(inicio, meses) == esperado
+
+
+def test_datas_de_pagamento_caem_em_dia_util():
+    datas = datas_pagamento(date(2025, 1, 2), date(2027, 1, 4), date(2025, 6, 30))
+
+    assert datas[0] == date(2025, 2, 3), "02/02 é domingo"
+    assert datas[1] == date(2025, 3, 5), "02/03 é domingo e 03-04/03 é Carnaval"
+    assert datas[-1] == date(2025, 6, 2), "nenhum aniversário depois de 30/06"
+    assert len(datas) == 5
+
+
+def test_juros_mensais_nao_capitalizam():
+    """O principal fica intacto e cada mês rende sobre ele, sem juro sobre juro."""
+    mensal = valorizar(CDB_MENSAL, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+    acumulado = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert mensal["pagamentos_realizados"] == 12
+    assert mensal["valor_bruto"] == 10000, "o 12º cupom foi pago hoje"
+    assert mensal["juros_recebidos_bruto"] > 0
+    assert mensal["rendimento_total_bruto"] < acumulado["rendimento_bruto"]
+
+
+def test_valor_aplicado_soma_o_rendimento_do_mes_em_curso():
+    """Entre um cupom e outro, o título carrega só o rendimento do período."""
+    calc = valorizar(CDB_MENSAL, hoje=date(2026, 1, 20), cdi_anual_pct=15.0)
+
+    assert calc["pagamentos_realizados"] == 12
+    assert 10000 < calc["valor_bruto"] < 10100
+    assert calc["rendimento_bruto"] == round(calc["valor_bruto"] - 10000, 2)
+    assert calc["proximo_pagamento"] == "2026-02-02"
+
+
+def test_ir_de_cada_cupom_usa_o_prazo_ate_ele():
+    """Os primeiros cupons pagam 22,5%; a alíquota média cai com o tempo."""
+    calc = valorizar(CDB_MENSAL, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+    media = calc["juros_recebidos_ir"] / calc["juros_recebidos_bruto"]
+
+    assert 0.175 < media < 0.225
+    assert calc["juros_recebidos_liquido"] == round(
+        calc["juros_recebidos_bruto"] - calc["juros_recebidos_ir"], 2
+    )
+
+
+def test_antes_do_primeiro_aniversario_nada_muda():
+    mensal = valorizar(CDB_MENSAL, hoje=date(2025, 1, 20), cdi_anual_pct=15.0)
+    acumulado = valorizar(CDB_CDI, hoje=date(2025, 1, 20), cdi_anual_pct=15.0)
+
+    assert mensal["pagamentos_realizados"] == 0
+    assert mensal["juros_recebidos_bruto"] == 0
+    assert mensal["valor_bruto"] == acumulado["valor_bruto"]
+    assert mensal["proximo_pagamento"] == "2025-02-03"
+
+
+def test_apos_o_vencimento_nao_ha_proximo_pagamento():
+    calc = valorizar(CDB_MENSAL, hoje=date(2028, 1, 4), cdi_anual_pct=15.0)
+
+    assert calc["vencido"] is True
+    assert calc["proximo_pagamento"] is None
+    assert calc["pagamentos_realizados"] == 24
+
+
+def test_ipca_reparte_a_correcao_entre_os_cupons():
+    ipca = {**CDB_MENSAL, "indexador": "IPCA", "taxa": 6.0}
+    com = valorizar(ipca, hoje=date(2026, 1, 2), cdi_anual_pct=15.0, ipca_fator=1.10)
+    sem = valorizar(ipca, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert com["juros_recebidos_bruto"] > sem["juros_recebidos_bruto"]
+    assert "IPCA indisponivel" in sem["aviso"]

@@ -47,7 +47,13 @@ describe("normalizar", () => {
       indexador: "CDI",
       nome: "CDB Inter 110% do CDI",
       liquidez_diaria: false,
+      pagamento_juros: "vencimento",
     });
+  });
+
+  test("aceita CDB com juros mensais", () => {
+    const pos = portfolio.normalizar({ ...CDB, pagamento_juros: "MENSAL" });
+    expect(pos.pagamento_juros).toBe("mensal");
   });
 
   test("preserva o id quando informado", () => {
@@ -57,6 +63,7 @@ describe("normalizar", () => {
   test.each([
     ["tipo inválido", { ...FII, tipo: "cripto" }, /Tipo invalido/],
     ["indexador inválido", { ...CDB, indexador: "SELIC" }, /Indexador invalido/],
+    ["pagamento de juros inválido", { ...CDB, pagamento_juros: "trimestral" }, /Pagamento de juros invalido/],
     ["ticker ausente", { tipo: "fii" }, /'ticker' e obrigatorio/],
     ["quantidade vazia", { ...FII, quantidade: "" }, /'quantidade' e obrigatorio/],
     ["banco em branco", { ...CDB, banco: "  " }, /'banco' e obrigatorio/],

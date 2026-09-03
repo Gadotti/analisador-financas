@@ -75,6 +75,18 @@ def _secao(titulo: str) -> list[str]:
 # Terminal
 # ─────────────────────────────────────────────
 
+def _juros_mensais(p: dict) -> str:
+    """Linha extra de um CDB que paga juros todo mês, com cupons e o próximo."""
+    proximo = (
+        f"próximo em {data_br(p['proximo_pagamento'])}"
+        if p.get("proximo_pagamento") else "sem novos pagamentos"
+    )
+    return (
+        f"         juros mensais · {p['pagamentos_realizados']} pagamento(s) · "
+        f"{moeda(p['juros_recebidos_liquido'])} líquidos recebidos · {proximo}"
+    )
+
+
 def _emissores_rf(snapshot: dict) -> list[str]:
     """Exposição por banco emissor — o lado de renda fixa do recorte por emissor."""
     emissores = snapshot["emissores_renda_fixa"]
@@ -239,6 +251,8 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
                 f"         {p['banco']} · {data_br(p['data_vencimento'])} · {situacao}"
                 f" · líquido estimado {moeda(p['valor_liquido'])}"
             )
+            if p.get("pagamento_juros") == "mensal":
+                out.append(_juros_mensais(p))
         else:
             preco = moeda(p["preco_atual"]) if p["preco_atual"] else "sem cotação"
             out.append(f"         {p['quantidade']:g} × {preco} · PM {moeda(p['preco_medio'])}")
