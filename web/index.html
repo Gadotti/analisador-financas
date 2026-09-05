@@ -98,7 +98,21 @@
       <section class="cartao">
         <div class="cartao-topo">
           <span class="cartao-titulo">Posições</span>
-          <button class="btn btn-primario btn-sm" id="btn-nova">+ Nova posição</button>
+          <div class="controles-lista">
+            <div class="filtros hidden" id="filtros-posicoes">
+              <label class="busca">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13.1 13.1L17 17"></path></svg>
+                <input id="busca-posicoes" type="search" placeholder="Buscar ativo, emissor ou segmento"
+                       autocomplete="off" aria-label="Buscar posição">
+              </label>
+              <label class="escolha">
+                <span>Ordenar por</span>
+                <select id="ordem-posicoes"></select>
+              </label>
+              <button type="button" class="btn btn-fantasma btn-sm" id="btn-recolher">Recolher tudo</button>
+            </div>
+            <button class="btn btn-primario btn-sm" id="btn-nova">+ Nova posição</button>
+          </div>
         </div>
         <div id="posicoes"><div class="vazio">Carregando…</div></div>
       </section>

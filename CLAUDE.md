@@ -295,10 +295,21 @@ estourado. O alerta de concentração por posição, esse sim, vale para qualque
 Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do
 navegador**: `web/app.js` é o ponto de entrada (`<script type="module">`) e só orquestra —
 carrega da API, guarda o último resultado e chama os módulos de `web/js/`, um por tela
-(`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `historico`, `configuracoes`) mais três
-de apoio (`formato`, `api`, `icones`, `navegacao`). Nenhum cálculo mora no front. As chaves
-consumidas são as mesmas do JSON que o Python produz — se mudar o formato de um snapshot,
-atualize o front junto.
+(`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `historico`, `configuracoes`), mais
+`painelPosicao`, que é só o formulário de cadastro, e os de apoio (`formato`, `api`,
+`icones`, `alertas`, `navegacao`). Nenhum cálculo mora no front. As chaves consumidas são as
+mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
+junto.
+
+**A tabela de posições declara as colunas, não as escreve.** `web/js/posicoes.js` quebra a
+listagem em um grupo por classe de ativo, e cada classe traz o seu próprio array de colunas
+(`{ rotulo, num, mono, celula(item) }`) — um CDB não tem P/VP, um FII não tem vencimento.
+Todas terminam nas mesmas quatro colunas de `COLUNAS_COMUNS` (valor, resultado, peso e
+ações), e é por isso que os grupos continuam numa tabela só, com os números alinhados de
+ponta a ponta. Uma classe nova entra em `GRUPOS` com o seu array; uma informação nova entra
+como coluna ou como linha de apoio de uma célula (`celula(principal, ...apoios)`), nunca
+como um `if` dentro do laço que desenha as linhas. Busca, ordenação e recolhimento são
+estado local do módulo — o `app.js` não os conhece.
 
 A interface tem cinco telas trocadas pelo hash da URL (`#posicoes`, `#historico`, …), sem
 recarregar a página e sem roteador. Ícones são SVG de traço em `web/js/icones.js` — nunca

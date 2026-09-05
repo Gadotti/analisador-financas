@@ -337,6 +337,75 @@ a:hover { color: var(--amber-forte); }
 .etiqueta-cdb { background: rgba(0, 161, 132, .18); color: var(--cdb); }
 .etiqueta-tesouro { background: rgba(155, 131, 232, .18); color: var(--tesouro); }
 
+/* ── Lista de posições ─────────────────── */
+
+/* A tela tem tantos ativos que uma lista corrida não se lê: a tabela é
+   quebrada em um grupo por classe, cada um com o seu cabeçalho de colunas e o
+   seu subtotal. As quatro últimas colunas são as mesmas em todos os grupos, e
+   por isso a tabela continua sendo uma só — os números seguem alinhados. */
+
+.controles-lista { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.busca { position: relative; display: flex; align-items: center; }
+.busca svg { position: absolute; left: 10px; color: var(--t3); pointer-events: none; }
+.busca input {
+  height: 30px; width: 250px; max-width: 100%; padding: 0 10px 0 31px;
+  background: var(--card2); border: 1px solid var(--borda-forte); border-radius: 7px;
+  color: var(--t1); font-size: var(--f-apoio); font-family: inherit;
+}
+.busca input::placeholder { color: var(--t3); }
+.busca input:focus { outline: 2px solid var(--amber); outline-offset: -1px; border-color: var(--amber); }
+
+.escolha { display: flex; align-items: center; gap: 7px; font-size: var(--f-micro); color: var(--t3); }
+.escolha select {
+  height: 30px; background: var(--card2); border: 1px solid var(--borda-forte);
+  border-radius: 7px; padding: 0 8px; color: var(--t1);
+  font-size: var(--f-apoio); font-family: inherit; cursor: pointer;
+}
+.escolha select:focus { outline: 2px solid var(--amber); outline-offset: -1px; }
+
+.tabela-posicoes .apoio { line-height: 1.45; }
+.tabela-posicoes td { vertical-align: top; }
+.tabela-posicoes .acoes { white-space: nowrap; vertical-align: middle; }
+
+/* Cabeçalho do grupo — a única linha com fundo próprio na tabela. */
+.tabela .linha-grupo th, .tabela .linha-grupo td {
+  background: var(--card2);
+  border-top: 1px solid var(--borda-forte);
+  border-bottom: 1px solid var(--borda-forte);
+  padding: 7px 10px; vertical-align: middle;
+  font-size: var(--f-dado); font-weight: 600;
+  color: var(--t1); text-transform: none; letter-spacing: 0; white-space: nowrap;
+}
+.grupo-ativos:first-child .linha-grupo th, .grupo-ativos:first-child .linha-grupo td {
+  border-top: none;
+}
+.linha-grupo .apoio { font-weight: 400; }
+
+.botao-grupo {
+  display: flex; align-items: center; gap: 9px;
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font: inherit; text-align: left;
+}
+.botao-grupo:hover { color: var(--amber); }
+.botao-grupo:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+.seta-grupo { display: flex; color: var(--t3); transition: transform .15s ease; }
+.grupo-contagem { font-size: var(--f-micro); font-weight: 400; color: var(--t3); }
+
+.grupo-ativos.recolhido tr:not(.linha-grupo) { display: none; }
+.grupo-ativos.recolhido .seta-grupo { transform: rotate(-90deg); }
+
+.tabela .linha-colunas th { padding-top: 9px; padding-bottom: 5px; border-bottom: 1px solid var(--borda); }
+
+/* Peso da posição: o número e, abaixo, a barra na cor da classe. O fundo de
+   escala é o maior peso da carteira, para que as barras se comparem; o traço
+   é o limite de concentração configurado. */
+.peso { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.peso-acima { color: var(--laranja); font-weight: 600; }
+.trilho-peso { width: 58px; height: 4px; background: var(--borda); }
+.trilho-peso .trilho-limite { top: -3px; height: 10px; }
+
 /* ── Formulários ───────────────────────── */
 
 .grade-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
@@ -496,6 +565,9 @@ a:hover { color: var(--amber-forte); }
   .legenda-classes { grid-template-columns: 1fr; }
   .indicadores { grid-template-columns: 1fr; }
   .painel { width: 100%; }
+  .controles-lista, .filtros { width: 100%; }
+  .busca { flex: 1; }
+  .busca input { width: 100%; }
   .btn, .nav-item, .btn-icone { min-height: 44px; }
   .btn-icone { min-width: 44px; }
 }

@@ -17,8 +17,8 @@ import {
   coletarPainel,
   fecharPainel,
   ligarPainel,
-  renderPosicoes,
-} from "./js/posicoes.js";
+} from "./js/painelPosicao.js";
+import { ligarPosicoes, renderPosicoes } from "./js/posicoes.js";
 import { renderFatos, renderMacro, renderResumo, renderRiscos } from "./js/visaoGeral.js";
 
 const AVISOS = [
@@ -47,7 +47,10 @@ const acoesDaTabela = { editar: editarPosicao, excluir: excluirPosicao };
 function renderAnalise() {
   const resultado = estado.analise;
   if (!resultado || resultado.vazio) {
-    renderPosicoes(estado.carteira?.posicoes || [], null, null, acoesDaTabela);
+    renderPosicoes(
+      { posicoes: estado.carteira?.posicoes || [], limite: limiteConcentracao() },
+      acoesDaTabela
+    );
     renderAnaliseVazia();
     return;
   }
@@ -59,7 +62,10 @@ function renderAnalise() {
   renderAlocacao(snapshot, fundamentos, limiteConcentracao());
   renderRiscos(snapshot, ia);
   renderFatos(ia);
-  renderPosicoes(estado.carteira.posicoes, snapshot, fundamentos, acoesDaTabela);
+  renderPosicoes(
+    { posicoes: estado.carteira.posicoes, snapshot, fundamentos, limite: limiteConcentracao() },
+    acoesDaTabela
+  );
   renderFichas(fundamentos);
   renderLeitura(ia, iaErro, herdadaDe);
   renderAnaliseVazia();
@@ -189,6 +195,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#rodape-nav").textContent = "Roda só na sua máquina.";
 
   ligarPainel();
+  ligarPosicoes();
   iniciarNavegacao(abrirTela);
 
   $("#btn-nova").addEventListener("click", () => abrirPainel());
