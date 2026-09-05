@@ -26,6 +26,8 @@ const FORMULARIO_RF = {
   tesouro: {
     indexadores: [["SELIC", "Selic + (% a.a.)"], ["PRE", "Prefixado (% a.a.)"], ["IPCA", "IPCA + (% a.a.)"]],
     pagamentos: [["vencimento", "No vencimento"], ["semestral", "Semestral"]],
+    // A taxa do título público sai do pregão da compra; digitá-la é opcional.
+    taxaOpcional: true,
   },
 };
 
@@ -43,6 +45,13 @@ function detalheCupons(posicao, calculada) {
   return `${rotulo} · ${moeda(calculada.juros_recebidos_liquido)} recebidos · ${proximo}`;
 }
 
+/** A taxa travada e o valor na curva, num título público marcado a mercado. */
+function detalheMarcacao(calculada) {
+  const origem = calculada.taxa_origem === "cadastro" ? "informada" : "do pregão da compra";
+  return `travado a ${esc(calculada.rotulo_taxa)} (${origem}) · na curva ${moeda(calculada.valor_na_curva)}
+    · mercado de ${dataBR(calculada.cotacao_em)}`;
+}
+
 function detalheRendaFixa(posicao, calculada) {
   const cupom = CUPOM_ROTULO[posicao.pagamento_juros];
   if (!calculada) {
@@ -51,8 +60,12 @@ function detalheRendaFixa(posicao, calculada) {
   const situacao = calculada.vencido
     ? '<strong class="neg">vencido</strong>'
     : `vence em ${calculada.dias_para_vencer} dias`;
-  const prazo = `${dataBR(posicao.data_vencimento)} · ${situacao} · líquido ${moeda(calculada.valor_liquido)}`;
-  return cupom ? `${prazo}<br>${detalheCupons(posicao, calculada)}` : prazo;
+  const linhas = [
+    `${dataBR(posicao.data_vencimento)} · ${situacao} · líquido ${moeda(calculada.valor_liquido)}`,
+  ];
+  if (calculada.marcado_a_mercado) linhas.push(detalheMarcacao(calculada));
+  if (cupom) linhas.push(detalheCupons(posicao, calculada));
+  return linhas.join("<br>");
 }
 
 function detalheVariavel(posicao, calculada) {
@@ -176,11 +189,14 @@ function selecionarTipo(tipo) {
     preencherSelect("#f-indexador", FORMULARIO_RF[tipo].indexadores);
     preencherSelect("#f-pagamento-juros", FORMULARIO_RF[tipo].pagamentos);
   }
-  atualizarRotuloTaxa();
+  atualizarRotuloTaxa(tipo);
 }
 
-const atualizarRotuloTaxa = () => {
-  $("#f-taxa-label").textContent = ROTULO_TAXA[$("#f-indexador").value] || "Taxa";
+const atualizarRotuloTaxa = (tipo) => {
+  const opcional = FORMULARIO_RF[tipo]?.taxaOpcional;
+  const base = ROTULO_TAXA[$("#f-indexador").value] || "Taxa";
+  $("#f-taxa-label").textContent = opcional ? `${base} — opcional` : base;
+  $("#f-taxa-dica").classList.toggle("hidden", !opcional);
 };
 
 function preencherRendaFixa(posicao) {
@@ -267,7 +283,7 @@ export function ligarPainel() {
   $$("#seletor-tipo button").forEach((b) =>
     b.addEventListener("click", () => selecionarTipo(b.dataset.tipo))
   );
-  $("#f-indexador").addEventListener("change", atualizarRotuloTaxa);
+  $("#f-indexador").addEventListener("change", () => atualizarRotuloTaxa(tipoSelecionado()));
   $("#btn-cancelar").addEventListener("click", fecharPainel);
   $("#btn-fechar-painel").addEventListener("click", fecharPainel);
   $("#veu").addEventListener("click", fecharPainel);

@@ -16,8 +16,9 @@ export class ValidacaoError extends Error {
   }
 }
 
-export function numero(valor, campo, { minimo = null } = {}) {
+export function numero(valor, campo, { minimo = null, obrigatorio = true } = {}) {
   if (valor === null || valor === undefined || valor === "") {
+    if (!obrigatorio) return null;
     throw new ValidacaoError(`Campo '${campo}' e obrigatorio.`);
   }
   const n = Number(String(valor).replace(",", "."));

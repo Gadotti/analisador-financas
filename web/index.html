@@ -259,6 +259,10 @@
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-taxa" id="f-taxa-label">Taxa (% do CDI)</label>
+        <!-- A dica vem antes do controle: o input é alinhado à base da célula
+             (margin-top: auto), então texto abaixo dele o desalinharia do
+             campo vizinho na mesma linha da grade. -->
+        <span class="campo-dica hidden" id="f-taxa-dica">Em branco, é buscada no pregão da compra.</span>
         <input id="f-taxa" type="number" step="any" min="0" placeholder="110">
       </div>
       <div class="campo campo-rf hidden">

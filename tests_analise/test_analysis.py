@@ -352,3 +352,117 @@ def test_vencimento_proximo_do_tesouro_tambem_alerta():
     alertas = analysis._gerar_alertas([titulo], 10000.0, CONFIG_PADRAO)
 
     assert any("Tesouro Prefixado 2026 vence em 20 dias" in a["titulo"] for a in alertas)
+
+
+# ─────────────────────────────────────────────
+# Tesouro: taxa buscada e marcação a mercado
+# ─────────────────────────────────────────────
+
+# Sem `taxa`: ela sai do pregão da compra. Os PU do `mercado_padrao` para este
+# papel são 15.745,70 na compra e 19.785,18 hoje.
+TESOURO_SEM_TAXA = {
+    "id": "c4",
+    "tipo": "tesouro",
+    "nome": "Tesouro Selic 2099",
+    "valor_inicial": 10000.0,
+    "indexador": "SELIC",
+    "taxa": None,
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2099-03-01",
+    "pagamento_juros": "vencimento",
+    "liquidez_diaria": False,
+    "observacao": "",
+}
+
+
+def test_taxa_do_tesouro_vem_do_pregao_da_compra(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO_SEM_TAXA]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    assert titulo["taxa"] == 0.13
+    assert titulo["taxa_origem"] == "tesouro_transparente"
+    assert titulo["rotulo_taxa"] == "SELIC + 0.13% a.a."
+
+
+def test_valor_atual_do_tesouro_e_o_preco_de_revenda(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO_SEM_TAXA]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    # 10.000 / 15.745,70 = 0,635094 titulos, revendidos a 19.785,18 cada.
+    assert titulo["quantidade"] == pytest.approx(10000 / 15745.70, rel=1e-6)
+    assert titulo["valor_atual"] == pytest.approx(
+        (10000 / 15745.70) * 19785.18, abs=0.01
+    )
+    assert titulo["marcado_a_mercado"] is True
+    assert titulo["cotacao_em"] == "2026-09-03"
+    assert titulo["pu_compra"] == 15745.70
+    assert titulo["pu_venda"] == 19785.18
+
+
+def test_valor_na_curva_segue_ao_lado_do_de_mercado(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO_SEM_TAXA]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    assert titulo["valor_na_curva"] > 10000, "a curva rende desde a aplicacao"
+    assert titulo["valor_na_curva"] != titulo["valor_atual"]
+    assert titulo["resultado"] == round(titulo["valor_atual"] - 10000, 2)
+
+
+def test_totais_da_carteira_usam_o_valor_de_mercado(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO_SEM_TAXA]), usar_cache=False)
+
+    assert snapshot["totais"]["valor_atual"] == snapshot["posicoes"][0]["valor_atual"]
+    assert snapshot["classes"]["tesouro"]["valor_atual"] == snapshot["totais"]["valor_atual"]
+
+
+def test_taxa_informada_no_cadastro_prevalece_sobre_a_buscada(dados_temp, mercado_padrao):
+    """Quem tem a taxa no extrato da corretora manda nela."""
+    snapshot = analysis.consolidar(
+        carteira_com([{**TESOURO_SEM_TAXA, "taxa": 0.25}]), usar_cache=False
+    )
+    titulo = snapshot["posicoes"][0]
+
+    assert titulo["taxa"] == 0.25
+    assert titulo["taxa_origem"] == "cadastro"
+
+
+def test_ir_do_tesouro_incide_sobre_o_ganho_de_mercado(dados_temp, mercado_padrao):
+    snapshot = analysis.consolidar(carteira_com([TESOURO_SEM_TAXA]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    # O IR sai da tabela regressiva pelo prazo decorrido, e incide sobre o
+    # ganho de MERCADO — nao sobre o da curva, que e outro numero.
+    aliquota = titulo["ir_aliquota_pct"] / 100
+    assert aliquota in (0.225, 0.20, 0.175, 0.15)
+    assert titulo["ir_valor"] == pytest.approx(
+        (titulo["valor_atual"] - 10000) * aliquota, abs=0.01
+    )
+    assert titulo["ir_valor"] != pytest.approx(
+        (titulo["valor_na_curva"] - 10000) * aliquota, abs=0.01
+    )
+    assert titulo["valor_liquido"] == pytest.approx(
+        titulo["valor_atual"] - titulo["ir_valor"] - titulo["custodia_valor"], abs=0.01
+    )
+
+
+def test_cdb_continua_na_curva_e_sem_marcacao(dados_temp, mercado_padrao):
+    """Não há preço de revenda de CDB para pessoa física — a curva é o valor."""
+    snapshot = analysis.consolidar(carteira_com([CDB]), usar_cache=False)
+    cdb = snapshot["posicoes"][0]
+
+    assert cdb["marcado_a_mercado"] is False
+    assert cdb["valor_atual"] == cdb["valor_na_curva"]
+    assert cdb["taxa_origem"] == "cadastro"
+
+
+def test_titulo_sem_taxa_localizavel_entra_pelo_valor_aplicado(dados_temp, mercado_padrao):
+    """Sem taxa no cadastro nem no arquivo, a posição não some nem inventa rendimento."""
+    orfao = {**TESOURO_SEM_TAXA, "data_aplicacao": "2004-01-02", "indexador": "PRE"}
+    snapshot = analysis.consolidar(carteira_com([orfao]), usar_cache=False)
+    titulo = snapshot["posicoes"][0]
+
+    assert titulo["valor_atual"] == 10000.0
+    assert titulo["resultado"] == 0.0
+    assert titulo["taxa_origem"] == "indisponivel"
+    assert titulo["erro_cotacao"]
+    assert any("Cotacao indisponivel" in a["titulo"] for a in snapshot["alertas"])

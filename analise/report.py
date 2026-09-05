@@ -13,11 +13,10 @@ Estrutura, na ordem em que um relatório de análise é lido:
 
 from __future__ import annotations
 
-import textwrap
 from datetime import datetime
 
-from . import portfolio
-from .analysis import data_br, moeda
+from . import formato, portfolio
+from .formato import LARGURA, data_br, moeda
 
 SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
 SAUDE_ROTULO = {"otima": "Ótima", "boa": "Boa", "atencao": "Atenção", "alerta": "Alerta"}
@@ -32,45 +31,6 @@ OPP_ICONE = {
 }
 TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB", "tesouro": "TD"}
 CUPOM_ROTULO = {"mensal": "juros mensais", "semestral": "juros semestrais"}
-
-LARGURA = 78
-
-
-# ─────────────────────────────────────────────
-# Formatação de números
-# ─────────────────────────────────────────────
-
-def _num(valor, casas: int = 2) -> str:
-    """Número no formato brasileiro, ou travessão quando indisponível."""
-    if valor is None:
-        return "—"
-    return f"{valor:.{casas}f}".replace(".", ",")
-
-
-def _pct(valor, casas: int = 2, *, sinal: bool = True) -> str:
-    """Percentual no formato brasileiro."""
-    if valor is None:
-        return "—"
-    texto = f"{valor:{'+' if sinal else ''}.{casas}f}".replace(".", ",")
-    return f"{texto}%"
-
-
-def _sinal(valor: float) -> str:
-    return "🟢" if valor > 0 else ("🔴" if valor < 0 else "⚪")
-
-
-def _quebrar(texto: str, recuo: str = "      ", largura: int = LARGURA) -> str:
-    """Quebra um parágrafo respeitando a largura do relatório."""
-    return textwrap.fill(
-        texto or "",
-        width=largura,
-        initial_indent=recuo,
-        subsequent_indent=recuo,
-    )
-
-
-def _secao(titulo: str) -> list[str]:
-    return ["", "─" * LARGURA, f"  {titulo.upper()}", "─" * LARGURA, ""]
 
 
 # ─────────────────────────────────────────────
@@ -100,6 +60,20 @@ def _nome_na_tabela(p: dict) -> str:
     return p["descricao"].removeprefix("Tesouro ")
 
 
+def _marcacao(p: dict) -> str:
+    """Linha do título público: a taxa travada e quanto ele vale na curva.
+
+    Só o Tesouro aparece aqui — o CDB não tem preço de revenda publicado, então
+    para ele a curva já é o valor da posição, e repeti-la não diria nada.
+    """
+    origem = "informada" if p.get("taxa_origem") == "cadastro" else "do pregão da compra"
+    return (
+        f"         travado a {p['rotulo_taxa']} ({origem}) · "
+        f"na curva {moeda(p['valor_na_curva'])} · "
+        f"mercado de {data_br(p['cotacao_em'])}"
+    )
+
+
 def _linha_renda_fixa(p: dict) -> list[str]:
     """Detalhe abaixo da linha da posição: emissor, prazo e valor líquido."""
     situacao = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
@@ -107,8 +81,12 @@ def _linha_renda_fixa(p: dict) -> list[str]:
         f"         {p['emissor']} · {data_br(p['data_vencimento'])} · {situacao}"
         f" · líquido estimado {moeda(p['valor_liquido'])}"
     ]
+    if p.get("marcado_a_mercado"):
+        linhas.append(_marcacao(p))
     if p["pagamento_juros"] != "vencimento":
         linhas.append(_cupons(p))
+    if p.get("erro_cotacao"):
+        linhas.append(f"         ⚠ {p['aviso']}")
     return linhas
 
 
@@ -122,11 +100,11 @@ def _emissores_rf(snapshot: dict) -> list[str]:
     for e in emissores:
         marcador = "  ⚠ acima do FGC" if e["acima_do_fgc"] else ""
         cobertura = (
-            f"{_pct(e['fgc_uso_pct'], 0, sinal=False)} do FGC"
+            f"{formato.pct(e['fgc_uso_pct'], 0, sinal=False)} do FGC"
             if e["fgc_limite"] else "garantia do Tesouro Nacional"
         )
         linhas.append(
-            f"  {e['nome'][:28]:<28} {_pct(e['peso_pct'], 1, sinal=False):>6}"
+            f"  {e['nome'][:28]:<28} {formato.pct(e['peso_pct'], 1, sinal=False):>6}"
             f"  {moeda(e['valor']):>15}  {cobertura}{marcador}"
         )
     return linhas
@@ -159,18 +137,18 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
 
     # ── 1. Sumário executivo ──
     if ia and ia.get("resumo"):
-        out += ["", _quebrar(ia["resumo"], "  ")]
+        out += ["", formato.quebrar(ia["resumo"], "  ")]
 
     # ── 2. Indicadores-chave ──
-    out += _secao("Posição consolidada")
+    out += formato.secao("Posição consolidada")
     out += [
         f"  Valor de mercado ........ {moeda(t['valor_atual'])}",
         f"  Custo de aquisição ...... {moeda(t['valor_investido'])}",
-        f"  Resultado acumulado ..... {moeda(t['resultado'])}  ({_pct(t['resultado_pct'])}) {_sinal(t['resultado'])}",
+        f"  Resultado acumulado ..... {moeda(t['resultado'])}  ({formato.pct(t['resultado_pct'])}) {formato.marcador(t['resultado'])}",
     ]
     if t["resultado_dia"]:
         out.append(
-            f"  Variação do dia ......... {moeda(t['resultado_dia'])} {_sinal(t['resultado_dia'])}"
+            f"  Variação do dia ......... {moeda(t['resultado_dia'])} {formato.marcador(t['resultado_dia'])}"
         )
     out.append(
         f"  Saúde da carteira ....... {SAUDE_ICONE.get(saude, '')} {SAUDE_ROTULO.get(saude, saude)}"
@@ -183,7 +161,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         if m["p_vp_medio"]:
             leitura = "desconto patrimonial" if m["p_vp_medio"] < 1 else "ágio sobre o patrimônio"
             out.append(
-                f"  P/VP médio ponderado .... {_num(m['p_vp_medio'], 2)}  ({leitura})"
+                f"  P/VP médio ponderado .... {formato.num(m['p_vp_medio'], 2)}  ({leitura})"
                 f"   ·   cobertura {m['p_vp_cobertura']}"
             )
             out.append(
@@ -193,7 +171,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
             )
         if m["dy_medio_pct"]:
             out.append(
-                f"  DY médio ponderado ...... {_pct(m['dy_medio_pct'], 2, sinal=False)} a.a."
+                f"  DY médio ponderado ...... {formato.pct(m['dy_medio_pct'], 2, sinal=False)} a.a."
                 f"   ·   cobertura {m['dy_cobertura']}"
             )
             out.append(
@@ -204,14 +182,14 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
                 out.append(f"     maior yield: {m['maior_dy']} · menor: {m['menor_dy']}")
 
     # ── 3. Alocação ──
-    out += _secao("Alocação")
+    out += formato.secao("Alocação")
     for classe in snapshot["classes"].values():
         barra = "█" * max(int(classe["peso_pct"] / 3), 1)
         out.append(
-            f"  {classe['rotulo']:<15} {_pct(classe['peso_pct'], 1, sinal=False):>6}  {barra}"
+            f"  {classe['rotulo']:<15} {formato.pct(classe['peso_pct'], 1, sinal=False):>6}  {barra}"
         )
         out.append(
-            f"           {moeda(classe['valor_atual'])}  ({_pct(classe['resultado_pct'], 1)})"
+            f"           {moeda(classe['valor_atual'])}  ({formato.pct(classe['resultado_pct'], 1)})"
             f"  ·  {classe['posicoes']} ativo(s)"
         )
 
@@ -229,7 +207,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
             for g in grupos:
                 marcador = "  ⚠" if g["peso_pct"] > limite_conc else "   "
                 out.append(
-                    f"  {g['nome'][:28]:<28} {_pct(g['peso_pct'], 1, sinal=False):>6}"
+                    f"  {g['nome'][:28]:<28} {formato.pct(g['peso_pct'], 1, sinal=False):>6}"
                     f"  {moeda(g['valor']):>15}  {', '.join(g['ativos'])}{marcador}".rstrip()
                 )
 
@@ -237,14 +215,14 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         if nao_coberto["valor"]:
             out.append(
                 f"  {'Sem ficha (renda fixa)':<28} "
-                f"{_pct(nao_coberto['peso_pct'], 1, sinal=False):>6}"
+                f"{formato.pct(nao_coberto['peso_pct'], 1, sinal=False):>6}"
                 f"  {moeda(nao_coberto['valor']):>15}"
             )
 
     out += _emissores_rf(snapshot)
 
     # ── 4. Posições ──
-    out += _secao("Posições")
+    out += formato.secao("Posições")
     cabecalho = (
         f"  {'':>6} {'ATIVO':<18} {'SEGMENTO':<21} {'P/VP':>6} {'DY 12M':>8} "
         f"{'VALOR':>14} {'RESULT.':>9} {'PESO':>6}"
@@ -264,13 +242,13 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         else:
             nome = p["ticker"]
             segmento = (ficha["segmento"][:21] if ficha else "—")
-            pvp = _num(ficha["p_vp"], 2) if ficha and ficha.get("p_vp") else "—"
-            dy = _pct(ficha["dy_12m_pct"], 1, sinal=False) if ficha and ficha.get("dy_12m_pct") else "—"
+            pvp = formato.num(ficha["p_vp"], 2) if ficha and ficha.get("p_vp") else "—"
+            dy = formato.pct(ficha["dy_12m_pct"], 1, sinal=False) if ficha and ficha.get("dy_12m_pct") else "—"
 
         out.append(
             f"  [{rotulo:>4}] {nome:<18} {segmento:<21} {pvp:>6} {dy:>8} "
-            f"{moeda(p['valor_atual']):>14} {_pct(p['resultado_pct'], 1):>9} "
-            f"{_pct(p['peso_pct'], 1, sinal=False):>6}"
+            f"{moeda(p['valor_atual']):>14} {formato.pct(p['resultado_pct'], 1):>9} "
+            f"{formato.pct(p['peso_pct'], 1, sinal=False):>6}"
         )
 
         if p["tipo"] in portfolio.TIPOS_RENDA_FIXA:
@@ -281,7 +259,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
 
     # ── 5. Ficha por ativo ──
     if fundamentos:
-        out += _secao("Análise por ativo")
+        out += formato.secao("Análise por ativo")
         for f in fundamentos["fichas"]:
             out.append(f"  ▸ {f['ticker']} — {f.get('nome', '')}")
             atributos = [
@@ -289,15 +267,15 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
                 f"{f.get('segmento', '—')}",
                 f"gestão {f.get('gestora')}" if f.get("gestora") else None,
                 f"PL {f.get('patrimonio')}" if f.get("patrimonio") else None,
-                f"P/VP {_num(f.get('p_vp'), 2)}" if f.get("p_vp") else None,
-                f"DY {_pct(f.get('dy_12m_pct'), 1, sinal=False)}" if f.get("dy_12m_pct") else None,
-                f"vacância {_pct(f.get('vacancia_pct'), 1, sinal=False)}" if f.get("vacancia_pct") else None,
+                f"P/VP {formato.num(f.get('p_vp'), 2)}" if f.get("p_vp") else None,
+                f"DY {formato.pct(f.get('dy_12m_pct'), 1, sinal=False)}" if f.get("dy_12m_pct") else None,
+                f"vacância {formato.pct(f.get('vacancia_pct'), 1, sinal=False)}" if f.get("vacancia_pct") else None,
             ]
-            out.append(_quebrar(" · ".join(a for a in atributos if a), "    "))
+            out.append(formato.quebrar(" · ".join(a for a in atributos if a), "    "))
             out.append("")
-            out.append(_quebrar(f.get("comentario", ""), "    "))
+            out.append(formato.quebrar(f.get("comentario", ""), "    "))
             if f.get("risco"):
-                out.append(_quebrar(f"Risco: {f['risco']}", "    "))
+                out.append(formato.quebrar(f"Risco: {f['risco']}", "    "))
             if f.get("fonte"):
                 out.append(f"    fonte: {f['fonte']}")
             out.append("")
@@ -305,7 +283,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     # ── 6. Leitura da carteira ──
     if ia and ia.get("carteira"):
         c = ia["carteira"]
-        out += _secao("Leitura da carteira")
+        out += formato.secao("Leitura da carteira")
         for titulo, chave in (
             ("Diversificação", "diversificacao"),
             ("Concentração setorial", "concentracao_setorial"),
@@ -315,22 +293,22 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         ):
             if c.get(chave):
                 out.append(f"  {titulo}")
-                out.append(_quebrar(c[chave], "    "))
+                out.append(formato.quebrar(c[chave], "    "))
                 out.append("")
         if c.get("conclusao"):
             out.append("  Conclusão")
-            out.append(_quebrar(c["conclusao"], "    "))
+            out.append(formato.quebrar(c["conclusao"], "    "))
 
     # ── 7. Riscos ──
     riscos_ia = (ia or {}).get("riscos") or []
     if snapshot["alertas"] or riscos_ia:
-        out += _secao("Riscos e alertas")
+        out += formato.secao("Riscos e alertas")
 
         if snapshot["alertas"]:
             out.append("  Detectados pelo cálculo da carteira")
             for a in snapshot["alertas"]:
                 out.append(f"  {SEV_ICONE.get(a['severidade'], '•')} {a['titulo']}")
-                out.append(_quebrar(a["descricao"], "     "))
+                out.append(formato.quebrar(a["descricao"], "     "))
             out.append("")
 
         if riscos_ia:
@@ -338,41 +316,41 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
             for i, r in enumerate(riscos_ia, 1):
                 ativos = f"  [{', '.join(r['ativos'])}]" if r.get("ativos") else ""
                 out.append(f"  {i}. {SEV_ICONE.get(r.get('severidade'), '•')} {r['titulo']}{ativos}")
-                out.append(_quebrar(r["descricao"], "     "))
+                out.append(formato.quebrar(r["descricao"], "     "))
 
     # ── 8. Fatos e observações ──
     if ia and ia.get("fatos"):
-        out += _secao("Fatos recentes")
+        out += formato.secao("Fatos recentes")
         for f in ia["fatos"]:
             out.append(f"  {SEV_ICONE.get(f.get('severidade'), '•')} [{f['ativo']}] {f['titulo']}")
-            out.append(_quebrar(f["descricao"], "     "))
+            out.append(formato.quebrar(f["descricao"], "     "))
             if f.get("fonte"):
                 out.append(f"     fonte: {f['fonte']}")
             out.append("")
 
     if ia and ia.get("oportunidades"):
-        out += _secao("Pontos de observação")
+        out += formato.secao("Pontos de observação")
         for o in ia["oportunidades"]:
             ativos = f"  ({', '.join(o['ativos'])})" if o.get("ativos") else ""
             out.append(f"  {OPP_ICONE.get(o.get('tipo'), '•')} {o['titulo']}{ativos}")
-            out.append(_quebrar(o["descricao"], "     "))
+            out.append(formato.quebrar(o["descricao"], "     "))
             out.append("")
 
     # ── 9. Contexto macro ──
     macro = snapshot["macro"]
-    out += _secao("Contexto de mercado")
+    out += formato.secao("Contexto de mercado")
     out.append(
-        f"  CDI {_num(macro['cdi_anual_pct']['valor'])}% a.a.   ·   "
-        f"Selic {_num(macro['selic_meta_pct']['valor'])}% a.a.   ·   "
-        f"IPCA 12m {_num(macro['ipca_12m_pct'].get('valor'))}%"
+        f"  CDI {formato.num(macro['cdi_anual_pct']['valor'])}% a.a.   ·   "
+        f"Selic {formato.num(macro['selic_meta_pct']['valor'])}% a.a.   ·   "
+        f"IPCA 12m {formato.num(macro['ipca_12m_pct'].get('valor'))}%"
     )
     ibov = macro["indices"].get("ibovespa")
     if ibov:
         pontos = f"{ibov['valor']:,.0f}".replace(",", ".")
-        out.append(f"  Ibovespa {pontos} pts ({_pct(ibov['variacao_dia_pct'])} no dia)")
+        out.append(f"  Ibovespa {pontos} pts ({formato.pct(ibov['variacao_dia_pct'])} no dia)")
 
     if ia and ia.get("contexto_mercado"):
-        out += ["", _quebrar(ia["contexto_mercado"], "  ")]
+        out += ["", formato.quebrar(ia["contexto_mercado"], "  ")]
 
     # ── Rodapé ──
     if ia and ia.get("_meta"):
@@ -388,7 +366,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     out += [
         "",
         borda,
-        "  Valores de renda fixa são estimados na curva; o extrato é a fonte oficial.",
+        "  CDB é estimado na curva; o Tesouro usa o preço de revenda do último pregão.",
         "  Indicadores de mercado levantados por IA — confira antes de decidir.",
         "  Este material é informativo e não constitui recomendação de investimento.",
         borda,
@@ -401,10 +379,6 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
 # Telegram (HTML)
 # ─────────────────────────────────────────────
 
-def _esc(txt) -> str:
-    return str(txt or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
 def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
     t = snapshot["totais"]
     saude = snapshot["saude_carteira"]
@@ -415,22 +389,22 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
         f"📅 {quando}",
         "",
         f"💰 <b>{moeda(t['valor_atual'])}</b>",
-        f"{_sinal(t['resultado'])} {moeda(t['resultado'])} ({_pct(t['resultado_pct'])}) acumulado",
+        f"{formato.marcador(t['resultado'])} {moeda(t['resultado'])} ({formato.pct(t['resultado_pct'])}) acumulado",
     ]
     if t["resultado_dia"]:
-        linhas.append(f"{_sinal(t['resultado_dia'])} {moeda(t['resultado_dia'])} no dia")
+        linhas.append(f"{formato.marcador(t['resultado_dia'])} {moeda(t['resultado_dia'])} no dia")
     linhas += ["", f"{SAUDE_ICONE.get(saude, '')} <b>Saúde: {SAUDE_ROTULO.get(saude, saude)}</b>"]
 
     if ia and ia.get("resumo"):
-        linhas += ["", f"<i>{_esc(ia['resumo'])}</i>"]
+        linhas += ["", f"<i>{formato.escapar_html(ia['resumo'])}</i>"]
 
     if fundamentos:
         m = fundamentos["metricas"]
         indicadores = []
         if m["p_vp_medio"]:
-            indicadores.append(f"P/VP médio <b>{_num(m['p_vp_medio'], 2)}</b>")
+            indicadores.append(f"P/VP médio <b>{formato.num(m['p_vp_medio'], 2)}</b>")
         if m["dy_medio_pct"]:
-            indicadores.append(f"DY médio <b>{_pct(m['dy_medio_pct'], 1, sinal=False)}</b>")
+            indicadores.append(f"DY médio <b>{formato.pct(m['dy_medio_pct'], 1, sinal=False)}</b>")
         if indicadores:
             linhas += ["", "━━━━━━━━━━━━━━━━", "📐 <b>INDICADORES</b>", " · ".join(indicadores)]
         if m["renda_mensal_estimada"]:
@@ -439,40 +413,40 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
     linhas += ["", "━━━━━━━━━━━━━━━━", "🗂 <b>ALOCAÇÃO</b>"]
     for classe in snapshot["classes"].values():
         linhas.append(
-            f"• {classe['rotulo']}: {_pct(classe['peso_pct'], 1, sinal=False)} — "
-            f"{moeda(classe['valor_atual'])} ({_pct(classe['resultado_pct'], 1)})"
+            f"• {classe['rotulo']}: {formato.pct(classe['peso_pct'], 1, sinal=False)} — "
+            f"{moeda(classe['valor_atual'])} ({formato.pct(classe['resultado_pct'], 1)})"
         )
 
     if fundamentos and len(fundamentos["por_segmento"]) > 1:
         linhas += ["", "🏢 <b>POR SEGMENTO</b>"]
         for g in fundamentos["por_segmento"][:5]:
             linhas.append(
-                f"• {_esc(g['nome'])}: {_pct(g['peso_pct'], 1, sinal=False)} "
-                f"({_esc(', '.join(g['ativos']))})"
+                f"• {formato.escapar_html(g['nome'])}: {formato.pct(g['peso_pct'], 1, sinal=False)} "
+                f"({formato.escapar_html(', '.join(g['ativos']))})"
             )
 
     if snapshot["alertas"]:
         linhas += ["", "━━━━━━━━━━━━━━━━", "🔔 <b>ALERTAS DA CARTEIRA</b>"]
         for a in snapshot["alertas"]:
-            linhas.append(f"\n{SEV_ICONE.get(a['severidade'], '•')} <b>{_esc(a['titulo'])}</b>")
-            linhas.append(f"<i>{_esc(a['descricao'])}</i>")
+            linhas.append(f"\n{SEV_ICONE.get(a['severidade'], '•')} <b>{formato.escapar_html(a['titulo'])}</b>")
+            linhas.append(f"<i>{formato.escapar_html(a['descricao'])}</i>")
 
     if ia and ia.get("riscos"):
         linhas += ["", "━━━━━━━━━━━━━━━━", "⚠️ <b>RISCOS PRIORIZADOS</b>"]
         for i, r in enumerate(ia["riscos"][:4], 1):
-            ativos = f" ({_esc(', '.join(r['ativos']))})" if r.get("ativos") else ""
-            linhas.append(f"\n{i}. <b>{_esc(r['titulo'])}</b>{ativos}")
-            linhas.append(f"<i>{_esc(r['descricao'])}</i>")
+            ativos = f" ({formato.escapar_html(', '.join(r['ativos']))})" if r.get("ativos") else ""
+            linhas.append(f"\n{i}. <b>{formato.escapar_html(r['titulo'])}</b>{ativos}")
+            linhas.append(f"<i>{formato.escapar_html(r['descricao'])}</i>")
 
     if ia and ia.get("fatos"):
         linhas += ["", "━━━━━━━━━━━━━━━━", "📋 <b>FATOS RECENTES</b>"]
         for f in ia["fatos"][:4]:
             icone = SEV_ICONE.get(f.get("severidade"), "ℹ️")
-            linhas.append(f"\n{icone} <b>[{_esc(f['ativo'])}]</b> {_esc(f['titulo'])}")
-            linhas.append(f"<i>{_esc(f['descricao'])}</i>")
+            linhas.append(f"\n{icone} <b>[{formato.escapar_html(f['ativo'])}]</b> {formato.escapar_html(f['titulo'])}")
+            linhas.append(f"<i>{formato.escapar_html(f['descricao'])}</i>")
 
     if ia and (ia.get("carteira") or {}).get("conclusao"):
-        linhas += ["", "━━━━━━━━━━━━━━━━", "🎯 <b>CONCLUSÃO</b>", _esc(ia["carteira"]["conclusao"])]
+        linhas += ["", "━━━━━━━━━━━━━━━━", "🎯 <b>CONCLUSÃO</b>", formato.escapar_html(ia["carteira"]["conclusao"])]
 
     herdada = _leitura_herdada(snapshot, ia)
     if herdada:

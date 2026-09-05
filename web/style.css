@@ -357,6 +357,7 @@ a:hover { color: var(--amber-forte); }
 .campo-check { flex-direction: row; align-items: center; gap: 8px; height: 40px; }
 .campo-check input { width: auto; height: auto; margin-top: 0; }
 .campo-check label { text-transform: none; letter-spacing: 0; color: var(--t2); }
+.campo-dica { font-size: var(--f-micro); color: var(--t3); line-height: 1.4; }
 .campo-largo { grid-column: 1 / -1; }
 .acoes-form { display: flex; gap: 9px; margin-top: 14px; flex-wrap: wrap; }
 

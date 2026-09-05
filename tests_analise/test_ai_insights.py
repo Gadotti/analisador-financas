@@ -132,7 +132,7 @@ def test_prompt_descreve_posicoes_perfil_alertas_e_tarefa(snapshot_exemplo):
     assert "Total investido: R$ 20,000.00" in prompt
     assert "Valor atual: R$ 22,000.00 (+10.00%)" in prompt
     assert "[FII] MXRF11: 1000 cotas" in prompt
-    assert "[CDB] Inter — 110% do CDI" in prompt
+    assert "[CDB] Inter — travado a 110% do CDI" in prompt
     assert "vence em 490 dias" in prompt
     assert "Renda mensal com risco moderado" in prompt
     assert "[atencao] Concentracao em MXRF11" in prompt
@@ -376,3 +376,30 @@ def test_schema_exige_todos_os_campos_e_proibe_extras():
 def test_indicadores_numericos_aceitam_null():
     pvp = ia.SCHEMA["properties"]["ativos"]["items"]["properties"]["p_vp"]
     assert pvp["anyOf"] == [{"type": "number"}, {"type": "null"}]
+
+
+def test_prompt_declara_a_marcacao_a_mercado_do_tesouro(snapshot_exemplo):
+    """Sem isso o modelo leria o ágio do papel como rendimento do período."""
+    snapshot = copy.deepcopy(snapshot_exemplo)
+    snapshot["posicoes"].append({
+        "id": "c3",
+        "tipo": "tesouro",
+        "descricao": "Tesouro Prefixado 2031",
+        "emissor": "Tesouro Nacional",
+        "banco": None,
+        "rotulo_taxa": "15.6% a.a.",
+        "pagamento_juros": "vencimento",
+        "valor_investido": 10000.0,
+        "valor_atual": 13338.15,
+        "valor_na_curva": 12732.97,
+        "taxa_mercado_aa_pct": 14.34,
+        "marcado_a_mercado": True,
+        "dias_para_vencer": 1579,
+        "vencido": False,
+        "peso_pct": 31.0,
+    })
+    prompt = ia.montar_prompt(snapshot, CONFIG)
+
+    assert "[Tesouro] Tesouro Prefixado 2031 — travado a 15.6% a.a." in prompt
+    assert "marcado a mercado (na curva valeria R$ 12,732.97" in prompt
+    assert "taxa de mercado hoje 14.34%" in prompt

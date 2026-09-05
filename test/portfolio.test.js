@@ -281,3 +281,41 @@ describe("títulos do Tesouro Direto", () => {
     expect(portfolio.tickers(carteira)).toEqual(["MXRF11"]);
   });
 });
+
+describe("taxa do Tesouro é opcional", () => {
+  test("aceita título sem taxa — ela vem do pregão da compra", () => {
+    const { taxa, ...resto } = TESOURO;
+    const pos = portfolio.normalizar(resto);
+
+    expect(pos.taxa).toBeNull();
+    expect(pos.nome).toBe("Tesouro Selic 2029");
+  });
+
+  test("taxa informada é preservada e prevalece sobre a busca", () => {
+    expect(portfolio.normalizar({ ...TESOURO, taxa: "0,0949" }).taxa).toBe(0.0949);
+  });
+
+  test("o CDB continua exigindo a taxa, que está no contrato", () => {
+    const { taxa, ...semTaxa } = CDB;
+    expect(() => portfolio.normalizar(semTaxa)).toThrow(/'taxa' e obrigatorio/);
+  });
+
+  test("rotuloTaxa avisa quando a taxa ainda não foi buscada", () => {
+    expect(portfolio.rotuloTaxa({ indexador: "PRE", taxa: null })).toBe("taxa a buscar");
+  });
+
+  test("Tesouro Selic não aceita cupom — o papel só paga no vencimento", () => {
+    expect(() =>
+      portfolio.normalizar({ ...TESOURO, pagamento_juros: "semestral" }),
+    ).toThrow(/Tesouro Selic paga tudo no vencimento/);
+  });
+
+  test.each([
+    ["PRE", "semestral"],
+    ["IPCA", "semestral"],
+    ["IPCA", "vencimento"],
+  ])("%s com pagamento %s continua válido", (indexador, pagamento_juros) => {
+    const pos = portfolio.normalizar({ ...TESOURO, indexador, pagamento_juros });
+    expect(pos.pagamento_juros).toBe(pagamento_juros);
+  });
+});

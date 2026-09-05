@@ -179,6 +179,27 @@ def _fator_periodo(
 # Custódia
 # ─────────────────────────────────────────────
 
+def _liquidar(
+    valor_bruto: float, principal: float, *, tipo: str, indexador: str, dc: int, du: int
+) -> dict:
+    """Desconta do valor bruto o que sai na hora do resgate: IR e custódia.
+
+    Vale tanto para o valor na curva quanto para o de mercado — o que muda é o
+    `valor_bruto` de entrada, porque o IR incide sobre o ganho efetivamente
+    realizado em cada um deles.
+    """
+    rendimento = valor_bruto - principal
+    ir_pct = aliquota_ir(dc)
+    ir_valor = max(rendimento, 0) * ir_pct
+    custodia = _custodia_b3(tipo, indexador, valor_bruto, du)
+    return {
+        "ir_aliquota_pct": round(ir_pct * 100, 2),
+        "ir_valor": round(ir_valor, 2),
+        "custodia_valor": round(custodia, 2),
+        "valor_liquido": valor_bruto - ir_valor - custodia,
+    }
+
+
 def _custodia_b3(tipo: str, indexador: str, valor_bruto: float, du: int) -> float:
     """Custódia da B3 acumulada no período, só para o Tesouro Direto.
 
@@ -311,10 +332,10 @@ def valorizar(
     )
     valor_bruto = principal * fator
     rendimento_bruto = valor_bruto - principal
-    ir_pct = aliquota_ir(dc)
-    ir_valor = max(rendimento_bruto, 0) * ir_pct
-    custodia = _custodia_b3(tipo, indexador, valor_bruto, du_total)
-    valor_liquido = valor_bruto - ir_valor - custodia
+    liquidacao = _liquidar(
+        valor_bruto, principal, tipo=tipo, indexador=indexador, dc=dc, du=du_total
+    )
+    valor_liquido = liquidacao["valor_liquido"]
     rendimento_liquido = valor_liquido - principal
 
     recebido_liquido = recebidos["bruto"] - recebidos["ir"]
@@ -341,12 +362,69 @@ def valorizar(
         "rentabilidade_total_bruta_pct": round(total_bruto / principal * 100, 4),
         "rentabilidade_total_liquida_pct": round(total_liquido / principal * 100, 4),
         "taxa_efetiva_aa_pct": round(taxa_efetiva, 4),
-        "ir_aliquota_pct": round(ir_pct * 100, 2),
-        "ir_valor": round(ir_valor, 2),
-        "custodia_valor": round(custodia, 2),
+        "ir_aliquota_pct": liquidacao["ir_aliquota_pct"],
+        "ir_valor": liquidacao["ir_valor"],
+        "custodia_valor": liquidacao["custodia_valor"],
+        "indexador_liquidacao": indexador,
+        "valor_na_curva": round(valor_bruto, 2),
         "dias_corridos": dc,
         "dias_uteis": du_total,
         "dias_para_vencer": (vencimento - hoje).days,
         "vencido": hoje >= vencimento,
         "aviso": aviso,
+    }
+
+
+# ─────────────────────────────────────────────
+# Marcação a mercado
+# ─────────────────────────────────────────────
+
+def marcar_a_mercado(curva: dict, *, quantidade: float, pu_venda: float) -> dict:
+    """Reescreve o resultado de `valorizar` com o preço de revenda de hoje.
+
+    O que o Tesouro paga por um título antes do vencimento é o PU de venda —
+    e ele já reflete só os fluxos que faltam, então cupom já pago continua
+    fora daqui, como no cálculo da curva. O valor na curva não é descartado:
+    vai para `valor_na_curva`, porque é ele que diz quanto o papel rende para
+    quem carrega até o fim.
+
+    Args:
+        curva: retorno de `valorizar` para o mesmo título.
+        quantidade: títulos detidos, geralmente fracionários.
+        pu_venda: preço unitário de revenda ao Tesouro, do último pregão.
+    """
+    principal = curva["valor_inicial"]
+    valor_bruto = quantidade * pu_venda
+    rendimento_bruto = valor_bruto - principal
+
+    liquidacao = _liquidar(
+        valor_bruto,
+        principal,
+        tipo="tesouro",
+        indexador=curva["indexador_liquidacao"],
+        dc=curva["dias_corridos"],
+        du=curva["dias_uteis"],
+    )
+    rendimento_liquido = liquidacao["valor_liquido"] - principal
+    total_bruto = rendimento_bruto + curva["juros_recebidos_bruto"]
+    total_liquido = rendimento_liquido + curva["juros_recebidos_liquido"]
+
+    return {
+        **curva,
+        "valor_na_curva": curva["valor_bruto"],
+        "valor_bruto": round(valor_bruto, 2),
+        "valor_liquido": round(liquidacao["valor_liquido"], 2),
+        "rendimento_bruto": round(rendimento_bruto, 2),
+        "rendimento_liquido": round(rendimento_liquido, 2),
+        "rentabilidade_bruta_pct": round(rendimento_bruto / principal * 100, 4),
+        "rentabilidade_liquida_pct": round(rendimento_liquido / principal * 100, 4),
+        "rendimento_total_bruto": round(total_bruto, 2),
+        "rendimento_total_liquido": round(total_liquido, 2),
+        "rentabilidade_total_bruta_pct": round(total_bruto / principal * 100, 4),
+        "rentabilidade_total_liquida_pct": round(total_liquido / principal * 100, 4),
+        "ir_aliquota_pct": liquidacao["ir_aliquota_pct"],
+        "ir_valor": liquidacao["ir_valor"],
+        "custodia_valor": liquidacao["custodia_valor"],
+        "quantidade": round(quantidade, 6),
+        "pu_venda": round(pu_venda, 2),
     }

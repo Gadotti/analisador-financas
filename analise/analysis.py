@@ -8,137 +8,12 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from . import fixed_income, market, portfolio
+from . import formato, market, portfolio, posicoes as marcacao
 
 CLASSES = {"fii": "FIIs", "acao": "Ações", "cdb": "CDBs", "tesouro": "Tesouro Direto"}
 
 # O FGC cobre depósito bancário; título público responde pelo Tesouro Nacional.
 TIPOS_COM_FGC = ("cdb",)
-
-
-# ─────────────────────────────────────────────
-# Posições
-# ─────────────────────────────────────────────
-
-def _posicao_variavel(pos: dict, cot: dict) -> dict:
-    qtd = float(pos["quantidade"])
-    pm = float(pos["preco_medio"])
-    investido = qtd * pm
-    preco = cot.get("preco")
-
-    if preco is None:
-        return {
-            "id": pos["id"],
-            "tipo": pos["tipo"],
-            "descricao": pos["ticker"],
-            "ticker": pos["ticker"],
-            "nome": cot.get("nome", pos["ticker"]),
-            "quantidade": qtd,
-            "preco_medio": pm,
-            "preco_atual": None,
-            "valor_investido": round(investido, 2),
-            "valor_atual": round(investido, 2),
-            "resultado": 0.0,
-            "resultado_pct": 0.0,
-            "variacao_dia_pct": None,
-            "observacao": pos.get("observacao", ""),
-            "erro_cotacao": cot.get("erro", "cotacao indisponivel"),
-        }
-
-    atual = qtd * preco
-    resultado = atual - investido
-    return {
-        "id": pos["id"],
-        "tipo": pos["tipo"],
-        "descricao": pos["ticker"],
-        "ticker": pos["ticker"],
-        "nome": cot.get("nome", pos["ticker"]),
-        "quantidade": qtd,
-        "preco_medio": pm,
-        "preco_atual": round(preco, 2),
-        "valor_investido": round(investido, 2),
-        "valor_atual": round(atual, 2),
-        "resultado": round(resultado, 2),
-        "resultado_pct": round(resultado / investido * 100, 2) if investido else 0.0,
-        "variacao_dia_pct": (
-            round(cot["variacao_dia_pct"], 2)
-            if cot.get("variacao_dia_pct") is not None else None
-        ),
-        "resultado_dia": (
-            round(atual - qtd * cot["fechamento_anterior"], 2)
-            if cot.get("fechamento_anterior") else None
-        ),
-        "fonte_cotacao": cot.get("fonte"),
-        "observacao": pos.get("observacao", ""),
-        "erro_cotacao": None,
-    }
-
-
-def _indexador_do_titulo(pos: dict, macro: dict) -> dict:
-    """Só consulta o índice que o título realmente usa — IPCA custa uma chamada."""
-    if pos["indexador"] == "IPCA":
-        aplicacao = date.fromisoformat(pos["data_aplicacao"])
-        return {"ipca_fator": market.ipca_acumulado(aplicacao).get("fator")}
-    if pos["indexador"] == "SELIC":
-        return {"selic_anual_pct": macro["selic_meta_pct"]["valor"]}
-    return {}
-
-
-def _posicao_renda_fixa(pos: dict, hoje: date, macro: dict) -> dict:
-    """Marca a mercado um CDB ou um título do Tesouro Direto.
-
-    `valor_atual` e `resultado` medem só o que segue aplicado no papel: num
-    título com cupom periódico os juros já sacados aparecem à parte, em
-    `resultado_total`.
-    """
-    calc = fixed_income.valorizar(
-        pos,
-        hoje=hoje,
-        cdi_anual_pct=macro["cdi_anual_pct"]["valor"],
-        **_indexador_do_titulo(pos, macro),
-    )
-
-    calculada = {
-        "id": pos["id"],
-        "tipo": pos["tipo"],
-        "descricao": portfolio.descricao(pos),
-        "emissor": portfolio.emissor(pos),
-        "indexador": pos["indexador"],
-        "taxa": pos["taxa"],
-        "rotulo_taxa": portfolio.rotulo_taxa(pos),
-        "data_aplicacao": pos["data_aplicacao"],
-        "data_vencimento": pos["data_vencimento"],
-        "liquidez_diaria": pos.get("liquidez_diaria", False),
-        "pagamento_juros": calc["pagamento_juros"],
-        "valor_investido": calc["valor_inicial"],
-        "valor_atual": calc["valor_bruto"],
-        "valor_liquido": calc["valor_liquido"],
-        "resultado": calc["rendimento_bruto"],
-        "resultado_pct": calc["rentabilidade_bruta_pct"],
-        "resultado_liquido": calc["rendimento_liquido"],
-        "resultado_liquido_pct": calc["rentabilidade_liquida_pct"],
-        "pagamentos_realizados": calc["pagamentos_realizados"],
-        "proximo_pagamento": calc["proximo_pagamento"],
-        "juros_recebidos_bruto": calc["juros_recebidos_bruto"],
-        "juros_recebidos_liquido": calc["juros_recebidos_liquido"],
-        "resultado_total": calc["rendimento_total_bruto"],
-        "resultado_total_pct": calc["rentabilidade_total_bruta_pct"],
-        "resultado_total_liquido": calc["rendimento_total_liquido"],
-        "resultado_total_liquido_pct": calc["rentabilidade_total_liquida_pct"],
-        "taxa_efetiva_aa_pct": calc["taxa_efetiva_aa_pct"],
-        "ir_aliquota_pct": calc["ir_aliquota_pct"],
-        "ir_valor": calc["ir_valor"],
-        "custodia_valor": calc["custodia_valor"],
-        "dias_para_vencer": calc["dias_para_vencer"],
-        "vencido": calc["vencido"],
-        "observacao": pos.get("observacao", ""),
-        "aviso": calc["aviso"],
-    }
-    # O banco emissor continua num campo próprio: o teto do FGC só vale para o
-    # CDB, e o Tesouro não tem banco algum por trás.
-    if pos["tipo"] == "cdb":
-        calculada["banco"] = pos["banco"]
-    return calculada
 
 
 # ─────────────────────────────────────────────
@@ -216,16 +91,16 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
             alertas.append(_alerta(
                 "alerta",
                 f"{p['descricao']} venceu",
-                f"Venceu em {_br(p['data_vencimento'])}. Valor liquido estimado de "
-                f"{_moeda(p['valor_liquido'])} disponivel para reinvestimento.",
+                f"Venceu em {formato.data_br(p['data_vencimento'])}. Valor liquido estimado de "
+                f"{formato.moeda(p['valor_liquido'])} disponivel para reinvestimento.",
                 p["descricao"],
             ))
         elif dias <= limite_venc:
             alertas.append(_alerta(
                 "atencao",
                 f"{p['descricao']} vence em {dias} dias",
-                f"Vencimento em {_br(p['data_vencimento'])}. Planeje o reinvestimento de "
-                f"{_moeda(p['valor_liquido'])} liquidos.",
+                f"Vencimento em {formato.data_br(p['data_vencimento'])}. Planeje o reinvestimento de "
+                f"{formato.moeda(p['valor_liquido'])} liquidos.",
                 p["descricao"],
             ))
 
@@ -235,8 +110,8 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
             alertas.append(_alerta(
                 "alerta",
                 f"Exposicao ao {banco} acima do teto do FGC",
-                f"{_moeda(valor)} aplicados no {banco}, acima do limite de "
-                f"{_moeda(limite_fgc)} garantido pelo FGC por CPF/instituicao.",
+                f"{formato.moeda(valor)} aplicados no {banco}, acima do limite de "
+                f"{formato.moeda(limite_fgc)} garantido pelo FGC por CPF/instituicao.",
                 banco,
             ))
 
@@ -259,8 +134,8 @@ def _gerar_alertas(posicoes: list[dict], total: float, config: dict) -> list[dic
             alertas.append(_alerta(
                 "atencao",
                 f"{p['descricao']} acumula {p['resultado_pct']:.1f}%",
-                f"Preco medio {_moeda(p['preco_medio'])} contra cotacao atual "
-                f"{_moeda(p['preco_atual'])}. Resultado de {_moeda(p['resultado'])}.",
+                f"Preco medio {formato.moeda(p['preco_medio'])} contra cotacao atual "
+                f"{formato.moeda(p['preco_atual'])}. Resultado de {formato.moeda(p['resultado'])}.",
                 p["descricao"],
             ))
 
@@ -306,12 +181,15 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
     tickers = portfolio.tickers(carteira)
     cots = market.cotacoes(tickers, usar_cache=usar_cache) if tickers else {}
 
+    titulos = [p for p in carteira["posicoes"] if p["tipo"] == "tesouro"]
+    tesouro = marcacao.dados_do_tesouro(titulos, usar_cache=usar_cache) if titulos else {}
+
     posicoes: list[dict] = []
     for pos in carteira["posicoes"]:
         if pos["tipo"] in portfolio.TIPOS_VARIAVEL:
-            posicoes.append(_posicao_variavel(pos, cots.get(pos["ticker"], {})))
+            posicoes.append(marcacao.variavel(pos, cots.get(pos["ticker"], {})))
         else:
-            posicoes.append(_posicao_renda_fixa(pos, hoje, macro))
+            posicoes.append(marcacao.renda_fixa(pos, hoje, macro, tesouro.get(pos["id"])))
 
     total_investido = sum(p["valor_investido"] for p in posicoes)
     total_atual = sum(p["valor_atual"] for p in posicoes)
@@ -374,23 +252,7 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
     }
 
 
-# ─────────────────────────────────────────────
-# Formatação
-# ─────────────────────────────────────────────
-
-def _moeda(valor) -> str:
-    if valor is None:
-        return "-"
-    txt = f"{abs(valor):,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
-    return f"{'-' if valor < 0 else ''}R$ {txt}"
-
-
-def _br(iso: str) -> str:
-    try:
-        return date.fromisoformat(iso).strftime("%d/%m/%Y")
-    except (TypeError, ValueError):
-        return iso or "-"
-
-
-moeda = _moeda
-data_br = _br
+# A formatação mora em `analise.formato`; aqui ela é só reexportada, porque os
+# alertas descrevem valores em reais e datas no meio do texto.
+moeda = formato.moeda
+data_br = formato.data_br

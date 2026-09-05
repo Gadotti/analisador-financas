@@ -65,11 +65,14 @@ Regras de rigor:
   segmento, concentração no mesmo gestor, exposição ao mesmo locatário ou devedor.
 - Para CDBs, considere vencimento, indexador e concentração por banco (teto do FGC de
   R$ 250 mil por CPF/instituição).
-- Para títulos do Tesouro Direto, considere o indexador e o prazo diante da curva de
-  juros atual: um prefixado longo ou um IPCA+ longo oscila com a marcação a mercado, e
-  o Tesouro Selic é o que menos oscila. O Tesouro não é coberto pelo FGC — quem responde
-  pelo papel é o Tesouro Nacional, o menor risco de crédito do país, então não trate a
-  concentração nele como concentração de emissor bancário.
+- Títulos do Tesouro Direto já vêm marcados a mercado, pelo preço de revenda do último
+  pregão: o valor informado é o que o investidor receberia vendendo hoje, e pode estar
+  acima ou abaixo do valor na curva. Compare a taxa travada na compra com a taxa de
+  mercado atual do mesmo papel — a diferença entre elas é o que explica o ágio ou o
+  deságio, e um prefixado ou IPCA+ longo oscila muito mais que um Tesouro Selic.
+- O Tesouro não é coberto pelo FGC — quem responde pelo papel é o Tesouro Nacional, o
+  menor risco de crédito do país, então não trate a concentração nele como concentração
+  de emissor bancário.
 - Nem CDB nem Tesouro entram na lista `ativos` — comente-os nos campos de análise da
   carteira.
 - Ordene os riscos do mais relevante para o menos relevante.
@@ -269,10 +272,16 @@ def _linha_renda_fixa(p: dict) -> str:
     rotulo = "CDB" if p["tipo"] == "cdb" else "Tesouro"
     identificacao = p["banco"] if p["tipo"] == "cdb" else p["descricao"]
     cupom = f", juros {p['pagamento_juros']}" if p["pagamento_juros"] != "vencimento" else ""
+    mercado = (
+        f", marcado a mercado (na curva valeria R$ {p['valor_na_curva']:,.2f}"
+        f", taxa de mercado hoje {p['taxa_mercado_aa_pct']:g}%)"
+        if p.get("marcado_a_mercado") else ""
+    )
     return (
-        f"- [{rotulo}] {identificacao} — {p['rotulo_taxa']}{cupom}, "
+        f"- [{rotulo}] {identificacao} — travado a {p['rotulo_taxa']}{cupom}, "
         f"aplicado R$ {p['valor_investido']:,.2f}, "
-        f"valor atual R$ {p['valor_atual']:,.2f}, {venc}, peso {p['peso_pct']:.1f}% da carteira"
+        f"valor atual R$ {p['valor_atual']:,.2f}{mercado}, {venc}, "
+        f"peso {p['peso_pct']:.1f}% da carteira"
     )
 
 

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -12,18 +13,44 @@ from analise import market  # noqa: E402
 
 
 class RespostaFalsa:
-    """Imita o objeto devolvido por requests.get."""
+    """Imita o objeto devolvido por requests.get.
 
-    def __init__(self, corpo, status=200):
+    Atende tanto quem chama `.json()` quanto quem percorre `.iter_lines()` com
+    `stream=True` — é assim que `tesouro_direto` lê o CSV do Tesouro.
+    """
+
+    def __init__(self, corpo=None, status=200, texto=""):
         self._corpo = corpo
+        self._texto = texto
         self.status_code = status
+        self.encoding = "utf-8"
+        self.fechada = False
 
     def raise_for_status(self):
+        # HTTPError, e nao um erro qualquer: e o que o requests levanta, e ha
+        # coletor que so trata `requests.RequestException`.
         if self.status_code >= 400:
-            raise RuntimeError(f"HTTP {self.status_code}")
+            raise requests.HTTPError(f"HTTP {self.status_code}")
 
     def json(self):
         return self._corpo
+
+    def iter_lines(self, decode_unicode=False):
+        return iter(self._texto.splitlines())
+
+    def close(self):
+        self.fechada = True
+
+
+CABECALHO_TESOURO = (
+    "Tipo Titulo;Data Vencimento;Data Base;Taxa Compra Manha;Taxa Venda Manha;"
+    "PU Compra Manha;PU Venda Manha;PU Base Manha"
+)
+
+
+def csv_tesouro(*linhas):
+    """CSV do Tesouro Transparente, do pregão mais novo para o mais antigo."""
+    return RespostaFalsa(texto=chr(10).join((CABECALHO_TESOURO, *linhas)))
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +86,8 @@ def rede(monkeypatch):
     rotas: dict = {}
     chamadas: list = []
 
-    def falso_get(url, params=None, headers=None, timeout=None):
-        chamadas.append({"url": url, "params": params or {}})
+    def falso_get(url, params=None, headers=None, timeout=None, stream=False):
+        chamadas.append({"url": url, "params": params or {}, "stream": stream})
         for trecho, resposta in rotas.items():
             if trecho in url:
                 valor = resposta(url, params) if callable(resposta) else resposta
@@ -93,6 +120,19 @@ def chart_yahoo(preco, anterior, nome="Fundo"):
     )
 
 
+# Dois pregões do Tesouro: o de hoje, que marca a mercado, e o de 02/01/2025,
+# onde as posições de teste foram compradas. Valores reais do arquivo oficial,
+# fora o vencimento 2099, que existe só para o título nunca vencer nos testes.
+TESOURO_PADRAO = (
+    "Tesouro Selic;01/03/2099;03/09/2026;0,03;0,04;19800,36;19785,18;19785,18",
+    "Tesouro Prefixado;01/01/2031;03/09/2026;14,22;14,34;565,63;562,79;562,79",
+    "Tesouro IPCA+ com Juros Semestrais;15/05/2035;03/09/2026;7,73;7,85;4338,38;4305,64;4305,64",
+    "Tesouro Selic;01/03/2099;02/01/2025;0,13;0,14;15745,70;15731,90;15731,90",
+    "Tesouro Prefixado;01/01/2031;02/01/2025;15,60;15,72;421,94;419,80;419,80",
+    "Tesouro IPCA+ com Juros Semestrais;15/05/2035;02/01/2025;7,65;7,77;3940,44;3915,20;3915,20",
+)
+
+
 @pytest.fixture
 def mercado_padrao(rede):
     """Indicadores macro estáveis; cada teste acrescenta as cotações que quiser."""
@@ -104,6 +144,7 @@ def mercado_padrao(rede):
             "%5EBVSP": RespostaFalsa({"chart": {"result": []}}),
             "^BVSP": RespostaFalsa({"chart": {"result": []}}),
             "^IFIX": RespostaFalsa({"chart": {"result": []}}),
+            "precotaxatesourodireto": csv_tesouro(*TESOURO_PADRAO),
         }
     )
     return rede

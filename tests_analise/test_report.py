@@ -274,7 +274,8 @@ def test_emissor_do_tesouro_nao_mostra_consumo_de_fgc(snapshot_exemplo):
     assert "acima do FGC" not in saida
 
 
-def test_rodape_fala_de_renda_fixa_e_nao_so_de_cdb(snapshot_exemplo):
+def test_rodape_distingue_a_curva_do_cdb_do_mercado_do_tesouro(snapshot_exemplo):
     saida = report.texto(com_tesouro(snapshot_exemplo))
 
-    assert "Valores de renda fixa são estimados na curva" in saida
+    assert "CDB é estimado na curva" in saida
+    assert "Tesouro usa o preço de revenda do último pregão" in saida

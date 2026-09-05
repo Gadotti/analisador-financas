@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from .paths import cache_file, garantir_diretorios
+from . import cache
 
 TIMEOUT = 15
 UA = {"User-Agent": "Mozilla/5.0 (compatible; PortfolioAnalyzer/1.0)"}
@@ -31,42 +31,8 @@ SGS_SELIC_META = 432   # Meta Selic definida pelo Copom (% a.a.)
 SGS_IPCA_MES = 433     # IPCA - variação mensal (%)
 
 
-# ─────────────────────────────────────────────
-# Cache em disco
-# ─────────────────────────────────────────────
-
-def _cache_ler() -> dict:
-    try:
-        with open(cache_file(), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _cache_gravar(cache: dict) -> None:
-    try:
-        garantir_diretorios()
-        with open(cache_file(), "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-    except OSError:
-        pass
-
-
-def _cache_get(chave: str, ttl: int):
-    entrada = _cache_ler().get(chave)
-    if entrada and (time.time() - entrada.get("ts", 0)) < ttl:
-        return entrada.get("valor")
-    return None
-
-
-def _cache_set(chave: str, valor) -> None:
-    cache = _cache_ler()
-    cache[chave] = {"ts": time.time(), "valor": valor}
-    _cache_gravar(cache)
-
-
-def limpar_cache() -> None:
-    _cache_gravar({})
+# O cache mora em `analise.cache`, compartilhado com o coletor do Tesouro.
+limpar_cache = cache.limpar
 
 
 # ─────────────────────────────────────────────
@@ -139,7 +105,7 @@ def cotacao(ticker: str, *, usar_cache: bool = True) -> dict:
     chave = f"cotacao:{ticker}"
 
     if usar_cache:
-        em_cache = _cache_get(chave, TTL_COTACAO)
+        em_cache = cache.obter(chave, TTL_COTACAO)
         if em_cache:
             return {**em_cache, "do_cache": True}
 
@@ -148,7 +114,7 @@ def cotacao(ticker: str, *, usar_cache: bool = True) -> dict:
         try:
             dados = provedor(ticker)
             if dados:
-                _cache_set(chave, dados)
+                cache.definir(chave, dados)
                 return {**dados, "do_cache": False}
             erros.append(f"{provedor.__name__}: sem dados")
         except Exception as exc:  # rede, HTTP, parsing
@@ -190,7 +156,7 @@ def _sgs(serie: int, *, ultimos: int = 1, inicio: date | None = None) -> list[di
 
 
 def _ultimo_valor(serie: int, chave: str, padrao: float) -> dict:
-    em_cache = _cache_get(chave, TTL_INDICADOR)
+    em_cache = cache.obter(chave, TTL_INDICADOR)
     if em_cache:
         return em_cache
     try:
@@ -200,7 +166,7 @@ def _ultimo_valor(serie: int, chave: str, padrao: float) -> dict:
             "data": dados[-1]["data"],
             "fonte": f"BCB/SGS {serie}",
         }
-        _cache_set(chave, valor)
+        cache.definir(chave, valor)
         return valor
     except Exception as exc:
         return {"valor": padrao, "data": None, "fonte": "padrao", "erro": str(exc)}
@@ -234,7 +200,7 @@ def _fracao_do_mes(desde: date, referencia: str) -> float:
 def ipca_acumulado(desde: date) -> dict:
     """IPCA acumulado (fator) entre `desde` e hoje, com o 1º mês pro rata."""
     chave = f"ipca_acum:{desde.isoformat()}"
-    em_cache = _cache_get(chave, TTL_INDICADOR)
+    em_cache = cache.obter(chave, TTL_INDICADOR)
     if em_cache:
         return em_cache
     try:
@@ -249,7 +215,7 @@ def ipca_acumulado(desde: date) -> dict:
             "meses": len(dados),
             "fonte": f"BCB/SGS {SGS_IPCA_MES}",
         }
-        _cache_set(chave, valor)
+        cache.definir(chave, valor)
         return valor
     except Exception as exc:
         return {"fator": None, "variacao_pct": None, "meses": 0, "erro": str(exc)}
@@ -258,7 +224,7 @@ def ipca_acumulado(desde: date) -> dict:
 def ipca_12m() -> dict:
     """IPCA acumulado nos últimos 12 meses, em %."""
     chave = "ipca_12m"
-    em_cache = _cache_get(chave, TTL_INDICADOR)
+    em_cache = cache.obter(chave, TTL_INDICADOR)
     if em_cache:
         return em_cache
     try:
@@ -267,7 +233,7 @@ def ipca_12m() -> dict:
         for item in dados:
             fator *= 1 + float(item["valor"].replace(",", ".")) / 100
         valor = {"valor": (fator - 1) * 100, "fonte": f"BCB/SGS {SGS_IPCA_MES}"}
-        _cache_set(chave, valor)
+        cache.definir(chave, valor)
         return valor
     except Exception as exc:
         return {"valor": None, "fonte": None, "erro": str(exc)}
@@ -276,7 +242,7 @@ def ipca_12m() -> dict:
 def indices_mercado() -> dict:
     """Ibovespa e IFIX (quando disponível na fonte)."""
     chave = "indices_mercado"
-    em_cache = _cache_get(chave, TTL_COTACAO)
+    em_cache = cache.obter(chave, TTL_COTACAO)
     if em_cache:
         return em_cache
 
@@ -302,7 +268,7 @@ def indices_mercado() -> dict:
         except Exception:
             continue
 
-    _cache_set(chave, saida)
+    cache.definir(chave, saida)
     return saida
 
 

@@ -85,7 +85,7 @@ Uma regra por arquivo, para não haver duas validações divergentes:
 | `data/portfolio.json` | Node (`src/core/portfolio.js`) | Node e Python |
 | `data/last_analysis.json` | Python (`analise/runner.py`) | Node e Python |
 | `data/history/*.json` | Python | Node e Python |
-| `data/cache.json` | Python (`analise/market.py`) | Python |
+| `data/cache.json` | Python (`analise/cache.py`) | Python |
 
 Por isso `analise/portfolio.py` é **somente leitura** — sem CRUD, sem gravação, sem
 migração de formato. Se precisar de uma nova regra de validação de posição, ela vai em
@@ -189,6 +189,11 @@ Ao acrescentar uma opção de provedor, ela entra em `configuracao()` (Python) e
 interface precisar dela, em `configuracaoIa()` (Node) — nunca como constante no meio da
 chamada. O Node **não** devolve a chave: `conferirChave()` só verifica a presença.
 
+**Uma função por natureza de ativo.** `analise/posicoes.py` marca cada posição a valor de
+hoje (`variavel`, `renda_fixa`, `dados_do_tesouro`) e devolve sempre o mesmo formato de
+dicionário; `analise/analysis.py` só soma, pesa, ordena e gera alertas, sem saber de onde
+veio cada número. Uma fonte nova entra em `posicoes.py`, não em `consolidar`.
+
 **Os números agregados não vêm do modelo.** A IA devolve as fichas por ativo (P/VP, DY,
 segmento, gestora); as médias ponderadas, a renda estimada e as concentrações são
 calculadas em `analise/fundamentals.py`. Mantenha essa divisão: pedir totais ao modelo
@@ -211,11 +216,42 @@ sem acento e sem os termos de razão social — e junta as chaves em que uma é 
 outra; `fundamentals` reescreve a ficha com o rótulo canônico antes de agrupar. Não peça
 essa unificação ao modelo: a saída dele não é estável entre execuções.
 
-**Marcação a mercado de renda fixa é estimativa.** `analise/fixed_income.py` projeta o CDI
-(ou a Selic) de hoje sobre todo o período decorrido, capitaliza em dias úteis (base 252) e
-aplica o IR regressivo. O Tesouro é carregado na curva, sem a marcação a mercado do papel —
-um prefixado longo pode valer bem menos que isso num resgate antecipado. Não apresente
-esses valores como oficiais; o rodapé do relatório já avisa.
+**CDB vale a curva; Tesouro vale o mercado.** São dois regimes, e a diferença é de fato,
+não de gosto: não existe mercado secundário de CDB para pessoa física, então a curva é o
+que o banco paga; o título público tem preço de revenda publicado todo pregão.
+
+- **CDB** — `analise/fixed_income.valorizar` projeta o CDI de hoje sobre todo o período
+  decorrido, capitaliza em dias úteis (base 252) e aplica o IR regressivo. É estimativa.
+- **Tesouro** — a curva é calculada do mesmo jeito, mas `fixed_income.marcar_a_mercado`
+  troca o valor por `quantidade × PU de venda` do último pregão. A curva não é jogada
+  fora: fica em `valor_na_curva`, que é o que o papel rende para quem carrega até o fim.
+  `valor_atual` — e portanto os totais, a alocação e os pesos — é o valor de mercado.
+
+O IR e a custódia saem de `_liquidar`, chamado pelos dois caminhos: a alíquota incide
+sobre o ganho de cada regime, não sobre o do outro.
+
+**A taxa do Tesouro não é digitada.** `analise/tesouro_direto.py` lê o CSV "Taxas dos
+Títulos Ofertados pelo Tesouro Direto" e resolve duas coisas por título:
+
+| Precisa de | Coluna | Quando |
+|---|---|---|
+| Taxa travada na compra | `Taxa Compra Manha` no pregão da `data_aplicacao` | uma vez por título |
+| Preço de revenda hoje | `PU Venda Manha` no último pregão | uma vez por execução |
+
+**Os rótulos do arquivo são da ótica do investidor**, conforme os metadados oficiais:
+"Compra" é a ponta em que ele compra, "Venda" é onde revende ao Tesouro. Trocá-las inverte
+o resultado — há teste travando as duas. A quantidade de títulos também não é pedida no
+cadastro: sai de `valor_inicial ÷ PU de compra`, que a mesma consulta já traz.
+
+O arquivo tem 14 MB e vem ordenado do pregão mais novo para o mais antigo. `cotacoes()`
+para de ler na primeira data diferente e fecha a conexão — o servidor responde 206 ao
+cabeçalho `Range` e manda o corpo inteiro assim mesmo, então o corte é do lado do cliente.
+`taxas_na_compra()` precisa varrer tudo, mas pregão fechado não muda: o resultado vai ao
+cache com `SEM_EXPIRAR`, e a chave é o título comprado, não a posição.
+
+Se a busca falhar e não houver taxa no cadastro, a posição entra pelo valor aplicado com
+`erro_cotacao` — mesmo tratamento da renda variável sem cotação. Uma taxa informada no
+cadastro sempre vence a buscada: é a que está no extrato da corretora.
 
 **Dois tipos de renda fixa, um esqueleto só.** `cdb` e `tesouro` compartilham valor
 aplicado, indexador, taxa, prazo e forma de pagamento dos juros. Divergem em três pontos,
@@ -227,6 +263,10 @@ declarados na tabela `REGRAS` de `src/core/rendaFixa.js` (e espelhados em
 | Indexadores | CDI, PRE, IPCA | SELIC, PRE, IPCA |
 | Cupom | `vencimento` ou `mensal` | `vencimento` ou `semestral` |
 | Emissor | o banco, com teto do FGC | Tesouro Nacional, sem FGC |
+| Taxa no cadastro | obrigatória | opcional (buscada) |
+
+Tesouro Selic é a exceção do cupom: paga tudo no vencimento, e `REGRAS.tesouro.conferir`
+recusa a combinação — ela não existe no Tesouro Direto e nunca teria preço para casar.
 
 O CDI é multiplicativo (110% do CDI); a Selic é aditiva (Selic + 0,09% a.a.) — veja
 `_taxa_efetiva`. Só o Tesouro paga custódia à B3 (0,20% a.a., isenta na primeira faixa em
@@ -234,8 +274,9 @@ Tesouro Selic), descontada do `valor_liquido` em `_custodia_b3`. O nome padrão 
 sai de `nomeTesouro()` no padrão em que o Tesouro Direto o publica ("Tesouro IPCA+ 2029 com
 Juros Semestrais"); o usuário pode sobrescrevê-lo.
 
-Ao acrescentar um terceiro tipo de renda fixa, ele entra em `REGRAS` e em
-`INTERVALO_CUPOM` — não em mais um `if` espalhado pelo relatório e pelo front.
+Ao acrescentar um terceiro tipo de renda fixa, ele entra em `REGRAS`, em `INTERVALO_CUPOM`
+e, se for título público, em `tesouro_direto.TIPO_TITULO` — não em mais um `if` espalhado
+pelo relatório e pelo front.
 
 **Título com cupom não capitaliza.** No modo `mensal` (CDB) ou `semestral` (Tesouro) cada
 aniversário da aplicação — ajustado para o dia útil seguinte — paga os juros do período e o
