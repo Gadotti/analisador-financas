@@ -26,6 +26,15 @@ export const num = (v, casas = 2) =>
 
 export const classeSinal = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "zero");
 
+/** Cor por classe de ativo — mesma régua na alocação e no resultado detalhado. */
+export const COR_CLASSE = {
+  fii: "var(--fii)",
+  acao: "var(--acao)",
+  cdb: "var(--cdb)",
+  tesouro: "var(--tesouro)",
+};
+export const corClasse = (tipo) => COR_CLASSE[tipo] || "var(--t3)";
+
 export function dataBR(iso) {
   if (!iso) return "—";
   const [ano, mes, dia] = iso.slice(0, 10).split("-");

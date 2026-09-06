@@ -1,7 +1,7 @@
 /** Tela "Visão geral": contexto macro, posição consolidada e riscos. */
 
 import { cartaoAlertaRecolhido, listaAlertas } from "./alertas.js";
-import { $, $$, classeSinal, dataHoraBR, esc, moeda, mostrar, num, pct } from "./formato.js";
+import { $, $$, classeSinal, corClasse, dataHoraBR, esc, moeda, moedaCurta, mostrar, num, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
 const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
@@ -50,6 +50,78 @@ function indicadoresDeFicha(metricas) {
   return linhas;
 }
 
+// A mesma fronteira de `portfolio.TIPOS_VARIAVEL` / `TIPOS_RENDA_FIXA` —
+// só para agrupar o que `snapshot.classes` já calculou, sem refazer conta.
+const GRUPOS_RESULTADO = [
+  { chave: "variavel", rotulo: "Renda variável", tipos: ["fii", "acao"] },
+  { chave: "fixa", rotulo: "Renda fixa", tipos: ["cdb", "tesouro"] },
+];
+
+/** Soma o que `analysis.consolidar` já calculou por classe, agora por regime. */
+function agruparResultadoPorRegime(classes) {
+  return GRUPOS_RESULTADO.map(({ chave, rotulo, tipos }) => {
+    const itens = tipos.filter((tipo) => classes[tipo]).map((tipo) => ({ tipo, ...classes[tipo] }));
+    const investido = itens.reduce((soma, c) => soma + c.valor_investido, 0);
+    const atual = itens.reduce((soma, c) => soma + c.valor_atual, 0);
+    const resultado = atual - investido;
+    return {
+      chave,
+      rotulo,
+      itens,
+      investido,
+      atual,
+      resultado,
+      resultado_pct: investido ? (resultado / investido) * 100 : 0,
+    };
+  }).filter((grupo) => grupo.itens.length > 0);
+}
+
+/** Faixa proporcional a quanto cada regime pesou no resultado, em módulo —
+ * evita larguras negativas ou acima de 100% quando um regime perde e o outro ganha. */
+function faixaContribuicao(grupos) {
+  const totalAbs = grupos.reduce((soma, g) => soma + Math.abs(g.resultado), 0);
+  if (!totalAbs) return "";
+  const cor = (g) => ({ pos: "var(--verde)", neg: "var(--vermelho)", zero: "var(--t3)" }[classeSinal(g.resultado)]);
+  const fatias = grupos
+    .map((g) => `<div style="width:${(Math.abs(g.resultado) / totalAbs) * 100}%;background:${cor(g)}"></div>`)
+    .join("");
+  return `<div class="faixa-classes">${fatias}</div>`;
+}
+
+const chipClasse = (item) => `
+  <div class="resultado-chip">
+    <span class="legenda-ponto" style="background:${corClasse(item.tipo)}"></span>
+    <span class="resultado-chip-nome">${esc(item.rotulo)}</span>
+    <span class="mono ${classeSinal(item.resultado)}">${moeda(item.resultado)}</span>
+  </div>`;
+
+const painelResultado = (g) => `
+  <div class="resultado-coluna">
+    <div class="resultado-coluna-cabeca">
+      <span class="resultado-coluna-nome">${esc(g.rotulo)}</span>
+      <span class="resultado-coluna-valor mono ${classeSinal(g.resultado)}">${moeda(g.resultado)}</span>
+    </div>
+    <div class="indicador-sub">
+      <span class="${classeSinal(g.resultado)}">${pct(g.resultado_pct)}</span>
+      · valor atual ${moedaCurta(g.atual)} · custo ${moedaCurta(g.investido)}
+    </div>
+    <div class="resultado-chips">${g.itens.map(chipClasse).join("")}</div>
+  </div>`;
+
+/** Quebra o "Resultado acumulado" no que veio de renda variável e de renda fixa. */
+function renderResultadoDetalhado(snapshot) {
+  const grupos = agruparResultadoPorRegime(snapshot.classes);
+  const alvo = $("#resultado-detalhado");
+  if (grupos.length < 2) {
+    alvo.innerHTML = "";
+    return;
+  }
+  alvo.innerHTML = `
+    <div class="resultado-detalhado-topo"><span class="microrotulo">Resultado por tipo de ativo</span></div>
+    ${faixaContribuicao(grupos)}
+    <div class="resultado-colunas">${grupos.map(painelResultado).join("")}</div>`;
+}
+
 /**
  * @param {string|null} herdadaDe Quando o texto da IA vem de uma análise
  *   anterior — só as cotações são desta execução.
@@ -84,6 +156,7 @@ export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
   }
 
   $("#indicadores").innerHTML = linhas.concat(indicadoresDeFicha(fundamentos?.metricas)).join("");
+  renderResultadoDetalhado(snapshot);
   renderContexto(ia);
 }
 

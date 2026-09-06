@@ -6,17 +6,10 @@
  * concentração configurado pelo usuário, desenhado como traço na barra.
  */
 
-import { $, esc, moeda, moedaCurta, pct } from "./formato.js";
+import { $, corClasse, esc, moeda, moedaCurta, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
-const COR_CLASSE = {
-  fii: "var(--fii)",
-  acao: "var(--acao)",
-  cdb: "var(--cdb)",
-  tesouro: "var(--tesouro)",
-};
-
-const corDe = (tipo) => COR_CLASSE[tipo] || "var(--t3)";
+const corDe = corClasse;
 
 /** Barra com o traço do limite por cima. */
 function trilho(pesoPct, cor, limitePct) {

@@ -279,6 +279,22 @@ a:hover { color: var(--amber-forte); }
 .selo-atencao { background: rgba(255, 140, 66, .15); color: var(--laranja); }
 .selo-alerta { background: rgba(255, 107, 120, .15); color: var(--vermelho); }
 
+/* Quebra do "Resultado acumulado" entre renda variável e renda fixa — painel
+   próprio (fundo + borda), não só uma linha, para não colar nos indicadores. */
+.resultado-detalhado:not(:empty) {
+  margin-top: 22px; padding: 16px 18px;
+  background: var(--card2); border: 1px solid var(--borda); border-radius: 10px;
+}
+.resultado-detalhado-topo { margin-bottom: 12px; }
+.resultado-colunas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.resultado-coluna { display: flex; flex-direction: column; gap: 7px; }
+.resultado-coluna-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.resultado-coluna-nome { font-size: var(--f-dado); font-weight: 600; }
+.resultado-coluna-valor { font-size: var(--f-num); font-weight: 700; }
+.resultado-chips { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+.resultado-chip { display: flex; align-items: center; gap: 8px; font-size: var(--f-apoio); color: var(--t2); }
+.resultado-chip-nome { flex: 1 1 auto; }
+
 /* ── Alocação e concentração ───────────── */
 
 .faixa-classes { display: flex; gap: 2px; height: 10px; margin-bottom: 14px; }
@@ -629,6 +645,7 @@ a:hover { color: var(--amber-forte); }
   .topo, .pagina { padding-left: 16px; padding-right: 16px; }
   .legenda-classes { grid-template-columns: 1fr; }
   .indicadores { grid-template-columns: 1fr; }
+  .resultado-colunas { grid-template-columns: 1fr; gap: 16px; }
   .painel { width: 100%; }
   .controles-lista, .filtros { width: 100%; }
   .busca { flex: 1; }
