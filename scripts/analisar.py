@@ -12,6 +12,7 @@ Uso:
     python scripts/analisar.py --json           # resultado bruto em JSON no stdout
     python scripts/analisar.py --enviar-ultima  # reenvia a última análise salva
     python scripts/analisar.py --testar-telegram
+    python scripts/analisar.py --testar-ia [--provedor kimi]
 
 Em modo --json o stdout carrega APENAS o JSON; todo o progresso vai para o
 stderr. É esse contrato que permite ao servidor web ler o resultado.
@@ -42,7 +43,7 @@ try:
 except ImportError:
     pass
 
-from analise import notifier, report, runner  # noqa: E402
+from analise import ai_insights, notifier, report, runner  # noqa: E402
 
 
 def montar_parser() -> argparse.ArgumentParser:
@@ -62,6 +63,15 @@ def montar_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--testar-telegram", action="store_true", help="Testa o bot do Telegram"
+    )
+    parser.add_argument(
+        "--testar-ia",
+        action="store_true",
+        help="Testa a conexão com a API de IA (ping mínimo, gasta poucos tokens)",
+    )
+    parser.add_argument(
+        "--provedor",
+        help="Provedor a testar com --testar-ia (padrão: o ativo em IA_PROVEDOR)",
     )
     return parser
 
@@ -92,6 +102,20 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
             return 1
         log(f"[OK] Conectado ao bot '{nome}' — mensagem de teste enviada.")
         resposta_json({"ok": True, "bot": nome})
+        return 0
+
+    if args.testar_ia:
+        try:
+            resultado = ai_insights.testar_conexao(args.provedor)
+        except Exception as exc:
+            log(f"[ERRO] IA: {exc}")
+            resposta_json({"erro": str(exc)})
+            return 1
+        log(
+            f"[OK] Conectado a {resultado['provedor']} ({resultado['modelo']}) — "
+            f"resposta: {resultado['resposta']!r}."
+        )
+        resposta_json(resultado)
         return 0
 
     if args.enviar_ultima:

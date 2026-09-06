@@ -56,6 +56,7 @@ function servicosFalsos() {
     respostaAnalise: null,
     ambiente: ambientePainelExemplo(),
     erroSalvarAmbiente: null,
+    erroTestarIa: null,
   };
 
   return {
@@ -73,6 +74,11 @@ function servicosFalsos() {
     testarTelegram() {
       estado.chamadas.push(["telegram-testar"]);
       return Promise.resolve({ ok: true, bot: "Carteira Bot" });
+    },
+    testarIa(provedor) {
+      estado.chamadas.push(["ia-testar", provedor]);
+      if (estado.erroTestarIa) return Promise.reject(estado.erroTestarIa);
+      return Promise.resolve({ ok: true, provedor: provedor || "anthropic", modelo: "claude-opus-5" });
     },
     statusIa: () => ({ ok: true, motivo: "" }),
     telegramConfigurado: () => true,
@@ -123,6 +129,7 @@ beforeEach(() => {
   servicos.estado.respostaAnalise = null;
   servicos.estado.ambiente = ambientePainelExemplo();
   servicos.estado.erroSalvarAmbiente = null;
+  servicos.estado.erroTestarIa = null;
 });
 
 describe("arquivos estáticos", () => {
@@ -360,5 +367,30 @@ describe("POST /api/telegram", () => {
 
   test("responde 404 em POST desconhecido", async () => {
     expect((await pedir("/api/nada", { method: "POST", body: "{}" })).status).toBe(404);
+  });
+});
+
+describe("POST /api/ia/testar", () => {
+  test("testa a conexão com o provedor ativo quando nenhum é informado", async () => {
+    const { status, corpo } = await pedir("/api/ia/testar", { method: "POST", body: "{}" });
+    expect(status).toBe(200);
+    expect(corpo).toEqual({ ok: true, provedor: "anthropic", modelo: "claude-opus-5" });
+    expect(servicos.estado.chamadas).toEqual([["ia-testar", undefined]]);
+  });
+
+  test("repassa o provedor escolhido na tela", async () => {
+    const { corpo } = await pedir("/api/ia/testar", {
+      method: "POST",
+      body: JSON.stringify({ provedor: "kimi" }),
+    });
+    expect(corpo.provedor).toBe("kimi");
+    expect(servicos.estado.chamadas).toEqual([["ia-testar", "kimi"]]);
+  });
+
+  test("propaga o erro de configuração ou de conexão", async () => {
+    servicos.estado.erroTestarIa = new Error("ANTHROPIC_API_KEY não encontrada");
+    const { status, corpo } = await pedir("/api/ia/testar", { method: "POST", body: "{}" });
+    expect(status).toBe(500);
+    expect(corpo.erro).toMatch(/ANTHROPIC_API_KEY/);
   });
 });

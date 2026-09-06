@@ -236,7 +236,7 @@
 
     <!-- ── Configurações ───────────────── -->
     <main class="pagina hidden" id="pg-configuracoes">
-      <form id="form-config">
+      <form id="form-ambiente">
         <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Perfil da carteira</span>
@@ -282,13 +282,8 @@
             O limite de concentração vale para cada posição e para os três recortes de
             alocação — é o traço laranja desenhado nas barras.
           </p>
-          <div class="acoes-form">
-            <button type="submit" class="btn btn-primario btn-sm">Salvar parâmetros</button>
-          </div>
         </section>
-      </form>
 
-      <form id="form-ambiente">
         <section class="cartao" style="margin-top:16px">
           <div class="cartao-topo">
             <span class="cartao-titulo">Provedor de IA</span>
@@ -319,7 +314,7 @@
                 <input id="e-anthropic-variavel" placeholder="ANTHROPIC_API_KEY" autocomplete="off">
               </div>
               <div class="campo campo-largo">
-                <label for="e-anthropic-chave">Chave de API <span class="selo" id="e-anthropic-chave-selo"></span></label>
+                <label for="e-anthropic-chave">Chave de API <span class="chave-selo" id="e-anthropic-chave-selo"></span></label>
                 <input id="e-anthropic-chave" type="password" placeholder="Deixe em branco para manter a chave atual" autocomplete="new-password">
               </div>
               <div class="campo">
@@ -363,6 +358,13 @@
                 <input id="e-anthropic-url" placeholder="outro endereço compatível com a API da Anthropic" autocomplete="off">
               </div>
             </div>
+            <div class="linha-teste">
+              <button type="button" class="btn btn-testar btn-sm" id="btn-testar-anthropic">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a10 10 0 0 1 14 0"></path><path d="M5.8 10.6a6 6 0 0 1 8.4 0"></path><path d="M8.6 13.7a2.2 2.2 0 0 1 2.8 0"></path><circle cx="10" cy="16.2" r="1" fill="currentColor" stroke="none"></circle></svg>
+                Testar conexão
+              </button>
+              <span class="teste-status" id="e-anthropic-teste-resultado"></span>
+            </div>
           </div>
 
           <div class="bloco-provedor" data-provedor="kimi" style="margin-top:18px">
@@ -380,7 +382,7 @@
                 <input id="e-kimi-variavel" placeholder="MOONSHOT_API_KEY" autocomplete="off">
               </div>
               <div class="campo campo-largo">
-                <label for="e-kimi-chave">Chave de API <span class="selo" id="e-kimi-chave-selo"></span></label>
+                <label for="e-kimi-chave">Chave de API <span class="chave-selo" id="e-kimi-chave-selo"></span></label>
                 <input id="e-kimi-chave" type="password" placeholder="Deixe em branco para manter a chave atual" autocomplete="new-password">
               </div>
               <div class="campo">
@@ -408,6 +410,13 @@
                 <input id="e-kimi-url" placeholder="https://api.moonshot.ai/anthropic" autocomplete="off">
               </div>
             </div>
+            <div class="linha-teste">
+              <button type="button" class="btn btn-testar btn-sm" id="btn-testar-kimi">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a10 10 0 0 1 14 0"></path><path d="M5.8 10.6a6 6 0 0 1 8.4 0"></path><path d="M8.6 13.7a2.2 2.2 0 0 1 2.8 0"></path><circle cx="10" cy="16.2" r="1" fill="currentColor" stroke="none"></circle></svg>
+                Testar conexão
+              </button>
+              <span class="teste-status" id="e-kimi-teste-resultado"></span>
+            </div>
           </div>
         </section>
 
@@ -418,13 +427,20 @@
           </div>
           <div class="grade-form">
             <div class="campo campo-largo">
-              <label for="e-telegram-token">Token do bot <span class="selo" id="e-telegram-token-selo"></span></label>
+              <label for="e-telegram-token">Token do bot <span class="chave-selo" id="e-telegram-token-selo"></span></label>
               <input id="e-telegram-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
             </div>
             <div class="campo">
               <label for="e-telegram-chat">Chat ID</label>
               <input id="e-telegram-chat" placeholder="123456789" autocomplete="off">
             </div>
+          </div>
+          <div class="linha-teste">
+            <button type="button" class="btn btn-testar btn-sm" id="btn-testar-telegram">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a10 10 0 0 1 14 0"></path><path d="M5.8 10.6a6 6 0 0 1 8.4 0"></path><path d="M8.6 13.7a2.2 2.2 0 0 1 2.8 0"></path><circle cx="10" cy="16.2" r="1" fill="currentColor" stroke="none"></circle></svg>
+              Testar conexão
+            </button>
+            <span class="teste-status" id="e-telegram-teste-resultado"></span>
           </div>
         </section>
 
@@ -435,14 +451,15 @@
           </div>
           <div class="grade-form">
             <div class="campo campo-largo">
-              <label for="e-brapi-token">Token <span class="selo" id="e-brapi-token-selo"></span></label>
+              <label for="e-brapi-token">Token <span class="chave-selo" id="e-brapi-token-selo"></span></label>
               <input id="e-brapi-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
             </div>
           </div>
-          <div class="acoes-form">
-            <button type="submit" class="btn btn-primario btn-sm">Salvar ambiente</button>
-          </div>
         </section>
+
+        <div class="acoes-tela">
+          <button type="submit" class="btn btn-primario">Salvar ambiente</button>
+        </div>
       </form>
     </main>
 

@@ -363,6 +363,121 @@ def test_cliente_sem_base_url_usa_o_padrao_do_sdk(com_chave):
     assert "anthropic.com" in str(cliente.base_url)
 
 
+def test_base_url_vazia_no_ambiente_nao_quebra_o_cliente(com_chave, monkeypatch):
+    """Regressão: o painel de Configurações grava ANTHROPIC_BASE_URL="" quando o
+    campo "URL base" fica em branco, e `scripts/analisar.py` recarrega esse
+    .env com load_dotenv() — a variável some do arquivo (cfg["base_url"] vira
+    None), mas continua presente e vazia no processo. O SDK lê essa variável
+    por conta própria quando `base_url` não é passado, e uma string vazia
+    (diferente de ausente) fazia o cliente tentar falar com um host vazio."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "")
+    cfg = config_ia.configuracao()
+    assert cfg["base_url"] is None, "pré-condição: nem arquivo nem ambiente têm valor utilizável"
+
+    cliente = ia._cliente_padrao(cfg)
+
+    assert "anthropic.com" in str(cliente.base_url)
+
+
+# ─────────────────────────────────────────────
+# Testar conexão (ping mínimo)
+# ─────────────────────────────────────────────
+
+
+def resposta_ping(texto="pong"):
+    return SimpleNamespace(
+        model="claude-opus-5",
+        stop_reason="end_turn",
+        content=[SimpleNamespace(type="text", text=texto)],
+        usage=SimpleNamespace(input_tokens=12, output_tokens=3),
+    )
+
+
+def test_testar_conexao_gasta_poucos_tokens_e_ignora_o_effort_configurado(com_chave):
+    cliente = ClienteFalso(resposta_ping())
+
+    resultado = ia.testar_conexao(criar_cliente=lambda: cliente)
+
+    parametros = cliente.chamadas["beta"][0]
+    assert parametros["max_tokens"] == 32
+    assert parametros["output_config"]["effort"] == "low"
+    assert "format" not in parametros["output_config"]
+    assert "tools" not in parametros
+
+    assert resultado["ok"] is True
+    assert resultado["provedor"] == "anthropic"
+    assert resultado["modelo"] == "claude-opus-5"
+    assert resultado["resposta"] == "pong"
+    assert resultado["truncado"] is False
+    assert resultado["tokens_entrada"] == 12
+    assert resultado["tokens_saida"] == 3
+
+
+def test_testar_conexao_tolera_truncamento_por_tokens(com_chave):
+    """Modelos com raciocínio interno (Kimi) podem cortar a resposta do ping
+    sem que isso signifique falha de conexão — a chave e o modelo já
+    responderam, só não coube no teto baixo do teste."""
+    truncada = SimpleNamespace(
+        model="claude-opus-5",
+        stop_reason="max_tokens",
+        content=[SimpleNamespace(type="text", text="po")],
+        usage=SimpleNamespace(input_tokens=12, output_tokens=32),
+    )
+
+    resultado = ia.testar_conexao(criar_cliente=lambda: ClienteFalso(truncada))
+
+    assert resultado["ok"] is True
+    assert resultado["truncado"] is True
+    assert resultado["resposta"] == "po"
+
+
+def test_testar_conexao_ainda_recusa_quando_o_modelo_recusa(com_chave):
+    """Truncamento é tolerado; recusa continua sendo um problema real."""
+    recusa = SimpleNamespace(
+        model="claude-opus-5",
+        stop_reason="refusal",
+        stop_details=SimpleNamespace(category="cyber"),
+        content=[],
+    )
+
+    with pytest.raises(ia.IAIndisponivel, match="recusou responder"):
+        ia.testar_conexao(criar_cliente=lambda: ClienteFalso(recusa))
+
+
+def test_testar_conexao_de_um_provedor_especifico(env_ia):
+    env_ia(
+        IA_PROVEDOR="anthropic",
+        ANTHROPIC_API_KEY="sk-ant-teste",
+        ANTHROPIC_MODEL="claude-opus-5",
+        ANTHROPIC_EFFORT="medium",
+        KIMI_API_KEY="sk-kimi-teste",
+        KIMI_MODEL="kimi-k2-thinking",
+        KIMI_EFFORT="nenhum",
+    )
+    cliente = ClienteFalso(resposta_ping())
+
+    resultado = ia.testar_conexao("kimi", criar_cliente=lambda: cliente)
+
+    assert resultado["provedor"] == "kimi"
+    parametros = cliente.chamadas["normal"][0]
+    assert parametros["model"] == "kimi-k2-thinking"
+    assert "output_config" not in parametros, "Kimi não usa effort"
+
+
+def test_testar_conexao_sem_config_vira_ia_indisponivel():
+    """`env_ia` já isola o .env real (autouse); sem nada gravado, falta ANTHROPIC_MODEL."""
+    with pytest.raises(ia.IAIndisponivel, match="ANTHROPIC_MODEL"):
+        ia.testar_conexao()
+
+
+def test_testar_conexao_propaga_erro_http(com_chave):
+    erro = RuntimeError("chave inválida")
+    erro.status_code = 401
+
+    with pytest.raises(ia.IAIndisponivel, match="HTTP 401"):
+        ia.testar_conexao(criar_cliente=lambda: ClienteFalso(falhar_com=erro))
+
+
 # ─────────────────────────────────────────────
 # Schema
 # ─────────────────────────────────────────────

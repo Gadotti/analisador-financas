@@ -384,11 +384,22 @@ def _cliente_padrao(cfg: dict):
     `base_url` vem do .env — é o que permite apontar para um provedor
     compatível com a API da Anthropic (Kimi, por exemplo) sem tocar no código.
     """
+    import os
+
     import anthropic
 
     argumentos = {"api_key": cfg["chave"]}
     if cfg["base_url"]:
         argumentos["base_url"] = cfg["base_url"]
+    else:
+        # cfg["base_url"] só fica vazio quando nem o arquivo nem o ambiente têm
+        # um valor utilizável (config_ia._valor já tentou os dois) — mas o SDK
+        # lê ANTHROPIC_BASE_URL do processo por conta própria quando o
+        # argumento não é passado, e uma variável presente-porém-vazia (comum
+        # quando o painel de Configurações grava "ANTHROPIC_BASE_URL=" em
+        # branco e o script recarrega o .env com load_dotenv) faz o cliente
+        # tentar falar com um host vazio em vez de cair no padrão do SDK.
+        os.environ.pop("ANTHROPIC_BASE_URL", None)
     return anthropic.Anthropic(**argumentos)
 
 
@@ -432,16 +443,66 @@ def _criar_resposta(client, parametros: dict, cfg: dict):
         ) from None
 
 
-def _conferir_parada(resposta, cfg: dict) -> None:
+def _conferir_parada(resposta, cfg: dict, *, exigir_completo: bool = True) -> None:
+    """`exigir_completo=False` tolera truncamento (usado no ping de teste: a
+    recusa ainda é um problema de configuração, mas um corte por tokens já
+    prova que a chave e o modelo respondem — só não coube na resposta)."""
     if resposta.stop_reason == "refusal":
         categoria = getattr(getattr(resposta, "stop_details", None), "category", None)
         sufixo = f" ({categoria})" if categoria else ""
         raise IAIndisponivel(f"A IA recusou responder a esta solicitação{sufixo}.")
-    if resposta.stop_reason == "max_tokens":
+    if exigir_completo and resposta.stop_reason == "max_tokens":
         raise IAIndisponivel(
             "A resposta da IA foi truncada por limite de tokens. Reduza o número "
             f"de posições ou aumente {cfg['prefixo']}MAX_TOKENS no arquivo .env."
         )
+
+
+def testar_conexao(provedor: str | None = None, *, criar_cliente=None) -> dict:
+    """Ping mínimo à API do provedor informado (ou o ativo em IA_PROVEDOR).
+
+    Não usa `montar_parametros`: sem schema, sem ferramenta de busca e sem o
+    esforço configurado no `.env` (que é para a análise real) — só confirma
+    que a chave e o modelo respondem, gastando o mínimo de tokens.
+    """
+    try:
+        cfg = config_ia.configuracao(provedor=provedor)
+    except ConfiguracaoIAError as exc:
+        raise IAIndisponivel(str(exc)) from None
+
+    try:
+        client = (criar_cliente or (lambda: _cliente_padrao(cfg)))()
+    except ImportError as exc:
+        raise IAIndisponivel(
+            f"Pacote 'anthropic' nao instalado (pip install -r requirements.txt): {exc}"
+        ) from None
+
+    parametros = {
+        "model": cfg["modelo"],
+        # Modelos com raciocínio interno (ex.: Kimi) gastam tokens pensando
+        # antes de responder mesmo num "pong" — 32 dá essa margem sem deixar
+        # de ser um teste barato.
+        "max_tokens": 32,
+        "messages": [{"role": "user", "content": "Responda só: pong"}],
+    }
+    if cfg["effort"]:
+        parametros["output_config"] = {"effort": "low"}
+
+    resposta = _criar_resposta(client, parametros, cfg)
+    _conferir_parada(resposta, cfg, exigir_completo=False)
+
+    texto = next((b.text for b in resposta.content if b.type == "text"), "")
+    return {
+        "ok": True,
+        "provedor": cfg["provedor"],
+        "modelo": resposta.model,
+        "resposta": texto.strip(),
+        # Um corte por tokens aqui não é falha: a chave e o modelo já
+        # responderam, só não coube no teto baixo deste ping.
+        "truncado": resposta.stop_reason == "max_tokens",
+        "tokens_entrada": getattr(resposta.usage, "input_tokens", None),
+        "tokens_saida": getattr(resposta.usage, "output_tokens", None),
+    }
 
 
 def analisar(snapshot: dict, config: dict, *, criar_cliente=None) -> dict:

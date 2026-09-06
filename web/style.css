@@ -525,6 +525,51 @@ a:hover { color: var(--amber-forte); }
 .campo-largo { grid-column: 1 / -1; }
 .acoes-form { display: flex; gap: 9px; margin-top: 14px; flex-wrap: wrap; }
 
+/* Indicador de credencial salva — discreto de propósito: a ausência de uma
+   chave ainda não preenchida não é um alerta, então não usa .selo-alerta. */
+.chave-selo {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--f-micro); font-weight: 600; text-transform: none;
+  letter-spacing: normal; color: var(--t3);
+}
+.chave-selo::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--t3);
+}
+.chave-selo.chave-selo-ok { color: var(--t2); }
+.chave-selo.chave-selo-ok::before { background: var(--verde); }
+
+/* Linha de teste de conexão — separada do formulário por um traço, com um
+   botão de ação secundária que ainda assim se destaca do cinza do btn-fantasma. */
+.linha-teste {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--borda);
+}
+.btn-testar {
+  background: rgba(77, 171, 247, .12); color: var(--azul);
+  border: 1px solid rgba(77, 171, 247, .4);
+}
+.btn-testar:hover:not(:disabled) { background: rgba(77, 171, 247, .2); border-color: var(--azul); }
+.teste-status {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--f-apoio); color: var(--t2);
+}
+.teste-status:empty { display: none; }
+.teste-status::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor;
+}
+.teste-status-ok { color: var(--verde); }
+.teste-status-erro { color: var(--vermelho); }
+.teste-status-aviso { color: var(--laranja); }
+
+/* Barra de ação da tela inteira — fora de qualquer .cartao, para não parecer
+   que salva só o card que a antecede (era o caso quando ficava dentro de
+   "Cotações"). O traço e o espaçamento maiores que os dos cartões marcam que
+   ela fecha a tela toda, não uma seção específica. */
+.acoes-tela {
+  display: flex; align-items: center; justify-content: flex-end; gap: 16px;
+  flex-wrap: wrap; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--borda-forte);
+}
+
 .segmentado { display: flex; gap: 4px; padding: 4px; background: var(--card2); border-radius: 9px; }
 .segmentado button {
   flex-grow: 1; height: 32px; border: none; border-radius: 6px; cursor: pointer;

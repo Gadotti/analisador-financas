@@ -14,6 +14,7 @@ import {
   executarAnalise,
   interpretadorPython,
   rodarScript,
+  testarIa,
   testarTelegram,
 } from "../src/server/analiseExterna.js";
 import { comEnv, dataDirTemporario } from "./helpers/ambiente.js";
@@ -136,6 +137,12 @@ describe("atalhos", () => {
     ["análise sem IA", () => executarAnalise({ usarIa: false, script }), ["--json", "--sem-ia"]],
     ["reenvio ao Telegram", () => enviarUltimaAoTelegram({ script }), ["--json", "--enviar-ultima"]],
     ["teste do Telegram", () => testarTelegram({ script }), ["--json", "--testar-telegram"]],
+    ["teste da IA sem provedor", () => testarIa(undefined, { script }), ["--json", "--testar-ia"]],
+    [
+      "teste da IA com provedor",
+      () => testarIa("kimi", { script }),
+      ["--json", "--testar-ia", "--provedor", "kimi"],
+    ],
   ])("%s monta as flags corretas", async (_titulo, chamar, esperado) => {
     const { args } = await chamar();
     expect(args).toEqual(esperado);

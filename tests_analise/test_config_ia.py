@@ -169,6 +169,22 @@ def test_bloco_do_kimi(env_ia):
     assert cfg["max_tokens"] == 8000
 
 
+def test_provedor_explicito_ignora_o_ia_provedor(env_ia):
+    """Permite testar o bloco do Kimi mesmo com Anthropic ativo (IA_PROVEDOR)."""
+    env_ia(
+        IA_PROVEDOR="anthropic",
+        **ANTHROPIC_MINIMO,
+        KIMI_API_KEY="sk-kimi-teste",
+        KIMI_MODEL="kimi-k2-thinking",
+        KIMI_EFFORT="nenhum",
+    )
+
+    cfg = config_ia.configuracao(provedor="kimi")
+
+    assert cfg["provedor"] == "kimi"
+    assert cfg["modelo"] == "kimi-k2-thinking"
+
+
 def test_provedor_ativo_nao_le_o_bloco_do_outro(env_ia):
     """Trocar IA_PROVEDOR troca o bloco inteiro, não só o modelo."""
     env_ia(IA_PROVEDOR="kimi", **ANTHROPIC_MINIMO)

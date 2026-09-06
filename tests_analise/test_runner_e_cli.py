@@ -268,6 +268,14 @@ def test_parser_reconhece_as_flags():
     assert args.sem_cache is False
 
 
+def test_parser_reconhece_testar_ia_com_provedor():
+    parser = importar_cli().montar_parser()
+    args = parser.parse_args(["--testar-ia", "--provedor", "kimi", "--json"])
+
+    assert args.testar_ia is True
+    assert args.provedor == "kimi"
+
+
 def test_enviar_ultima_exige_analise_anterior(dados_temp):
     cli = importar_cli()
     out, err = io.StringIO(), io.StringIO()
@@ -376,3 +384,12 @@ def test_cli_nao_salvar(carteira):
 
     assert not (carteira / "last_analysis.json").exists()
     assert list((carteira / "history").glob("*.json")) == []
+
+
+def test_cli_testar_ia_sem_chave(carteira):
+    """--testar-ia segue o mesmo contrato --json de erro que --testar-telegram."""
+    proc = rodar_cli(["--testar-ia", "--json"], carteira)
+
+    assert proc.returncode == 1
+    assert "ANTHROPIC_API_KEY" in json.loads(proc.stdout.strip())["erro"]
+    assert "[ERRO] IA" in proc.stderr

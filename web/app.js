@@ -156,7 +156,12 @@ async function salvarPosicao(evento) {
   }
 }
 
-async function salvarConfig(evento) {
+/**
+ * Um único botão salva a tela inteira: perfil e limites de alerta (carteira,
+ * `/api/config`) e provedor de IA, Telegram e brapi (.env, `/api/ambiente`).
+ * As duas gravações são independentes — uma falhar não desfaz a outra.
+ */
+async function salvarConfiguracoes(evento) {
   evento.preventDefault();
   try {
     estado.carteira = await api("/api/config", {
@@ -164,22 +169,15 @@ async function salvarConfig(evento) {
       body: JSON.stringify(coletarConfig()),
     });
     renderAnalise();
-    toast("Parâmetros salvos.", "ok");
-  } catch (erro) {
-    toast(erro.message, "erro");
-  }
-}
 
-async function salvarAmbiente(evento) {
-  evento.preventDefault();
-  try {
     const dados = await api("/api/ambiente", {
       method: "POST",
       body: JSON.stringify(coletarAmbiente()),
     });
     renderAmbiente(dados);
     await aplicarStatus();
-    toast("Configurações de ambiente salvas.", "ok");
+
+    toast("Configurações salvas.", "ok");
   } catch (erro) {
     toast(erro.message, "erro", 7000);
   }
@@ -224,8 +222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#btn-cotacoes").addEventListener("click", () => rodarAnalise(false));
   $("#btn-telegram").addEventListener("click", enviarAoTelegram);
   $("#form-posicao").addEventListener("submit", salvarPosicao);
-  $("#form-config").addEventListener("submit", salvarConfig);
-  $("#form-ambiente").addEventListener("submit", salvarAmbiente);
+  $("#form-ambiente").addEventListener("submit", salvarConfiguracoes);
 
   try {
     await aplicarStatus();

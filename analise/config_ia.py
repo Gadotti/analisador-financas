@@ -182,14 +182,17 @@ def _fallback(valores: dict[str, str], pref: str, nome_modelo: str) -> bool:
     return suporta_fallback(nome_modelo)
 
 
-def configuracao(*, exigir_chave: bool = True) -> dict:
-    """Configuração completa do provedor ativo.
+def configuracao(*, exigir_chave: bool = True, provedor: str | None = None) -> dict:
+    """Configuração completa de um provedor.
 
     Levanta ConfiguracaoIAError quando falta algo. `exigir_chave=False` serve
     para exibir provedor, modelo e esforço sem precisar da credencial.
+    `provedor` lê o bloco de um provedor específico (ex.: para testar a
+    conexão com o Kimi mesmo com IA_PROVEDOR=anthropic); sem ele, vale o
+    provedor ativo em IA_PROVEDOR.
     """
     valores = ler_arquivo_env()
-    nome = _valor(valores, "IA_PROVEDOR") or PROVEDOR_PADRAO
+    nome = provedor or _valor(valores, "IA_PROVEDOR") or PROVEDOR_PADRAO
     pref = prefixo(nome)
 
     modelo = _exigir(

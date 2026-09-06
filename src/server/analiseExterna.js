@@ -134,3 +134,9 @@ export function enviarUltimaAoTelegram(opcoes = {}) {
 export function testarTelegram(opcoes = {}) {
   return rodarScript(["--testar-telegram"], opcoes);
 }
+
+/** Testa a conexão com a API de IA (ping mínimo). `provedor` é opcional. */
+export function testarIa(provedor, opcoes = {}) {
+  const args = provedor ? ["--testar-ia", "--provedor", provedor] : ["--testar-ia"];
+  return rodarScript(args, opcoes);
+}

@@ -34,6 +34,7 @@ const SERVICOS_PADRAO = {
   executarAnalise: analiseExterna.executarAnalise,
   enviarUltimaAoTelegram: analiseExterna.enviarUltimaAoTelegram,
   testarTelegram: analiseExterna.testarTelegram,
+  testarIa: analiseExterna.testarIa,
   statusIa: ambiente.statusIa,
   telegramConfigurado: ambiente.telegramConfigurado,
   modeloIa: ambiente.modeloIa,
@@ -211,6 +212,10 @@ export function criarServidor(servicos = {}) {
         }
         if (rota === "/api/telegram/testar") {
           responderJson(res, await svc.testarTelegram());
+          return;
+        }
+        if (rota === "/api/ia/testar") {
+          responderJson(res, await svc.testarIa(corpo.provedor));
           return;
         }
         responderErro(res, "Rota não encontrada.", 404);
