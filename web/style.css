@@ -262,12 +262,12 @@ a:hover { color: var(--amber-forte); }
 #equivalencia-corpo .subtitulo { margin: 20px 0 9px; }
 .equivalencia-nota { margin-top: 13px; }
 
-/* ── Indicadores da carteira ───────────── */
+/* ── Posição consolidada ───────────────── */
 
-.indicadores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.indicador { display: flex; flex-direction: column; gap: 3px; }
-.indicador-hero .indicador-valor { font-size: var(--f-hero); }
-.indicador-valor { font-size: var(--f-num); font-weight: 700; line-height: 1.15; }
+.grade-topo { display: grid; grid-template-columns: 1fr 280px; gap: 14px; align-items: stretch; }
+.macro-vertical { flex-direction: column; align-items: stretch; gap: 12px; }
+.macro-vertical .macro-item { justify-content: space-between; }
+
 .indicador-sub { font-size: var(--f-apoio); color: var(--t3); }
 
 .selo {
@@ -279,31 +279,45 @@ a:hover { color: var(--amber-forte); }
 .selo-atencao { background: rgba(255, 140, 66, .15); color: var(--laranja); }
 .selo-alerta { background: rgba(255, 107, 120, .15); color: var(--vermelho); }
 
-/* Quebra do "Resultado acumulado" entre renda variável e renda fixa — painel
-   próprio (fundo + borda), não só uma linha, para não colar nos indicadores. */
-.resultado-detalhado:not(:empty) {
-  margin-top: 22px; padding: 16px 18px;
-  background: var(--card2); border: 1px solid var(--borda); border-radius: 10px;
+.hero-topo, .hero-resultado { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.hero-valor { font-size: var(--f-hero); font-weight: 700; line-height: 1.15; margin: 5px 0 3px; }
+.hero-valor2 { font-size: 26px; font-weight: 700; line-height: 1.15; margin: 5px 0 3px; }
+.hero-resultado { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--borda); }
+.hero-chip { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+
+.resultado-regimes {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--borda);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;
 }
-.resultado-detalhado-topo { margin-bottom: 12px; }
-.resultado-colunas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.resultado-coluna { display: flex; flex-direction: column; gap: 7px; }
-.resultado-coluna-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.resultado-coluna-nome { font-size: var(--f-dado); font-weight: 600; }
-.resultado-coluna-valor { font-size: var(--f-num); font-weight: 700; }
+.regime { display: flex; flex-direction: column; gap: 7px; }
+.regime-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.regime-nome { font-size: var(--f-dado); font-weight: 600; }
 .resultado-chips { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
 .resultado-chip { display: flex; align-items: center; gap: 8px; font-size: var(--f-apoio); color: var(--t2); }
 .resultado-chip-nome { flex: 1 1 auto; }
 
+/* ── Indicadores de ficha ──────────────── */
+
+.fundamentos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.ficha-tile { display: flex; gap: 11px; align-items: flex-start; }
+.ficha-tile-icone {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card2); color: var(--amber-forte);
+}
+.ficha-tile-valor { font-size: var(--f-num); font-weight: 700; margin: 1px 0; }
+
 /* ── Alocação e concentração ───────────── */
 
-.faixa-classes { display: flex; gap: 2px; height: 10px; margin-bottom: 14px; }
-.faixa-classes > div:first-child { border-radius: 3px 0 0 3px; }
-.faixa-classes > div:last-child { border-radius: 0 3px 3px 0; }
+.rosco-linha { display: flex; align-items: center; gap: 30px; flex-wrap: wrap; margin-bottom: 8px; }
+.rosco-classes { width: 150px; height: 150px; flex-shrink: 0; }
 
 .legenda-classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .legenda-classe { display: flex; align-items: baseline; gap: 10px; }
 .legenda-ponto { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* Ao lado do rosco a legenda vira lista — em coluna única, um ativo por linha. */
+.rosco-legenda { flex: 1 1 260px; grid-template-columns: 1fr; gap: 11px; }
 
 .recortes {
   margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--borda);
@@ -628,7 +642,9 @@ a:hover { color: var(--amber-forte); }
   .conversor { grid-template-columns: 1fr; }
   .btn-trocar { justify-self: center; transform: rotate(90deg); }
   .faixas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grade-topo { grid-template-columns: 1fr; }
+  .fundamentos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .resultado-regimes { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 860px) {
@@ -644,8 +660,7 @@ a:hover { color: var(--amber-forte); }
   .nav-item { min-height: 44px; white-space: nowrap; }
   .topo, .pagina { padding-left: 16px; padding-right: 16px; }
   .legenda-classes { grid-template-columns: 1fr; }
-  .indicadores { grid-template-columns: 1fr; }
-  .resultado-colunas { grid-template-columns: 1fr; gap: 16px; }
+  .fundamentos { grid-template-columns: 1fr; }
   .painel { width: 100%; }
   .controles-lista, .filtros { width: 100%; }
   .busca { flex: 1; }

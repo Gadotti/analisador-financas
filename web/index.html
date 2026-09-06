@@ -45,24 +45,33 @@
 
     <!-- ── Visão geral ─────────────────── -->
     <main class="pagina" id="pg-visao-geral">
-      <section class="cartao">
-        <div class="cartao-topo">
-          <span class="cartao-titulo">Posição do mercado</span>
-          <span class="cartao-meta" data-macro-quando></span>
-        </div>
-        <div class="macro" data-macro><div class="vazio">—</div></div>
-      </section>
+      <div class="grade-topo">
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Posição consolidada</span>
+            <span class="cartao-meta" id="resumo-quando"></span>
+          </div>
+          <div id="hero">
+            <div class="vazio">Nenhuma análise ainda. Cadastre suas posições e clique em “Atualizar cotações”.</div>
+          </div>
+          <div id="contexto-mercado" class="hidden"></div>
+        </section>
 
-      <section class="cartao">
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Posição do mercado</span>
+            <span class="cartao-meta" data-macro-quando></span>
+          </div>
+          <div class="macro macro-vertical" data-macro><div class="vazio">—</div></div>
+        </section>
+      </div>
+
+      <section class="cartao hidden" id="fundamentos-cartao">
         <div class="cartao-topo">
-          <span class="cartao-titulo">Posição consolidada</span>
-          <span class="cartao-meta" id="resumo-quando"></span>
+          <span class="cartao-titulo">Indicadores de ficha</span>
+          <span class="cartao-meta">médias ponderadas · vêm da leitura por IA</span>
         </div>
-        <div class="indicadores" id="indicadores">
-          <div class="vazio">Nenhuma análise ainda. Cadastre suas posições e clique em “Atualizar cotações”.</div>
-        </div>
-        <div id="resultado-detalhado" class="resultado-detalhado"></div>
-        <div id="contexto-mercado" class="hidden"></div>
+        <div class="fundamentos" id="fundamentos"></div>
       </section>
 
       <section class="cartao">

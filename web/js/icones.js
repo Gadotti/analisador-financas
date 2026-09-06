@@ -27,6 +27,8 @@ const CAMINHOS = {
   seta: '<path d="M5.5 8l4.5 4.5L14.5 8"></path>',
   editar: '<path d="M13.5 3.5l3 3L7 16H4v-3z"></path>',
   excluir: '<path d="M4 5.5h12M8.2 5.5V3.8h3.6v1.7M5.6 5.5l.8 10.7h7.2l.8-10.7"></path>',
+  moeda:
+    '<circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.8v8.4M12.6 7.6c-.4-.9-1.3-1.3-2.4-1.3-1.4 0-2.4.7-2.4 1.7 0 2.4 5 1 5 3.4 0 1-1 1.7-2.4 1.7-1.1 0-2-.4-2.4-1.3"></path>',
 };
 
 /** SVG do ícone, pronto para injetar como HTML. */

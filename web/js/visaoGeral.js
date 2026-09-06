@@ -1,54 +1,14 @@
-/** Tela "Visão geral": contexto macro, posição consolidada e riscos. */
+/** Tela "Visão geral": contexto macro, posição consolidada, alocação e riscos. */
 
+import { trilho } from "./alocacao.js";
 import { cartaoAlertaRecolhido, listaAlertas } from "./alertas.js";
 import { $, $$, classeSinal, corClasse, dataHoraBR, esc, moeda, moedaCurta, mostrar, num, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
 const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
+const COR_SINAL = { pos: "var(--verde)", neg: "var(--vermelho)", zero: "var(--t3)" };
 
-const indicador = (rotulo, valor, sub, classe = "") => `
-  <div class="indicador ${classe}">
-    <span class="microrotulo">${rotulo}</span>
-    <span class="indicador-valor">${valor}</span>
-    <span class="indicador-sub">${sub}</span>
-  </div>`;
-
-/** Indicadores de valuation e renda — só existem quando a IA devolveu fichas. */
-function indicadoresDeFicha(metricas) {
-  if (!metricas) return [];
-  const linhas = [];
-
-  if (metricas.p_vp_medio) {
-    const leitura = metricas.p_vp_medio < 1 ? "desconto patrimonial" : "ágio patrimonial";
-    linhas.push(
-      indicador("P/VP médio", num(metricas.p_vp_medio, 2), `${leitura} · ${metricas.p_vp_cobertura} com dado`)
-    );
-  }
-  if (metricas.dy_medio_pct) {
-    linhas.push(
-      indicador("DY médio", pct(metricas.dy_medio_pct, 2, false), `cobertura ${metricas.dy_cobertura}`)
-    );
-    // O YoC mede a mesma renda contra o que foi pago; sem o rótulo da base os
-    // dois números pareceriam divergir sobre a mesma coisa.
-    if (metricas.yoc_medio_pct) {
-      linhas.push(
-        indicador(
-          "YoC médio",
-          pct(metricas.yoc_medio_pct, 2, false),
-          `sobre o preço médio · cobertura ${metricas.yoc_cobertura}`
-        )
-      );
-    }
-    linhas.push(
-      indicador(
-        "Renda estimada",
-        moeda(metricas.renda_mensal_estimada),
-        `por mês · ${moeda(metricas.renda_anual_estimada)} ao ano`
-      )
-    );
-  }
-  return linhas;
-}
+// ── Hero: valor de mercado, resultado e a quebra por regime ──────────
 
 // A mesma fronteira de `portfolio.TIPOS_VARIAVEL` / `TIPOS_RENDA_FIXA` —
 // só para agrupar o que `snapshot.classes` já calculou, sem refazer conta.
@@ -76,18 +36,6 @@ function agruparResultadoPorRegime(classes) {
   }).filter((grupo) => grupo.itens.length > 0);
 }
 
-/** Faixa proporcional a quanto cada regime pesou no resultado, em módulo —
- * evita larguras negativas ou acima de 100% quando um regime perde e o outro ganha. */
-function faixaContribuicao(grupos) {
-  const totalAbs = grupos.reduce((soma, g) => soma + Math.abs(g.resultado), 0);
-  if (!totalAbs) return "";
-  const cor = (g) => ({ pos: "var(--verde)", neg: "var(--vermelho)", zero: "var(--t3)" }[classeSinal(g.resultado)]);
-  const fatias = grupos
-    .map((g) => `<div style="width:${(Math.abs(g.resultado) / totalAbs) * 100}%;background:${cor(g)}"></div>`)
-    .join("");
-  return `<div class="faixa-classes">${fatias}</div>`;
-}
-
 const chipClasse = (item) => `
   <div class="resultado-chip">
     <span class="legenda-ponto" style="background:${corClasse(item.tipo)}"></span>
@@ -95,31 +43,116 @@ const chipClasse = (item) => `
     <span class="mono ${classeSinal(item.resultado)}">${moeda(item.resultado)}</span>
   </div>`;
 
-const painelResultado = (g) => `
-  <div class="resultado-coluna">
-    <div class="resultado-coluna-cabeca">
-      <span class="resultado-coluna-nome">${esc(g.rotulo)}</span>
-      <span class="resultado-coluna-valor mono ${classeSinal(g.resultado)}">${moeda(g.resultado)}</span>
+function barraRegime(grupo) {
+  const sinal = classeSinal(grupo.resultado);
+  return `<div class="regime">
+    <div class="regime-cabeca">
+      <span class="regime-nome">${esc(grupo.rotulo)}</span>
+      <span class="mono ${sinal}">${moeda(grupo.resultado)} <span class="indicador-sub">(${pct(grupo.resultado_pct)})</span></span>
     </div>
-    <div class="indicador-sub">
-      <span class="${classeSinal(g.resultado)}">${pct(g.resultado_pct)}</span>
-      · valor atual ${moedaCurta(g.atual)} · custo ${moedaCurta(g.investido)}
-    </div>
-    <div class="resultado-chips">${g.itens.map(chipClasse).join("")}</div>
+    ${trilho(grupo.resultado_pct, COR_SINAL[sinal])}
+    <div class="resultado-chips">${grupo.itens.map(chipClasse).join("")}</div>
   </div>`;
+}
 
 /** Quebra o "Resultado acumulado" no que veio de renda variável e de renda fixa. */
-function renderResultadoDetalhado(snapshot) {
-  const grupos = agruparResultadoPorRegime(snapshot.classes);
-  const alvo = $("#resultado-detalhado");
-  if (grupos.length < 2) {
-    alvo.innerHTML = "";
-    return;
+function blocoRegimes(classes) {
+  const grupos = agruparResultadoPorRegime(classes);
+  if (grupos.length < 2) return "";
+  return `<div class="resultado-regimes">${grupos.map(barraRegime).join("")}</div>`;
+}
+
+function hero(snapshot) {
+  const t = snapshot.totais;
+  const saude = snapshot.saude_carteira;
+  const sinal = classeSinal(t.resultado);
+
+  const chipDia = t.resultado_dia
+    ? `<div class="hero-chip">
+        <span class="microrotulo">Variação do dia</span>
+        <span class="mono ${classeSinal(t.resultado_dia)}">${moeda(t.resultado_dia)}</span>
+      </div>`
+    : "";
+
+  return `
+    <div class="hero-topo">
+      <div>
+        <span class="microrotulo">Valor de mercado</span>
+        <div class="hero-valor mono">${moeda(t.valor_atual)}</div>
+        <div class="indicador-sub">custo ${moedaCurta(t.valor_investido)} · ${t.posicoes} posições</div>
+      </div>
+      <span class="selo selo-${saude}">${ROTULO_SAUDE[saude] || saude}</span>
+    </div>
+    <div class="hero-resultado">
+      <div>
+        <span class="microrotulo">Resultado acumulado</span>
+        <div class="hero-valor2 mono ${sinal}">${moeda(t.resultado)}</div>
+        <div class="indicador-sub"><span class="${sinal}">${pct(t.resultado_pct)}</span> desde a compra</div>
+      </div>
+      ${chipDia}
+    </div>
+    ${blocoRegimes(snapshot.classes)}`;
+}
+
+// ── Indicadores de ficha (P/VP, DY, YoC, renda estimada) ──────────────
+
+/** Métricas de valuation e renda calculadas por `fundamentals` — só existem quando a IA devolveu fichas. */
+function metricasFicha(metricas) {
+  if (!metricas) return [];
+  const linhas = [];
+
+  if (metricas.p_vp_medio) {
+    const leitura = metricas.p_vp_medio < 1 ? "desconto patrimonial" : "ágio patrimonial";
+    linhas.push({
+      chave: "pvp",
+      rotulo: "P/VP médio",
+      valor: num(metricas.p_vp_medio, 2),
+      sub: `${leitura} · ${metricas.p_vp_cobertura} com dado`,
+    });
   }
-  alvo.innerHTML = `
-    <div class="resultado-detalhado-topo"><span class="microrotulo">Resultado por tipo de ativo</span></div>
-    ${faixaContribuicao(grupos)}
-    <div class="resultado-colunas">${grupos.map(painelResultado).join("")}</div>`;
+  if (metricas.dy_medio_pct) {
+    linhas.push({
+      chave: "dy",
+      rotulo: "DY médio",
+      valor: pct(metricas.dy_medio_pct, 2, false),
+      sub: `cobertura ${metricas.dy_cobertura}`,
+    });
+    // O YoC mede a mesma renda contra o que foi pago; sem o rótulo da base os
+    // dois números pareceriam divergir sobre a mesma coisa.
+    if (metricas.yoc_medio_pct) {
+      linhas.push({
+        chave: "yoc",
+        rotulo: "YoC médio",
+        valor: pct(metricas.yoc_medio_pct, 2, false),
+        sub: `sobre o preço médio · cobertura ${metricas.yoc_cobertura}`,
+      });
+    }
+    linhas.push({
+      chave: "renda",
+      rotulo: "Renda estimada",
+      valor: moeda(metricas.renda_mensal_estimada),
+      sub: `por mês · ${moeda(metricas.renda_anual_estimada)} ao ano`,
+    });
+  }
+  return linhas;
+}
+
+const ICONE_METRICA = { pvp: "balanca", dy: "moeda", yoc: "moeda", renda: "moeda" };
+
+const tileFicha = (m) => `
+  <div class="ficha-tile">
+    <span class="ficha-tile-icone">${icone(ICONE_METRICA[m.chave] || "analise", 17)}</span>
+    <div>
+      <span class="microrotulo">${esc(m.rotulo)}</span>
+      <div class="ficha-tile-valor mono">${m.valor}</div>
+      <div class="indicador-sub">${esc(m.sub)}</div>
+    </div>
+  </div>`;
+
+function renderFundamentos(metricas) {
+  const linhas = metricasFicha(metricas);
+  mostrar("#fundamentos-cartao", linhas.length > 0);
+  $("#fundamentos").innerHTML = linhas.map(tileFicha).join("");
 }
 
 /**
@@ -127,36 +160,11 @@ function renderResultadoDetalhado(snapshot) {
  *   anterior — só as cotações são desta execução.
  */
 export function renderResumo(snapshot, ia, fundamentos, herdadaDe = null) {
-  const t = snapshot.totais;
-  const saude = snapshot.saude_carteira;
-
   const origem = herdadaDe ? ` · leitura por IA de ${dataHoraBR(herdadaDe)}` : "";
   $("#resumo-quando").textContent = "atualizado em " + dataHoraBR(snapshot.gerado_em) + origem;
+  $("#hero").innerHTML = hero(snapshot);
 
-  const sinal = classeSinal(t.resultado);
-  const linhas = [
-    indicador("Valor de mercado", moeda(t.valor_atual), `custo ${moeda(t.valor_investido)}`, "indicador-hero"),
-    indicador(
-      "Resultado acumulado",
-      `<span class="${sinal}">${moeda(t.resultado)}</span>`,
-      `<span class="${sinal}">${pct(t.resultado_pct)}</span>`
-    ),
-    indicador(
-      "Saúde",
-      `<span class="selo selo-${saude}">${ROTULO_SAUDE[saude] || saude}</span>`,
-      `${snapshot.alertas.length} alerta(s) · ${t.posicoes} posições`
-    ),
-  ];
-
-  if (t.resultado_dia) {
-    const sinalDia = classeSinal(t.resultado_dia);
-    linhas.push(
-      indicador("Variação do dia", `<span class="${sinalDia}">${moeda(t.resultado_dia)}</span>`, "renda variável")
-    );
-  }
-
-  $("#indicadores").innerHTML = linhas.concat(indicadoresDeFicha(fundamentos?.metricas)).join("");
-  renderResultadoDetalhado(snapshot);
+  renderFundamentos(fundamentos?.metricas);
   renderContexto(ia);
 }
 

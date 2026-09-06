@@ -11,21 +11,22 @@ import { icone } from "./icones.js";
 
 const corDe = corClasse;
 
-/** Barra com o traço do limite por cima. */
-function trilho(pesoPct, cor, limitePct) {
-  const largura = Math.min(pesoPct, 100);
+/**
+ * Barra proporcional, com o traço do limite de concentração por cima — omita
+ * `limitePct` quando a barra não representar peso contra um limite (ex.: o
+ * resultado por regime na posição consolidada).
+ */
+export function trilho(pesoPct, cor, limitePct = null) {
+  const largura = Math.min(Math.abs(pesoPct), 100);
+  const tick = limitePct == null ? "" : `<div class="trilho-limite" style="left:${Math.min(limitePct, 100)}%"></div>`;
   return `<div class="trilho">
     <div class="trilho-preenche" style="width:${largura}%;background:${cor}"></div>
-    <div class="trilho-limite" style="left:${Math.min(limitePct, 100)}%"></div>
+    ${tick}
   </div>`;
 }
 
-function faixaClasses(classes) {
-  const fatias = Object.entries(classes)
-    .map(([chave, c]) => `<div style="width:${c.peso_pct}%;background:${corDe(chave)}"></div>`)
-    .join("");
-
-  const legenda = Object.entries(classes)
+function legendaClasses(classes) {
+  return Object.entries(classes)
     .map(
       ([chave, c]) => `<div class="legenda-classe">
         <span class="legenda-ponto" style="background:${corDe(chave)}"></span>
@@ -36,10 +37,35 @@ function faixaClasses(classes) {
       </div>`
     )
     .join("");
-
-  return `<div class="faixa-classes">${fatias}</div>
-    <div class="legenda-classes">${legenda}</div>`;
 }
+
+/** Rosco SVG com uma fatia por classe de ativo — cada arco começa onde o anterior termina. */
+function roscoClasses(classes) {
+  const raio = 46;
+  const circunferencia = 2 * Math.PI * raio;
+  let acumulado = 0;
+
+  const arcos = Object.entries(classes)
+    .map(([chave, c]) => {
+      const comprimento = (Math.max(c.peso_pct, 0) / 100) * circunferencia;
+      const arco = `<circle cx="60" cy="60" r="${raio}" fill="none" stroke="${corDe(chave)}" stroke-width="16"
+        stroke-dasharray="${comprimento.toFixed(2)} ${(circunferencia - comprimento).toFixed(2)}"
+        stroke-dashoffset="${(-acumulado).toFixed(2)}" transform="rotate(-90 60 60)"></circle>`;
+      acumulado += comprimento;
+      return arco;
+    })
+    .join("");
+
+  return `<svg class="rosco-classes" viewBox="0 0 120 120" role="img" aria-label="Alocação por classe de ativo">
+    <circle cx="60" cy="60" r="${raio}" fill="none" stroke="var(--borda)" stroke-width="16"></circle>
+    ${arcos}
+  </svg>`;
+}
+
+const blocoRosco = (classes) => `<div class="rosco-linha">
+    ${roscoClasses(classes)}
+    <div class="legenda-classes rosco-legenda">${legendaClasses(classes)}</div>
+  </div>`;
 
 function linhaGrupo(grupo, limitePct) {
   const acima = grupo.peso_pct > limitePct;
@@ -163,7 +189,7 @@ export function renderAlocacao(snapshot, fundamentos, limitePct) {
      <span class="pilula pilula-limite mono">Limite ${pct(limitePct, 0, false)}</span>`;
 
   $("#alocacao").innerHTML =
-    faixaClasses(snapshot.classes) +
+    blocoRosco(snapshot.classes) +
     `<div class="recortes">
       ${colunaRecorte("Por classificação", fundamentos?.por_classificacao || [], limitePct, linhaDescoberto(naoCoberto, true))}
       ${colunaRecorte("Por segmento", fundamentos?.por_segmento || [], limitePct, linhaDescoberto(naoCoberto, false))}
