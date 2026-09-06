@@ -201,6 +201,7 @@ async function aplicarStatus() {
   $("#status-ia").title = status.ia_motivo || "";
   $("#btn-analise").disabled = !status.ia_disponivel;
   $("#btn-telegram").disabled = !status.telegram_configurado;
+  $("#rodape-nav").textContent = `Versão ${status.versao}`;
   if (!status.telegram_configurado) {
     $("#btn-telegram").title = "Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env";
   }
@@ -211,7 +212,6 @@ async function aplicarStatus() {
 document.addEventListener("DOMContentLoaded", async () => {
   $("#rodape-aviso").innerHTML = AVISOS.join("<br>");
   $("#rodape-posicoes").textContent = AVISOS[0];
-  $("#rodape-nav").textContent = "Roda só na sua máquina.";
 
   ligarPainel();
   ligarPosicoes();

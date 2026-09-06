@@ -126,7 +126,10 @@ a:hover { color: var(--amber-forte); }
 .nav-item svg { flex-shrink: 0; }
 .nav-contagem { margin-left: auto; font-size: var(--f-micro); color: var(--t3); }
 
-.rodape-nav { margin-top: auto; padding: 16px 18px 0; font-size: var(--f-micro); color: var(--t3); }
+.rodape-nav {
+  margin-top: auto; padding: 12px 18px 0; font-size: var(--f-micro); color: var(--t3);
+  border-top: 1px solid var(--borda);
+}
 
 /* ── Cabeçalho da página ───────────────── */
 

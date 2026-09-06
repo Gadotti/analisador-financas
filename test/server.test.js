@@ -4,6 +4,7 @@ import { ConfiguracaoIaError } from "../src/config/configIa.js";
 import { lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
 import * as portfolio from "../src/core/portfolio.js";
 import { criarServidor } from "../src/server/app.js";
+import { VERSAO } from "../version.js";
 import { dataDirTemporario, gravarAnalise, snapshotExemplo } from "./helpers/ambiente.js";
 
 let ambiente;
@@ -188,6 +189,7 @@ describe("GET /api", () => {
       telegram_configurado: true,
       modelo: "claude-opus-5",
       provedor: "anthropic",
+      versao: VERSAO,
     });
   });
 

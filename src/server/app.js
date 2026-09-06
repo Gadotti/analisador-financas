@@ -15,6 +15,7 @@ import * as envPainel from "../config/envPainel.js";
 import { WEB_DIR } from "../config/paths.js";
 import * as portfolio from "../core/portfolio.js";
 import * as storage from "../core/storage.js";
+import { VERSAO } from "../../version.js";
 import * as ambiente from "./ambiente.js";
 import * as analiseExterna from "./analiseExterna.js";
 
@@ -160,6 +161,7 @@ export function criarServidor(servicos = {}) {
             telegram_configurado: svc.telegramConfigurado(),
             modelo: svc.modeloIa(),
             provedor: svc.provedorIa(),
+            versao: VERSAO,
           });
           return;
         }
