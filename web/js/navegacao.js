@@ -7,6 +7,7 @@ export const TELAS = [
   { id: "visao-geral", rotulo: "Visão geral", icone: "visaoGeral", subtitulo: "Onde a carteira está hoje" },
   { id: "posicoes", rotulo: "Posições", icone: "posicoes", subtitulo: "Cadastro e marcação a mercado" },
   { id: "analise", rotulo: "Análise", icone: "analise", subtitulo: "Fichas por ativo e leitura da IA" },
+  { id: "equivalencia", rotulo: "Equivalência", icone: "balanca", subtitulo: "Quanto uma LCI isenta vale em CDB" },
   { id: "historico", rotulo: "Histórico", icone: "historico", subtitulo: "Evolução das execuções registradas" },
   { id: "configuracoes", rotulo: "Configurações", icone: "configuracoes", subtitulo: "Perfil e limites de alerta" },
 ];

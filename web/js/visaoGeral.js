@@ -1,7 +1,7 @@
 /** Tela "Visão geral": contexto macro, posição consolidada e riscos. */
 
 import { cartaoAlertaRecolhido, listaAlertas } from "./alertas.js";
-import { $, classeSinal, dataHoraBR, esc, moeda, mostrar, num, pct } from "./formato.js";
+import { $, $$, classeSinal, dataHoraBR, esc, moeda, mostrar, num, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
 const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
@@ -107,10 +107,7 @@ function renderContexto(ia) {
   $("#contexto-mercado").innerHTML = blocos.join("");
 }
 
-export function renderMacro(snapshot) {
-  const macro = snapshot.macro;
-  const consultadoEm = macro.consultado_em || snapshot.gerado_em;
-  $("#macro-quando").textContent = consultadoEm ? "atualizado em " + dataHoraBR(consultadoEm) : "";
+function itensMacro(macro) {
   const itens = [
     ["CDI", `${num(macro.cdi_anual_pct.valor)}% a.a.`],
     ["Selic meta", `${num(macro.selic_meta_pct.valor)}% a.a.`],
@@ -123,12 +120,27 @@ export function renderMacro(snapshot) {
       `${Math.round(ibov.valor).toLocaleString("pt-BR")} pts (${pct(ibov.variacao_dia_pct)})`,
     ]);
   }
-  $("#macro").innerHTML = itens
+  return itens;
+}
+
+/**
+ * O mesmo quadro aparece na visão geral e na tela de equivalência, onde o CDI
+ * é a base da conta — por isso os alvos vêm por atributo, e não por id.
+ */
+export function renderMacro(snapshot) {
+  const macro = snapshot.macro;
+  const consultadoEm = macro.consultado_em || snapshot.gerado_em;
+  const html = itensMacro(macro)
     .map(
       ([k, v]) =>
         `<div class="macro-item"><span class="microrotulo">${k}</span><span class="macro-v mono">${v}</span></div>`
     )
     .join("");
+
+  $$("[data-macro-quando]").forEach((el) => {
+    el.textContent = consultadoEm ? "atualizado em " + dataHoraBR(consultadoEm) : "";
+  });
+  $$("[data-macro]").forEach((el) => (el.innerHTML = html));
 }
 
 export function renderRiscos(snapshot, ia) {

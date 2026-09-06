@@ -295,9 +295,11 @@ estourado. O alerta de concentração por posição, esse sim, vale para qualque
 Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do
 navegador**: `web/app.js` é o ponto de entrada (`<script type="module">`) e só orquestra —
 carrega da API, guarda o último resultado e chama os módulos de `web/js/`, um por tela
-(`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `historico`, `configuracoes`), mais
-`painelPosicao`, que é só o formulário de cadastro, e os de apoio (`formato`, `api`,
-`icones`, `alertas`, `navegacao`). Nenhum cálculo mora no front. As chaves consumidas são as
+(`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `equivalencia`, `historico`,
+`configuracoes`), mais `painelPosicao`, que é só o formulário de cadastro, e os de apoio
+(`formato`, `api`, `icones`, `alertas`, `navegacao`). Nenhum cálculo da carteira mora no
+front — a única conta ali é a da tela de equivalência, e o porquê está em "Cuidados
+específicos". As chaves consumidas são as
 mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
 junto.
 
@@ -311,7 +313,7 @@ como coluna ou como linha de apoio de uma célula (`celula(principal, ...apoios)
 como um `if` dentro do laço que desenha as linhas. Busca, ordenação e recolhimento são
 estado local do módulo — o `app.js` não os conhece.
 
-A interface tem cinco telas trocadas pelo hash da URL (`#posicoes`, `#historico`, …), sem
+A interface tem seis telas trocadas pelo hash da URL (`#posicoes`, `#equivalencia`, …), sem
 recarregar a página e sem roteador. Ícones são SVG de traço em `web/js/icones.js` — nunca
 glifos de texto ou emoji. O gráfico do histórico é SVG desenhado à mão em
 `web/js/historico.js`; não adicione biblioteca de gráfico.
@@ -325,6 +327,24 @@ interface é o `alerta_concentracao_pct` do cadastro, publicado no snapshot como
 no front. O recorte por emissor de renda fixa vem de `snapshot.emissores_renda_fixa`
 (calculado em `analysis.py`, com o consumo do teto do FGC), porque `fundamentals` só
 percorre fichas de renda variável.
+
+**A tela de equivalência é a única conta do front.** `web/js/equivalencia.js` converte a taxa
+que o usuário digita — uma LCI ofertada em taxa líquida contra um CDB em taxa bruta — e por
+isso responde a cada tecla, sem ida ao Python. A regra de negócio que ela usa não mora lá: as
+alíquotas vêm de `snapshot.ir_renda_fixa`, publicado por `fixed_income.faixas_ir()`, a mesma
+`TABELA_IR` que `_liquidar` aplica no resgate. Não escreva uma tabela de IR no front — sem a
+chave no snapshot, o cartão troca a conta por um aviso. O que o módulo faz é dividir por
+`1 - alíquota` (ou multiplicar), nas duas direções, sobre o CDI de `macro.cdi_anual_pct`.
+
+Os quatro cartões de prazo são a resposta inteira **e** o seletor: o escolhido alimenta o
+painel de cima, e os outros três continuam à vista, que era o ponto de comparar as alíquotas.
+Eles são montados uma vez por snapshot (`montarFaixas`) e só têm os valores repintados
+(`pintarFaixas`) — redesenhar o HTML a cada tecla tiraria o foco de quem navega pelo teclado.
+
+**O quadro "Posição do mercado" aparece em duas telas.** A da equivalência precisa dele
+porque o CDI é a base da conversão. Por isso `renderMacro` escreve em todo `[data-macro]` e
+`[data-macro-quando]`, e não num id — para acrescentar o quadro a uma terceira tela basta
+repetir a marcação, sem tocar no JS.
 
 **Localizar o Python.** `src/server/analiseExterna.js` usa `PYTHON_BIN` quando definido,
 senão `python` no Windows e `python3` nos demais. Um `ENOENT` no spawn vira uma mensagem

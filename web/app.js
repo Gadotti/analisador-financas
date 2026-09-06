@@ -9,6 +9,7 @@ import { api, toast } from "./js/api.js";
 import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.js";
 import { renderAlocacao } from "./js/alocacao.js";
 import { coletarConfig, renderConfig } from "./js/configuracoes.js";
+import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
 import { renderHistorico } from "./js/historico.js";
 import { definirContagem, iniciarNavegacao } from "./js/navegacao.js";
@@ -51,6 +52,7 @@ function renderAnalise() {
       { posicoes: estado.carteira?.posicoes || [], limite: limiteConcentracao() },
       acoesDaTabela
     );
+    renderEquivalencia(null);
     renderAnaliseVazia();
     return;
   }
@@ -58,6 +60,7 @@ function renderAnalise() {
   const { snapshot, ia, ia_erro: iaErro, fundamentos } = resultado;
   const herdadaDe = resultado.ia_reaproveitada_de || null;
   renderMacro(snapshot);
+  renderEquivalencia(snapshot);
   renderResumo(snapshot, ia, fundamentos, herdadaDe);
   renderAlocacao(snapshot, fundamentos, limiteConcentracao());
   renderRiscos(snapshot, ia);
@@ -196,6 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   ligarPainel();
   ligarPosicoes();
+  ligarEquivalencia();
   iniciarNavegacao(abrirTela);
 
   $("#btn-nova").addEventListener("click", () => abrirPainel());

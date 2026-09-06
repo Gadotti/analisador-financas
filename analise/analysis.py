@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from . import formato, market, portfolio, posicoes as marcacao
+from . import fixed_income, formato, market, portfolio, posicoes as marcacao
 
 CLASSES = {"fii": "FIIs", "acao": "Ações", "cdb": "CDBs", "tesouro": "Tesouro Direto"}
 
@@ -249,6 +249,9 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
             "piores": destaques[-3:][::-1] if len(destaques) > 3 else [],
         },
         "macro": macro,
+        # A tabela de IR vem junto porque a interface compara ofertas isentas
+        # (LCI, LCA) com tributadas; a alíquota tem de ser a mesma do resgate.
+        "ir_renda_fixa": fixed_income.faixas_ir(),
     }
 
 

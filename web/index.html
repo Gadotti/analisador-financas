@@ -48,9 +48,9 @@
       <section class="cartao">
         <div class="cartao-topo">
           <span class="cartao-titulo">Posição do mercado</span>
-          <span class="cartao-meta" id="macro-quando"></span>
+          <span class="cartao-meta" data-macro-quando></span>
         </div>
-        <div class="macro" id="macro"><div class="vazio">—</div></div>
+        <div class="macro" data-macro><div class="vazio">—</div></div>
       </section>
 
       <section class="cartao">
@@ -139,6 +139,71 @@
       <div class="vazio" id="analise-vazia">
         Nenhuma análise por IA ainda. Use “Analisar com IA” no topo.
       </div>
+    </main>
+
+    <!-- ── Equivalência ───────────────── -->
+    <main class="pagina hidden" id="pg-equivalencia">
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Posição do mercado</span>
+          <span class="cartao-meta" data-macro-quando></span>
+        </div>
+        <div class="macro" data-macro><div class="vazio">—</div></div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Converter uma taxa</span>
+          <span class="cartao-meta" id="equivalencia-base"></span>
+        </div>
+
+        <div class="vazio hidden" id="equivalencia-vazio">
+          Clique em “Atualizar cotações” para carregar o CDI do dia e a tabela de IR.
+        </div>
+
+        <div id="equivalencia-corpo">
+          <div class="conversor">
+            <div class="conversor-lado">
+              <span class="microrotulo" data-de-papel></span>
+              <span class="conversor-classe" data-de-titulo></span>
+              <span class="conversor-exemplos" data-de-exemplos></span>
+              <div class="conversor-entrada">
+                <input id="equivalencia-taxa" type="text" inputmode="decimal" value="97"
+                       autocomplete="off" aria-label="Taxa ofertada">
+                <select id="equivalencia-unidade" aria-label="Unidade da taxa">
+                  <option value="cdi">% do CDI</option>
+                  <option value="aa">% a.a.</option>
+                </select>
+              </div>
+              <span class="conversor-apoio" data-de-apoio></span>
+            </div>
+
+            <button type="button" class="btn-trocar" id="equivalencia-trocar"
+                    title="Inverter o sentido" aria-label="Inverter o sentido da conversão"></button>
+
+            <div class="conversor-lado">
+              <span class="microrotulo" data-para-papel></span>
+              <span class="conversor-classe" data-para-titulo></span>
+              <span class="conversor-exemplos" data-para-exemplos></span>
+              <div class="conversor-resultado">
+                <span class="conversor-num mono" data-para-principal>—</span>
+                <span class="conversor-num2 mono" data-para-secundario></span>
+              </div>
+              <span class="conversor-apoio" data-para-apoio></span>
+            </div>
+          </div>
+
+          <div class="subtitulo">Prazo até o resgate — escolha para ver o resultado acima</div>
+          <div class="faixas" id="equivalencia-faixas" role="group"
+               aria-label="Prazo até o resgate"></div>
+
+          <p class="campo-dica equivalencia-nota">
+            A conversão usa só a alíquota de IR sobre o rendimento — quanto mais longo o papel, menos o
+            CDB precisa render para empatar. Ficam de fora o IOF (resgate em menos de 30 dias), a
+            carência da LCI/LCA e o efeito da capitalização em prazos acima de um ano.
+          </p>
+        </div>
+      </section>
     </main>
 
     <!-- ── Histórico ───────────────────── -->

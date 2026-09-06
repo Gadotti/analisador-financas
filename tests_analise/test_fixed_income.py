@@ -8,6 +8,7 @@ from analise.fixed_income import (
     _pascoa,
     aliquota_ir,
     datas_pagamento,
+    faixas_ir,
     dias_uteis,
     feriados_nacionais,
     proximo_dia_util,
@@ -343,3 +344,20 @@ def test_datas_de_pagamento_respeitam_o_intervalo_pedido():
 
     assert len(mensais) == 12
     assert semestrais == [date(2025, 7, 2), date(2026, 1, 2)]
+
+
+def test_faixas_de_ir_cobrem_a_tabela_sem_buraco():
+    faixas = faixas_ir()
+
+    assert [f["aliquota_pct"] for f in faixas] == [22.5, 20.0, 17.5, 15.0]
+    assert [f["ate_dias"] for f in faixas] == [180, 360, 720, None]
+    # Cada faixa começa no dia seguinte ao fim da anterior.
+    assert [f["de_dias"] for f in faixas] == [1, 181, 361, 721]
+    assert faixas[0]["rotulo"] == "até 180 dias"
+    assert faixas[-1]["rotulo"] == "acima de 720 dias"
+
+
+def test_faixas_de_ir_repetem_a_aliquota_aplicada_no_resgate():
+    for faixa in faixas_ir():
+        dia = faixa["ate_dias"] or faixa["de_dias"]
+        assert aliquota_ir(dia) * 100 == faixa["aliquota_pct"]

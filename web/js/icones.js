@@ -13,6 +13,10 @@ const CAMINHOS = {
   posicoes:
     '<path d="M7 5h10M7 10h10M7 15h10"></path><circle cx="3.2" cy="5" r="1.1"></circle><circle cx="3.2" cy="10" r="1.1"></circle><circle cx="3.2" cy="15" r="1.1"></circle>',
   analise: '<path d="M2.5 13.5l4-4.5 3.5 3 7.5-8"></path><path d="M13 4h4.5v4.5"></path>',
+  balanca:
+    '<path d="M10 3.6v12.9M6 16.8h8M4.2 6.4l5.8-1.5 5.8 1.5"></path><path d="M2.2 11.1l2-4.7 2 4.7a2.5 2.5 0 0 1-4 0z"></path><path d="M13.8 11.1l2-4.7 2 4.7a2.5 2.5 0 0 1-4 0z"></path>',
+  trocar:
+    '<path d="M3.5 7.2h12M12.3 4l3.2 3.2-3.2 3.2"></path><path d="M16.5 12.8h-12M7.7 9.6l-3.2 3.2 3.2 3.2"></path>',
   historico: '<circle cx="10" cy="10" r="7.5"></circle><path d="M10 5.5V10l3 2"></path>',
   configuracoes:
     '<circle cx="10" cy="10" r="2.6"></circle><path d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4M15.3 15.3l-1.4-1.4M6.1 6.1L4.7 4.7"></path>',

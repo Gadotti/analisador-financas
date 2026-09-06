@@ -2,7 +2,7 @@
 
 import pytest
 
-from analise import analysis
+from analise import analysis, fixed_income
 from analise.portfolio import CONFIG_PADRAO
 from conftest import RespostaFalsa, chart_yahoo
 
@@ -141,6 +141,14 @@ def test_destaques_ordenados_do_melhor_para_o_pior(dados_temp, mercado_padrao):
     assert snapshot["destaques"]["melhores"][0]["ticker"] == "MXRF11"
     assert snapshot["destaques"]["melhores"][1]["ticker"] == "HGLG11"
     assert snapshot["destaques"]["piores"] == [], "poucos ativos: sem lista de piores"
+
+
+def test_snapshot_publica_a_tabela_de_ir(dados_temp, mercado_padrao):
+    # A interface compara oferta isenta com tributada; a alíquota sai daqui,
+    # e não de uma cópia no front-end.
+    snapshot = analysis.consolidar(carteira_com([]), usar_cache=False)
+
+    assert snapshot["ir_renda_fixa"] == fixed_income.faixas_ir()
 
 
 def test_carteira_vazia_zera_os_totais(dados_temp, mercado_padrao):

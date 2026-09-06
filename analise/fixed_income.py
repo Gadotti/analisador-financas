@@ -140,6 +140,35 @@ def aliquota_ir(dias_corridos: int) -> float:
     return 0.15
 
 
+def _rotulo_faixa(inicio: int, fim: int | None) -> str:
+    if fim is None:
+        return f"acima de {inicio} dias"
+    if inicio == 0:
+        return f"até {fim} dias"
+    return f"de {inicio + 1} a {fim} dias"
+
+
+def faixas_ir() -> list[dict]:
+    """`TABELA_IR` em forma serializável, para quem só precisa exibi-la.
+
+    A alíquota é a mesma régua que `_liquidar` aplica no resgate. Publicá-la no
+    snapshot evita que a interface mantenha uma cópia própria da tabela e passe
+    a divergir daqui quando a legislação mudar.
+    """
+    faixas: list[dict] = []
+    inicio = 0
+    for limite, aliquota in TABELA_IR:
+        fim = None if limite == float("inf") else int(limite)
+        faixas.append({
+            "de_dias": inicio + 1,
+            "ate_dias": fim,
+            "aliquota_pct": round(aliquota * 100, 2),
+            "rotulo": _rotulo_faixa(inicio, fim),
+        })
+        inicio = fim if fim is not None else inicio
+    return faixas
+
+
 # ─────────────────────────────────────────────
 # Fatores de rendimento
 # ─────────────────────────────────────────────
