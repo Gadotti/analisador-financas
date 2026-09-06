@@ -22,7 +22,18 @@ from datetime import datetime
 from . import config_ia, portfolio
 from .config_ia import ConfiguracaoIAError, suporta_fallback  # noqa: F401
 
-FERRAMENTA_BUSCA = {"type": "web_search_20260209", "name": "web_search"}
+CACHE_EFEMERO = {"type": "ephemeral"}
+
+# `cache_control` marca o fim de um trecho que não muda entre chamadas, para a
+# API cobrar como leitura de cache (bem mais barata) a partir da segunda vez
+# que aparece — dentro do próprio laço de busca web desta execução. Só vale
+# para blocos de `system`, `tools` e `messages`; o schema de saída estruturada
+# em `output_config` não é um desses blocos e não é coberto por isto.
+FERRAMENTA_BUSCA = {
+    "type": "web_search_20260209",
+    "name": "web_search",
+    "cache_control": CACHE_EFEMERO,
+}
 BETA_FALLBACK = "server-side-fallback-2026-07-01"
 
 
@@ -390,7 +401,7 @@ def montar_parametros(snapshot: dict, config: dict, cfg: dict) -> dict:
     parametros = {
         "model": cfg["modelo"],
         "max_tokens": cfg["max_tokens"],
-        "system": SYSTEM_PROMPT,
+        "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": CACHE_EFEMERO}],
         "output_config": output_config,
         "messages": [{"role": "user", "content": montar_prompt(snapshot, config)}],
     }

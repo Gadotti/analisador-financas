@@ -221,7 +221,16 @@ def test_usa_o_canal_beta_com_fallback(snapshot_exemplo, com_chave):
     assert parametros["output_config"]["effort"] == "medium"
     assert parametros["output_config"]["format"]["type"] == "json_schema"
     assert parametros["output_config"]["format"]["schema"] is ia.SCHEMA
-    assert parametros["tools"] == [{"type": "web_search_20260209", "name": "web_search"}]
+    assert parametros["tools"] == [{
+        "type": "web_search_20260209",
+        "name": "web_search",
+        "cache_control": {"type": "ephemeral"},
+    }]
+    assert parametros["system"] == [{
+        "type": "text",
+        "text": ia.SYSTEM_PROMPT,
+        "cache_control": {"type": "ephemeral"},
+    }]
     assert parametros["max_tokens"] == config_ia.MAX_TOKENS_PADRAO
     assert parametros["messages"][0]["role"] == "user"
 
