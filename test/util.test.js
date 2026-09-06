@@ -10,7 +10,7 @@ import {
   paraISO,
   somarDias,
 } from "../src/util/datas.js";
-import { carregarEnv, lerArquivoEnv } from "../src/util/env.js";
+import { carregarEnv, lerArquivoEnv, salvarValoresEnv } from "../src/util/env.js";
 import { comEnv } from "./helpers/ambiente.js";
 
 const NL = String.fromCharCode(10);
@@ -143,5 +143,43 @@ describe("carregarEnv", () => {
     } finally {
       restaurar();
     }
+  });
+});
+
+describe("salvarValoresEnv", () => {
+  let dir;
+  let arquivo;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "env-salvar-"));
+    arquivo = path.join(dir, ".env");
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("cria o arquivo quando ele não existe", () => {
+    salvarValoresEnv(arquivo, { NOVA: "valor" });
+    expect(lerArquivoEnv(arquivo)).toEqual({ NOVA: "valor" });
+  });
+
+  test("substitui o valor de uma chave já presente, preservando comentários e outras linhas", () => {
+    fs.writeFileSync(arquivo, ["# comentário", "MODELO=antigo", "OUTRA=fica"].join(NL));
+    salvarValoresEnv(arquivo, { MODELO: "novo" });
+
+    const conteudo = fs.readFileSync(arquivo, "utf8");
+    expect(conteudo).toMatch(/# comentário/);
+    expect(lerArquivoEnv(arquivo)).toEqual({ MODELO: "novo", OUTRA: "fica" });
+  });
+
+  test("acrescenta ao final chaves que não existiam", () => {
+    fs.writeFileSync(arquivo, "EXISTENTE=1");
+    salvarValoresEnv(arquivo, { NOVA: "2" });
+    expect(lerArquivoEnv(arquivo)).toEqual({ EXISTENTE: "1", NOVA: "2" });
+  });
+
+  test("usa aspas quando o valor tem espaço ou aspas", () => {
+    salvarValoresEnv(arquivo, { COM_ESPACO: "dois valores", COM_ASPAS: 'a"b' });
+    expect(lerArquivoEnv(arquivo)).toEqual({ COM_ESPACO: "dois valores", COM_ASPAS: 'a"b' });
   });
 });

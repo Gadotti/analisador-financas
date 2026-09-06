@@ -61,3 +61,50 @@ export function carregarEnv(arquivo = arquivoEnvPadrao()) {
   }
   return true;
 }
+
+/**
+ * `semAspas` só remove as aspas que envolvem o valor, sem interpretar escapes —
+ * por isso a aspa escolhida aqui precisa ser a que não aparece dentro do
+ * texto, para o par escrito e lido bater.
+ */
+function comAspasSeNecessario(valor) {
+  const texto = String(valor ?? "");
+  if (!/[\s#"']/.test(texto)) return texto;
+  if (!texto.includes('"')) return `"${texto}"`;
+  if (!texto.includes("'")) return `'${texto}'`;
+  return texto;
+}
+
+/**
+ * Grava pares chave=valor no arquivo, preservando as demais linhas (comentários
+ * e variáveis não alteradas). Uma chave ausente é acrescentada ao final; o
+ * arquivo é criado se não existir. Usado pela tela de Configurações — nunca
+ * pelo cadastro da carteira, que mora só em `data/`.
+ */
+export function salvarValoresEnv(arquivo, alteracoes) {
+  const pendentes = new Map(Object.entries(alteracoes));
+  let linhas = [];
+  try {
+    linhas = fs.readFileSync(arquivo, "utf8").split(/\r?\n/);
+  } catch {
+    linhas = [];
+  }
+
+  const resultado = linhas.map((linha) => {
+    const casa = LINHA.exec(linha);
+    if (!casa || !pendentes.has(casa[1])) return linha;
+    const valor = pendentes.get(casa[1]);
+    pendentes.delete(casa[1]);
+    return `${casa[1]}=${comAspasSeNecessario(valor)}`;
+  });
+
+  if (pendentes.size > 0) {
+    if (resultado.length && resultado[resultado.length - 1].trim() !== "") resultado.push("");
+    for (const [chave, valor] of pendentes) {
+      resultado.push(`${chave}=${comAspasSeNecessario(valor)}`);
+    }
+  }
+
+  fs.mkdirSync(path.dirname(arquivo), { recursive: true });
+  fs.writeFileSync(arquivo, resultado.join("\n"), "utf8");
+}

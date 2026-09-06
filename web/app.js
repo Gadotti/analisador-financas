@@ -8,6 +8,7 @@
 import { api, toast } from "./js/api.js";
 import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.js";
 import { renderAlocacao } from "./js/alocacao.js";
+import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
 import { coletarConfig, renderConfig } from "./js/configuracoes.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
@@ -169,6 +170,21 @@ async function salvarConfig(evento) {
   }
 }
 
+async function salvarAmbiente(evento) {
+  evento.preventDefault();
+  try {
+    const dados = await api("/api/ambiente", {
+      method: "POST",
+      body: JSON.stringify(coletarAmbiente()),
+    });
+    renderAmbiente(dados);
+    await aplicarStatus();
+    toast("Configurações de ambiente salvas.", "ok");
+  } catch (erro) {
+    toast(erro.message, "erro", 7000);
+  }
+}
+
 async function enviarAoTelegram() {
   try {
     await api("/api/telegram", { method: "POST" });
@@ -200,6 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ligarPainel();
   ligarPosicoes();
   ligarEquivalencia();
+  ligarAmbiente();
   iniciarNavegacao(abrirTela);
 
   $("#btn-nova").addEventListener("click", () => abrirPainel());
@@ -208,10 +225,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#btn-telegram").addEventListener("click", enviarAoTelegram);
   $("#form-posicao").addEventListener("submit", salvarPosicao);
   $("#form-config").addEventListener("submit", salvarConfig);
+  $("#form-ambiente").addEventListener("submit", salvarAmbiente);
 
   try {
     await aplicarStatus();
     await carregarCarteira();
+    renderAmbiente(await api("/api/ambiente"));
   } catch (erro) {
     toast("Falha ao carregar: " + erro.message, "erro", 9000);
   }

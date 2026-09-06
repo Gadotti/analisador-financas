@@ -10,6 +10,8 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
+import { ConfiguracaoIaError } from "../config/configIa.js";
+import * as envPainel from "../config/envPainel.js";
 import { WEB_DIR } from "../config/paths.js";
 import * as portfolio from "../core/portfolio.js";
 import * as storage from "../core/storage.js";
@@ -35,6 +37,8 @@ const SERVICOS_PADRAO = {
   telegramConfigurado: ambiente.telegramConfigurado,
   modeloIa: ambiente.modeloIa,
   provedorIa: ambiente.provedorIa,
+  lerAmbiente: envPainel.lerPainelEnv,
+  salvarAmbiente: envPainel.salvarPainelEnv,
 };
 
 function responderJson(res, dados, status = 200) {
@@ -159,6 +163,10 @@ export function criarServidor(servicos = {}) {
           });
           return;
         }
+        if (rota === "/api/ambiente") {
+          responderJson(res, svc.lerAmbiente());
+          return;
+        }
         responderErro(res, "Rota não encontrada.", 404);
         return;
       }
@@ -188,6 +196,10 @@ export function criarServidor(servicos = {}) {
         }
         if (rota === "/api/config") {
           responderJson(res, portfolio.atualizarConfig(corpo));
+          return;
+        }
+        if (rota === "/api/ambiente") {
+          responderJson(res, svc.salvarAmbiente(corpo));
           return;
         }
         if (rota === "/api/telegram") {
@@ -221,6 +233,10 @@ export function criarServidor(servicos = {}) {
       if (erro instanceof portfolio.ValidacaoError) {
         const naoEncontrada = erro.message.includes("nao encontrada");
         responderErro(res, erro.message, naoEncontrada ? 404 : 422);
+        return;
+      }
+      if (erro instanceof ConfiguracaoIaError) {
+        responderErro(res, erro.message, 422);
         return;
       }
       if (erro.message.includes("JSON válido") || erro.message.includes("limite permitido")) {

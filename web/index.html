@@ -287,6 +287,163 @@
           </div>
         </section>
       </form>
+
+      <form id="form-ambiente">
+        <section class="cartao" style="margin-top:16px">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Provedor de IA</span>
+            <span class="cartao-meta">gravado no .env — a chave nunca aparece na tela</span>
+          </div>
+          <div class="grade-form">
+            <div class="campo">
+              <label for="e-provedor">Provedor ativo (IA_PROVEDOR)</label>
+              <select id="e-provedor">
+                <option value="anthropic">Anthropic</option>
+                <option value="kimi">Kimi (Moonshot AI)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bloco-provedor" data-provedor="anthropic">
+            <p class="rodape" style="margin-top:14px; margin-bottom:6px">Bloco Anthropic</p>
+            <div class="grade-form">
+              <div class="campo">
+                <label for="e-anthropic-origem">Origem da chave</label>
+                <select id="e-anthropic-origem">
+                  <option value="arquivo">Arquivo (.env)</option>
+                  <option value="ambiente">Variável de ambiente</option>
+                </select>
+              </div>
+              <div class="campo campo-variavel-anthropic hidden">
+                <label for="e-anthropic-variavel">Nome da variável de ambiente</label>
+                <input id="e-anthropic-variavel" placeholder="ANTHROPIC_API_KEY" autocomplete="off">
+              </div>
+              <div class="campo campo-largo">
+                <label for="e-anthropic-chave">Chave de API <span class="selo" id="e-anthropic-chave-selo"></span></label>
+                <input id="e-anthropic-chave" type="password" placeholder="Deixe em branco para manter a chave atual" autocomplete="new-password">
+              </div>
+              <div class="campo">
+                <label for="e-anthropic-modelo">Modelo</label>
+                <input id="e-anthropic-modelo" placeholder="claude-opus-5" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label for="e-anthropic-effort">Esforço</label>
+                <select id="e-anthropic-effort">
+                  <option value="">—</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="xhigh">xhigh</option>
+                  <option value="max">max</option>
+                  <option value="nenhum">nenhum (não envia)</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="e-anthropic-fallback">Fallback</label>
+                <select id="e-anthropic-fallback">
+                  <option value="">auto</option>
+                  <option value="sim">sim</option>
+                  <option value="nao">não</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="e-anthropic-busca">Busca web</label>
+                <select id="e-anthropic-busca">
+                  <option value="">sim (padrão)</option>
+                  <option value="sim">sim</option>
+                  <option value="nao">não</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="e-anthropic-tokens">Máx. de tokens</label>
+                <input id="e-anthropic-tokens" type="number" step="1" min="1" placeholder="16000">
+              </div>
+              <div class="campo campo-largo">
+                <label for="e-anthropic-url">URL base (opcional)</label>
+                <input id="e-anthropic-url" placeholder="outro endereço compatível com a API da Anthropic" autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <div class="bloco-provedor" data-provedor="kimi" style="margin-top:18px">
+            <p class="rodape" style="margin-bottom:6px">Bloco Kimi (Moonshot AI)</p>
+            <div class="grade-form">
+              <div class="campo">
+                <label for="e-kimi-origem">Origem da chave</label>
+                <select id="e-kimi-origem">
+                  <option value="arquivo">Arquivo (.env)</option>
+                  <option value="ambiente">Variável de ambiente</option>
+                </select>
+              </div>
+              <div class="campo campo-variavel-kimi hidden">
+                <label for="e-kimi-variavel">Nome da variável de ambiente</label>
+                <input id="e-kimi-variavel" placeholder="MOONSHOT_API_KEY" autocomplete="off">
+              </div>
+              <div class="campo campo-largo">
+                <label for="e-kimi-chave">Chave de API <span class="selo" id="e-kimi-chave-selo"></span></label>
+                <input id="e-kimi-chave" type="password" placeholder="Deixe em branco para manter a chave atual" autocomplete="new-password">
+              </div>
+              <div class="campo">
+                <label for="e-kimi-modelo">Modelo</label>
+                <input id="e-kimi-modelo" placeholder="kimi-k2-thinking" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label for="e-kimi-effort">Esforço</label>
+                <select id="e-kimi-effort">
+                  <option value="">—</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="xhigh">xhigh</option>
+                  <option value="max">max</option>
+                  <option value="nenhum">nenhum (não envia)</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="e-kimi-tokens">Máx. de tokens</label>
+                <input id="e-kimi-tokens" type="number" step="1" min="1" placeholder="16000">
+              </div>
+              <div class="campo campo-largo">
+                <label for="e-kimi-url">URL base</label>
+                <input id="e-kimi-url" placeholder="https://api.moonshot.ai/anthropic" autocomplete="off">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="cartao" style="margin-top:16px">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Telegram</span>
+            <span class="cartao-meta">envio do relatório</span>
+          </div>
+          <div class="grade-form">
+            <div class="campo campo-largo">
+              <label for="e-telegram-token">Token do bot <span class="selo" id="e-telegram-token-selo"></span></label>
+              <input id="e-telegram-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
+            </div>
+            <div class="campo">
+              <label for="e-telegram-chat">Chat ID</label>
+              <input id="e-telegram-chat" placeholder="123456789" autocomplete="off">
+            </div>
+          </div>
+        </section>
+
+        <section class="cartao" style="margin-top:16px">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Cotações</span>
+            <span class="cartao-meta">brapi.dev — alternativa quando o Yahoo Finance falha</span>
+          </div>
+          <div class="grade-form">
+            <div class="campo campo-largo">
+              <label for="e-brapi-token">Token <span class="selo" id="e-brapi-token-selo"></span></label>
+              <input id="e-brapi-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="acoes-form">
+            <button type="submit" class="btn btn-primario btn-sm">Salvar ambiente</button>
+          </div>
+        </section>
+      </form>
     </main>
 
   </div>

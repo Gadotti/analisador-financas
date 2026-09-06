@@ -1,5 +1,6 @@
 import fs from "node:fs";
 
+import { ConfiguracaoIaError } from "../src/config/configIa.js";
 import { lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
 import * as portfolio from "../src/core/portfolio.js";
 import { criarServidor } from "../src/server/app.js";
@@ -15,8 +16,46 @@ let servicos;
  * O estado fica num objeto próprio para poder ser ajustado por teste, mesmo
  * depois de o servidor ter copiado as funções.
  */
+function ambientePainelExemplo() {
+  return {
+    ia_provedor: "anthropic",
+    provedores: {
+      anthropic: {
+        origem_chave: "arquivo",
+        variavel_chave: "",
+        model: "claude-opus-5",
+        effort: "medium",
+        base_url: "",
+        fallback: "",
+        busca_web: "",
+        max_tokens: "",
+        api_key_definida: true,
+      },
+      kimi: {
+        origem_chave: "",
+        variavel_chave: "",
+        model: "",
+        effort: "",
+        base_url: "",
+        fallback: "",
+        busca_web: "",
+        max_tokens: "",
+        api_key_definida: false,
+      },
+    },
+    telegram: { chat_id: "42", bot_token_definido: true },
+    brapi_token_definido: false,
+  };
+}
+
 function servicosFalsos() {
-  const estado = { chamadas: [], erroAnalise: null, respostaAnalise: null };
+  const estado = {
+    chamadas: [],
+    erroAnalise: null,
+    respostaAnalise: null,
+    ambiente: ambientePainelExemplo(),
+    erroSalvarAmbiente: null,
+  };
 
   return {
     estado,
@@ -38,6 +77,12 @@ function servicosFalsos() {
     telegramConfigurado: () => true,
     modeloIa: () => "claude-opus-5",
     provedorIa: () => "anthropic",
+    lerAmbiente: () => estado.ambiente,
+    salvarAmbiente(corpo) {
+      estado.chamadas.push(["salvar-ambiente", corpo]);
+      if (estado.erroSalvarAmbiente) throw estado.erroSalvarAmbiente;
+      return estado.ambiente;
+    },
   };
 }
 
@@ -75,6 +120,8 @@ beforeEach(() => {
   servicos.estado.chamadas.length = 0;
   servicos.estado.erroAnalise = null;
   servicos.estado.respostaAnalise = null;
+  servicos.estado.ambiente = ambientePainelExemplo();
+  servicos.estado.erroSalvarAmbiente = null;
 });
 
 describe("arquivos estáticos", () => {
@@ -148,6 +195,35 @@ describe("GET /api", () => {
     const { status, corpo } = await pedir("/api/nao-existe");
     expect(status).toBe(404);
     expect(corpo.erro).toMatch(/não encontrada/);
+  });
+
+  test("devolve o painel de ambiente sem segredos", async () => {
+    const { status, corpo } = await pedir("/api/ambiente");
+    expect(status).toBe(200);
+    expect(corpo).toEqual(servicos.estado.ambiente);
+  });
+});
+
+describe("POST /api/ambiente", () => {
+  test("grava as alterações e devolve o painel atualizado", async () => {
+    const alteracoes = { provedores: { anthropic: { model: "claude-sonnet-5" } } };
+    const { status, corpo } = await pedir("/api/ambiente", {
+      method: "POST",
+      body: JSON.stringify(alteracoes),
+    });
+    expect(status).toBe(200);
+    expect(corpo).toEqual(servicos.estado.ambiente);
+    expect(servicos.estado.chamadas).toEqual([["salvar-ambiente", alteracoes]]);
+  });
+
+  test("responde 422 quando o provedor informado é inválido", async () => {
+    servicos.estado.erroSalvarAmbiente = new ConfiguracaoIaError("IA_PROVEDOR inválido: \"---\".");
+    const { status, corpo } = await pedir("/api/ambiente", {
+      method: "POST",
+      body: JSON.stringify({ ia_provedor: "---" }),
+    });
+    expect(status).toBe(422);
+    expect(corpo.erro).toMatch(/IA_PROVEDOR inválido/);
   });
 });
 
