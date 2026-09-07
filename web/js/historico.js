@@ -6,12 +6,23 @@
  * referência (custo acumulado), na mesma escala e num eixo só.
  */
 
-import { $, classeSinal, dataBR, diaMes, moeda, moedaCurta, pct } from "./formato.js";
+import {
+  $, classeSinal, dataBR, dataHoraBR, diaMes, esc, moeda, moedaCurta, pct,
+} from "./formato.js";
 
 const AREA = { largura: 900, altura: 300, esq: 68, dir: 16, topo: 14, base: 42 };
 const COR_MERCADO = "var(--azul)";
 const COR_CUSTO = "var(--t3)";
-const ROTULO_SAUDE = { otima: "Ótima", boa: "Boa", atencao: "Atenção", alerta: "Alerta" };
+
+/** Rótulo e cor (reaproveitando os tons de `.selo-*`) por status da IA na execução. */
+const STATUS_IA = {
+  sucesso: { rotulo: "OK", classe: "otima" },
+  sem_ia: { rotulo: "Sem IA", classe: "boa" },
+  erro_recuperado: { rotulo: "Erro · leitura mantida", classe: "atencao" },
+  erro: { rotulo: "Erro", classe: "alerta" },
+};
+
+const FALHOU = new Set(["erro", "erro_recuperado"]);
 
 const x0 = AREA.esq;
 const x1 = AREA.largura - AREA.dir;
@@ -152,44 +163,85 @@ function renderGrafico(serie) {
   ligarLeituraDoGrafico(serie);
 }
 
-function renderTabela(serie) {
-  if (!serie.length) {
+/** Segundos como o usuário lê: "12,4s" abaixo de um minuto, "4min 38s" acima. */
+function duracaoBR(segundos) {
+  if (segundos == null) return "—";
+  if (segundos < 60) return `${segundos.toFixed(1).replace(".", ",")}s`;
+  const minutos = Math.floor(segundos / 60);
+  return `${minutos}min ${Math.round(segundos - minutos * 60)}s`;
+}
+
+/** O selo do status e, abaixo dele, o motivo — que é o que se procura numa falha. */
+function celulaStatus(execucao) {
+  const status = STATUS_IA[execucao.status_ia] || {
+    rotulo: execucao.status_ia || "—",
+    classe: "boa",
+  };
+  const selo = `<span class="selo selo-${status.classe}">${status.rotulo}</span>`;
+  if (execucao.ia_erro) {
+    // Erro inteiro no title: a linha da tabela mostra o começo e não estica.
+    return `${selo}<div class="apoio-erro" title="${esc(execucao.ia_erro)}">${esc(execucao.ia_erro)}</div>`;
+  }
+  if (execucao.ia_reaproveitada_de) {
+    return `${selo}<div class="apoio">leitura de ${dataHoraBR(execucao.ia_reaproveitada_de)}</div>`;
+  }
+  return selo;
+}
+
+function celulaModelo(execucao) {
+  if (!execucao.modelo) return "—";
+  const detalhes = [execucao.provedor, execucao.effort && `esforço ${execucao.effort}`]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    `<div class="mono">${esc(execucao.modelo)}</div>` +
+    (detalhes ? `<div class="apoio">${esc(detalhes)}</div>` : "")
+  );
+}
+
+const linhaExecucao = (e) => `<tr>
+  <td class="mono">${dataHoraBR(e.gerado_em)}</td>
+  <td class="num mono">${moeda(e.valor_atual)}</td>
+  <td class="num mono ${classeSinal(e.resultado_pct)}">${pct(e.resultado_pct)}</td>
+  <td>${celulaStatus(e)}</td>
+  <td>${celulaModelo(e)}</td>
+  <td class="num mono">${e.buscas_web ?? "—"}</td>
+  <td class="num mono">${duracaoBR(e.duracao_s)}</td>
+</tr>`;
+
+function renderExecucoes(execucoes) {
+  if (!execucoes.length) {
+    $("#execucoes-meta").textContent = "";
     $("#tabela-historico").innerHTML =
-      '<div class="vazio">Nenhuma execução registrada ainda.</div>';
+      '<div class="vazio">Nenhuma execução registrada ainda. O log começa na próxima análise.</div>';
     return;
   }
 
-  const linhas = [...serie]
-    .reverse()
-    .map(
-      (p) => `<tr>
-        <td class="mono">${dataBR(p.data)}</td>
-        <td class="num mono">${moeda(p.valor_investido)}</td>
-        <td class="num mono">${moeda(p.valor_atual)}</td>
-        <td class="num mono ${classeSinal(p.resultado)}">${moeda(p.resultado)}</td>
-        <td class="num mono ${classeSinal(p.resultado)}">${pct(p.resultado_pct)}</td>
-        <td><span class="selo selo-${p.saude}">${ROTULO_SAUDE[p.saude] || p.saude}</span></td>
-      </tr>`
-    )
-    .join("");
+  const falhas = execucoes.filter((e) => FALHOU.has(e.status_ia)).length;
+  $("#execucoes-meta").textContent =
+    `${execucoes.length} execução(ões)` + (falhas ? ` · ${falhas} com falha` : "");
 
+  const linhas = [...execucoes].reverse().map(linhaExecucao).join("");
   $("#tabela-historico").innerHTML = `
     <div class="tabela-rolagem">
       <table class="tabela">
         <thead><tr>
-          <th>Data</th><th class="num">Custo acumulado</th><th class="num">Valor de mercado</th>
-          <th class="num">Resultado</th><th class="num">Resultado %</th><th>Saúde</th>
+          <th>Data e hora</th><th class="num">Valor de mercado</th><th class="num">Resultado</th>
+          <th>IA</th><th>Modelo</th><th class="num">Buscas</th><th class="num">Duração</th>
         </tr></thead>
         <tbody>${linhas}</tbody>
       </table>
     </div>`;
 }
 
-/** Desenha as duas seções a partir da série devolvida por /api/historico. */
-export function renderHistorico(serie) {
+/**
+ * Desenha as duas seções de /api/historico: o gráfico vem da série diária (um
+ * ponto por dia) e a tabela, do log de execuções (uma linha por rodada).
+ */
+export function renderHistorico(serie, execucoes = []) {
   $("#historico-periodo").textContent = serie.length
-    ? `${serie.length} execução(ões) · de ${dataBR(serie[0].data)} a ${dataBR(serie[serie.length - 1].data)}`
+    ? `${serie.length} dia(s) · de ${dataBR(serie[0].data)} a ${dataBR(serie[serie.length - 1].data)}`
     : "";
   renderGrafico(serie);
-  renderTabela(serie);
+  renderExecucoes(execucoes);
 }

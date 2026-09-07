@@ -31,6 +31,13 @@ def last_analysis_file() -> Path:
     return data_dir() / "last_analysis.json"
 
 
+def execucoes_file() -> Path:
+    """Log de execuções. Ao contrário do arquivo do dia, nunca é sobrescrito:
+    cada rodada acrescenta uma linha, e por isso uma falha continua visível
+    depois de uma execução seguinte bem-sucedida."""
+    return data_dir() / "execucoes.json"
+
+
 def garantir_diretorios() -> None:
     """Cria os diretórios de dados. Chamado antes de qualquer escrita."""
     history_dir().mkdir(parents=True, exist_ok=True)

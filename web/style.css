@@ -423,6 +423,13 @@ a:hover { color: var(--amber-forte); }
 .tabela tbody tr:hover td { background: var(--card2); }
 .tabela .apoio { font-size: var(--f-apoio); color: var(--t3); }
 
+/* Motivo da falha no log de execuções: cabe numa linha, o texto inteiro fica
+   no title — sem isso uma mensagem longa da API estica a linha da tabela. */
+.tabela .apoio-erro {
+  margin-top: 4px; max-width: 340px; font-size: var(--f-apoio); color: var(--vermelho);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .etiqueta {
   font-size: var(--f-micro); font-weight: 700; padding: 2px 7px;
   border-radius: 4px; letter-spacing: .5px;

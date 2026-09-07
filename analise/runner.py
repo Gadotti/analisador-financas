@@ -8,10 +8,15 @@ origens produzam exatamente o mesmo resultado.
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 
-from . import ai_insights, analysis, fundamentals, portfolio
-from .paths import garantir_diretorios, history_dir, last_analysis_file
+from . import ai_insights, analysis, config_ia, fundamentals, portfolio
+from .paths import execucoes_file, garantir_diretorios, history_dir, last_analysis_file
+
+# Teto do log de execuções. Cada linha é pequena; o limite existe só para o
+# arquivo não crescer para sempre em quem roda a análise várias vezes ao dia.
+LIMITE_EXECUCOES = 300
 
 
 def executar(
@@ -28,6 +33,7 @@ def executar(
     Sem leitura nova, as fichas da última análise salva são herdadas — ver
     `_reaproveitar_ia`.
     """
+    inicio = time.monotonic()
     carteira = portfolio.load()
     snapshot = analysis.consolidar(carteira, usar_cache=usar_cache)
 
@@ -38,6 +44,7 @@ def executar(
         "ia_erro": None,
         "ia_solicitada": usar_ia,
         "ia_reaproveitada_de": None,
+        "duracao_s": None,
     }
 
     if usar_ia:
@@ -49,6 +56,7 @@ def executar(
 
     # Métricas derivadas das fichas: aritmética local, não estimativa do modelo.
     resultado["fundamentos"] = fundamentals.consolidar(snapshot, resultado["ia"])
+    resultado["duracao_s"] = round(time.monotonic() - inicio, 1)
 
     if salvar:
         persistir(resultado)
@@ -88,6 +96,53 @@ def _reaproveitar_ia(resultado: dict) -> None:
     resultado["ia_reaproveitada_de"] = (ia.get("_meta") or {}).get("gerado_em")
 
 
+def _identificacao_ia(registro: dict, status: str) -> dict:
+    """Provedor, modelo e esforço a registrar para esta execução.
+
+    Numa leitura nova o `_meta` descreve quem de fato respondeu — inclusive o
+    modelo de retaguarda, quando houve fallback. Numa falha não existe `_meta`,
+    e numa leitura herdada ele é o da análise antiga: aí o que interessa é a
+    configuração que esta execução tentou usar.
+    """
+    vazio = {"provedor": None, "modelo": None, "effort": None, "buscas_web": None}
+    if status == "sem_ia":
+        return vazio
+    if status == "sucesso":
+        meta = (registro.get("ia") or {}).get("_meta") or {}
+        return {campo: meta.get(campo) for campo in vazio}
+    try:
+        cfg = config_ia.configuracao(exigir_chave=False)
+    except config_ia.ConfiguracaoIAError:
+        return vazio
+    return {**vazio, "provedor": cfg["provedor"], "modelo": cfg["modelo"], "effort": cfg["effort"]}
+
+
+def _registro_execucao(registro: dict) -> dict:
+    """Uma linha do log de execuções — o que a tela de Histórico lista."""
+    totais = registro["snapshot"]["totais"]
+    status = _status_execucao(registro)
+    return {
+        "gerado_em": registro["gerado_em"],
+        "data": registro["snapshot"]["data"],
+        "duracao_s": registro.get("duracao_s"),
+        "status_ia": status,
+        "ia_erro": registro.get("ia_erro"),
+        "ia_reaproveitada_de": registro.get("ia_reaproveitada_de"),
+        **_identificacao_ia(registro, status),
+        "valor_atual": totais["valor_atual"],
+        "resultado_pct": totais["resultado_pct"],
+        "posicoes": totais["posicoes"],
+    }
+
+
+def _anexar_execucao(registro: dict) -> None:
+    """Acrescenta esta execução ao log, respeitando o teto."""
+    log = execucoes(limite=LIMITE_EXECUCOES - 1)
+    log.append(_registro_execucao(registro))
+    with open(execucoes_file(), "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+
 def persistir(resultado: dict) -> dict:
     registro = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
@@ -101,7 +156,20 @@ def persistir(resultado: dict) -> dict:
     with open(arquivo, "w", encoding="utf-8") as f:
         json.dump(registro, f, ensure_ascii=False, indent=2)
 
+    _anexar_execucao(registro)
     return registro
+
+
+def execucoes(limite: int = 60) -> list[dict]:
+    """Log de execuções, da mais antiga para a mais recente."""
+    try:
+        with open(execucoes_file(), "r", encoding="utf-8") as f:
+            registros = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(registros, list):
+        return []
+    return registros[-limite:]
 
 
 def ultima_analise() -> dict | None:
@@ -110,6 +178,22 @@ def ultima_analise() -> dict | None:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return None
+
+
+def _status_execucao(registro: dict) -> str:
+    """Resume o resultado da IA numa execução, para a tela de Histórico.
+
+    'sem_ia': não foi pedida (--sem-ia, botão "Atualizar cotações").
+    'erro': foi pedida e falhou sem uma leitura anterior para herdar.
+    'erro_recuperado': falhou, mas a leitura do dia anterior foi mantida —
+    ver `_reaproveitar_ia`.
+    'sucesso': leitura nova e válida nesta execução.
+    """
+    if not registro.get("ia_solicitada"):
+        return "sem_ia"
+    if registro.get("ia_erro"):
+        return "erro_recuperado" if registro.get("ia_reaproveitada_de") else "erro"
+    return "sucesso"
 
 
 def historico(limite: int = 60) -> list[dict]:

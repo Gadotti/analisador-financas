@@ -12,6 +12,22 @@ from analise import config_ia
 CONFIG = {"max_fatos": 5, "max_oportunidades": 3}
 
 
+class FluxoFalso:
+    """Imita o contexto devolvido por `client.messages.stream(...)`."""
+
+    def __init__(self, resposta):
+        self.resposta = resposta
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return self.resposta
+
+
 class ClienteFalso:
     """Registra os parâmetros recebidos em cada canal (beta e normal)."""
 
@@ -20,15 +36,35 @@ class ClienteFalso:
         self.falhar_com = falhar_com
         self.chamadas = {"beta": [], "normal": []}
         self.beta = SimpleNamespace(
-            messages=SimpleNamespace(create=lambda **kw: self._responder(kw, "beta"))
+            messages=SimpleNamespace(stream=lambda **kw: self._responder(kw, "beta"))
         )
-        self.messages = SimpleNamespace(create=lambda **kw: self._responder(kw, "normal"))
+        self.messages = SimpleNamespace(stream=lambda **kw: self._responder(kw, "normal"))
 
     def _responder(self, parametros, canal):
         self.chamadas[canal].append(parametros)
         if self.falhar_com:
             raise self.falhar_com
-        return self.resposta
+        return FluxoFalso(self.resposta)
+
+
+def dados_ia_validos(**overrides):
+    """Resposta completa o bastante para passar por `_conferir_conteudo`.
+
+    `snapshot_exemplo` tem um único ativo de renda variável (MXRF11) — é o que
+    `ativos` precisa cobrir para a resposta não ser tratada como vazia.
+    """
+    base = {
+        "resumo": "ok",
+        "saude_carteira": "boa",
+        "ativos": [{"ticker": "MXRF11", "comentario": "ok"}],
+        "carteira": {"diversificacao": "ok"},
+        "riscos": [],
+        "fatos": [],
+        "oportunidades": [],
+        "contexto_mercado": "ok",
+    }
+    base.update(overrides)
+    return base
 
 
 def resposta_valida(dados):
@@ -207,7 +243,7 @@ def test_recusa_sem_chave(snapshot_exemplo, env_ia):
 
 
 def test_usa_o_canal_beta_com_fallback(snapshot_exemplo, com_chave):
-    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+    cliente = ClienteFalso(resposta_valida(dados_ia_validos()))
 
     dados = ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
 
@@ -248,7 +284,7 @@ def test_usa_o_canal_normal_sem_fallback(snapshot_exemplo, env_ia):
         ANTHROPIC_MODEL="claude-sonnet-5",
         ANTHROPIC_EFFORT="medium",
     )
-    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+    cliente = ClienteFalso(resposta_valida(dados_ia_validos()))
 
     ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
 
@@ -264,7 +300,7 @@ def test_fallback_pode_ser_forcado_pelo_env(snapshot_exemplo, env_ia):
         ANTHROPIC_EFFORT="medium",
         ANTHROPIC_FALLBACK="sim",
     )
-    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+    cliente = ClienteFalso(resposta_valida(dados_ia_validos()))
 
     ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
 
@@ -289,6 +325,36 @@ def test_truncamento_vira_ia_indisponivel(snapshot_exemplo, com_chave):
 
     with pytest.raises(ia.IAIndisponivel, match="truncada por limite de tokens"):
         ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: ClienteFalso(truncada))
+
+
+def test_resposta_com_resumo_vazio_vira_ia_indisponivel(snapshot_exemplo, com_chave):
+    """Um provedor que não suporta os recursos pedidos (busca, effort) pode
+    devolver um JSON válido e completo na forma, mas vazio no conteúdo — isso
+    não pode ser tratado como sucesso, senão apaga a última leitura boa."""
+    dados = dados_ia_validos(resumo="  ")
+    cliente = ClienteFalso(resposta_valida(dados))
+
+    with pytest.raises(ia.IAIndisponivel, match="resumo.*vazio"):
+        ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
+
+
+def test_resposta_sem_fichas_de_ativos_vira_ia_indisponivel(snapshot_exemplo, com_chave):
+    dados = dados_ia_validos(ativos=[])
+    cliente = ClienteFalso(resposta_valida(dados))
+
+    with pytest.raises(ia.IAIndisponivel, match="MXRF11"):
+        ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
+
+
+def test_resposta_com_carteira_toda_vazia_vira_ia_indisponivel(snapshot_exemplo, com_chave):
+    dados = dados_ia_validos(carteira={
+        "diversificacao": "", "concentracao_setorial": "", "concentracao_gestor": "",
+        "valuation": "", "renda": "", "conclusao": "",
+    })
+    cliente = ClienteFalso(resposta_valida(dados))
+
+    with pytest.raises(ia.IAIndisponivel, match="carteira.*vazia"):
+        ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
 
 
 def test_erro_http_traz_o_status(snapshot_exemplo, com_chave):
@@ -333,7 +399,7 @@ def com_kimi(env_ia):
 
 
 def test_kimi_usa_canal_normal_sem_effort_e_sem_busca(snapshot_exemplo, com_kimi):
-    cliente = ClienteFalso(resposta_valida({"resumo": "ok"}))
+    cliente = ClienteFalso(resposta_valida(dados_ia_validos()))
 
     dados = ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
 
@@ -345,6 +411,19 @@ def test_kimi_usa_canal_normal_sem_effort_e_sem_busca(snapshot_exemplo, com_kimi
     assert "tools" not in parametros
     assert dados["_meta"]["provedor"] == "kimi"
     assert dados["_meta"]["effort"] is None
+
+
+def test_sem_busca_web_o_prompt_avisa_o_modelo(snapshot_exemplo, com_kimi):
+    """Regressão: o endpoint compatível do Kimi não expõe busca web, e a regra
+    'só afirme o que encontrou na busca' fazia o modelo devolver o relatório em
+    branco. Sem a ferramenta, o aviso de compensação precisa ir no system."""
+    cliente = ClienteFalso(resposta_valida(dados_ia_validos()))
+
+    ia.analisar(snapshot_exemplo, CONFIG, criar_cliente=lambda: cliente)
+
+    texto = cliente.chamadas["normal"][0]["system"][0]["text"]
+    assert texto.startswith(ia.SYSTEM_PROMPT)
+    assert "NÃO tem ferramenta de busca web" in texto
 
 
 def test_base_url_do_env_chega_ao_cliente(com_kimi):

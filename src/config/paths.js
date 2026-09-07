@@ -35,6 +35,11 @@ export function lastAnalysisFile() {
   return path.join(dataDir(), "last_analysis.json");
 }
 
+/** Log de execuções, escrito pelo Python a cada rodada (uma linha por execução). */
+export function execucoesFile() {
+  return path.join(dataDir(), "execucoes.json");
+}
+
 /** Cria os diretórios de dados. Chamado antes de qualquer escrita. */
 export function garantirDiretorios() {
   fs.mkdirSync(historyDir(), { recursive: true });

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -39,7 +40,13 @@ for _stream in (sys.stdout, sys.stderr):
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # IA_ENV_FILE aponta para um .env isolado (testes). Sem redirecionar
+    # load_dotenv() para ele também, o carregamento padrão ainda encontrava o
+    # .env real do projeto subindo os diretórios a partir do cwd e vazava
+    # IA_PROVEDOR e as demais variáveis do provedor ativo do usuário para o
+    # ambiente do processo — config_ia usa o ambiente como retaguarda quando
+    # uma chave falta no arquivo isolado.
+    load_dotenv(os.environ.get("IA_ENV_FILE") or None)
 except ImportError:
     pass
 

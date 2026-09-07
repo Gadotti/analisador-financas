@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
 import { ConfiguracaoIaError } from "../src/config/configIa.js";
-import { lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
+import { execucoesFile, lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
 import * as portfolio from "../src/core/portfolio.js";
 import { criarServidor } from "../src/server/app.js";
 import { VERSAO } from "../version.js";
@@ -124,6 +124,7 @@ afterAll(async () => {
 beforeEach(() => {
   fs.rmSync(portfolioFile(), { force: true });
   fs.rmSync(lastAnalysisFile(), { force: true });
+  fs.rmSync(execucoesFile(), { force: true });
   servicos.estado.chamadas.length = 0;
   servicos.estado.erroAnalise = null;
   servicos.estado.respostaAnalise = null;
@@ -186,6 +187,21 @@ describe("GET /api", () => {
 
   test("cai no padrão quando o limite não é numérico", async () => {
     expect((await pedir("/api/historico?limite=abc")).status).toBe(200);
+  });
+
+  test("devolve também o log de execuções gravado pelo script", async () => {
+    fs.writeFileSync(
+      execucoesFile(),
+      JSON.stringify([{ gerado_em: "2026-09-07T08:31:19", status_ia: "erro", ia_erro: "HTTP 429" }]),
+      "utf8"
+    );
+    const { corpo } = await pedir("/api/historico");
+    expect(corpo.execucoes).toHaveLength(1);
+    expect(corpo.execucoes[0].ia_erro).toBe("HTTP 429");
+  });
+
+  test("devolve log vazio quando nenhuma execução foi registrada", async () => {
+    expect((await pedir("/api/historico")).corpo.execucoes).toEqual([]);
   });
 
   test("informa a disponibilidade de IA e Telegram", async () => {

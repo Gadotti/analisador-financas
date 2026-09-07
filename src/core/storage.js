@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { historyDir, lastAnalysisFile } from "../config/paths.js";
+import { execucoesFile, historyDir, lastAnalysisFile } from "../config/paths.js";
 
 export function ultimaAnalise() {
   try {
@@ -48,4 +48,21 @@ export function historico(limite = 60) {
     }
   }
   return serie;
+}
+
+/**
+ * Log de execuções, da mais antiga para a mais recente.
+ *
+ * Quem escreve é o Python, a cada rodada. Diferente do arquivo do dia, que é
+ * sobrescrito, aqui cada execução deixa uma linha — é o que mantém visível uma
+ * falha que a execução seguinte já corrigiu.
+ */
+export function execucoes(limite = 60) {
+  let registros;
+  try {
+    registros = JSON.parse(fs.readFileSync(execucoesFile(), "utf8"));
+  } catch {
+    return [];
+  }
+  return Array.isArray(registros) ? registros.slice(-limite) : [];
 }

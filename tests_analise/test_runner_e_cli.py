@@ -204,6 +204,91 @@ def test_nao_salvar_deixa_o_historico_intocado(carteira, mercado):
 
     assert not (carteira / "last_analysis.json").exists()
     assert list((carteira / "history").glob("*.json")) == []
+    assert runner.execucoes() == []
+
+
+# ─────────────────────────────────────────────
+# Log de execuções
+# ─────────────────────────────────────────────
+
+
+def test_cada_execucao_do_dia_deixa_a_sua_linha(carteira, mercado):
+    """O arquivo do dia é sobrescrito; o log, não. É o que mantém visível uma
+    falha que a execução seguinte já corrigiu."""
+    def falhar(*_):
+        raise ai_insights.IAIndisponivel("sem crédito na conta")
+
+    runner.executar(analisar_com_ia=falhar)
+    runner.executar(usar_ia=False)
+
+    log = runner.execucoes()
+    assert [e["status_ia"] for e in log] == ["erro", "sem_ia"]
+    assert len(list((carteira / "history").glob("*.json"))) == 1
+
+
+def test_execucao_com_falha_registra_motivo_e_modelo_tentado(carteira, mercado, env_ia):
+    env_ia(
+        IA_PROVEDOR="kimi",
+        KIMI_MODEL="kimi-k3",
+        KIMI_EFFORT="high",
+    )
+
+    def falhar(*_):
+        raise ai_insights.IAIndisponivel("HTTP 429: sem cota")
+
+    runner.executar(analisar_com_ia=falhar)
+
+    execucao = runner.execucoes()[-1]
+    assert execucao["status_ia"] == "erro"
+    assert execucao["ia_erro"] == "HTTP 429: sem cota"
+    # Sem `_meta` numa falha: o que interessa é a configuração que foi tentada.
+    assert (execucao["provedor"], execucao["modelo"], execucao["effort"]) == (
+        "kimi", "kimi-k3", "high",
+    )
+    assert execucao["duracao_s"] >= 0
+
+
+def test_execucao_bem_sucedida_registra_o_meta_da_resposta(carteira, mercado, ia_exemplo):
+    ia_exemplo["_meta"] = {
+        "provedor": "anthropic",
+        "modelo": "claude-sonnet-5",
+        "effort": "high",
+        "buscas_web": 7,
+        "gerado_em": "2026-09-07T10:00:00",
+    }
+
+    runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+
+    execucao = runner.execucoes()[-1]
+    assert execucao["status_ia"] == "sucesso"
+    assert execucao["ia_erro"] is None
+    assert execucao["modelo"] == "claude-sonnet-5"
+    assert execucao["buscas_web"] == 7
+
+
+def test_execucao_sem_ia_nao_registra_modelo(carteira, mercado):
+    """"Atualizar cotações" não tentou modelo nenhum — anotar um seria ruído."""
+    runner.executar(usar_ia=False)
+
+    execucao = runner.execucoes()[-1]
+    assert execucao["status_ia"] == "sem_ia"
+    assert (execucao["modelo"], execucao["effort"], execucao["buscas_web"]) == (None, None, None)
+
+
+def test_log_de_execucoes_respeita_o_teto(carteira, mercado, monkeypatch):
+    monkeypatch.setattr(runner, "LIMITE_EXECUCOES", 3)
+    for _ in range(5):
+        runner.executar(usar_ia=False)
+
+    assert len(runner.execucoes(limite=99)) == 3
+
+
+def test_execucoes_ignora_arquivo_ausente_ou_corrompido(dados_temp):
+    assert runner.execucoes() == []
+    (dados_temp / "execucoes.json").write_text("{{{", encoding="utf-8")
+    assert runner.execucoes() == []
+    (dados_temp / "execucoes.json").write_text('{"nao": "e uma lista"}', encoding="utf-8")
+    assert runner.execucoes() == []
 
 
 def test_historico_em_ordem_cronologica_com_limite(dados_temp):

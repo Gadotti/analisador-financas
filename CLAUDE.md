@@ -85,7 +85,17 @@ Uma regra por arquivo, para não haver duas validações divergentes:
 | `data/portfolio.json` | Node (`src/core/portfolio.js`) | Node e Python |
 | `data/last_analysis.json` | Python (`analise/runner.py`) | Node e Python |
 | `data/history/*.json` | Python | Node e Python |
+| `data/execucoes.json` | Python (`analise/runner.py`) | Node e Python |
 | `data/cache.json` | Python (`analise/cache.py`) | Python |
+
+`history/` e `execucoes.json` respondem a perguntas diferentes e por isso convivem: o
+arquivo do dia guarda o **estado** (é sobrescrito a cada rodada, e o gráfico do histórico
+lê um ponto por dia), enquanto `execucoes.json` guarda o **que aconteceu em cada rodada** —
+uma linha por execução, nunca sobrescrita, com status, erro da API, modelo, esforço,
+buscas e duração. Sem ele, uma falha desaparecia assim que a execução seguinte gravava o
+arquivo do dia por cima. Quem monta a linha é `runner._registro_execucao`; a tela de
+Histórico lista o log e o `_status_execucao` classifica cada rodada em `sucesso`,
+`sem_ia`, `erro` ou `erro_recuperado` (falhou, mas a leitura anterior foi mantida).
 
 Por isso `analise/portfolio.py` é **somente leitura** — sem CRUD, sem gravação, sem
 migração de formato. Se precisar de uma nova regra de validação de posição, ela vai em

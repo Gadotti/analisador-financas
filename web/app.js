@@ -82,10 +82,10 @@ function renderAnalise() {
 async function abrirTela(id) {
   if (id !== "historico" || estado.historico) return;
   try {
-    const { serie } = await api("/api/historico");
+    const { serie, execucoes } = await api("/api/historico");
     estado.historico = serie;
-    renderHistorico(serie);
-    definirContagem("historico", serie.length || "");
+    renderHistorico(serie, execucoes);
+    definirContagem("historico", execucoes?.length || serie.length || "");
   } catch (erro) {
     toast("Falha ao ler o histórico: " + erro.message, "erro");
   }

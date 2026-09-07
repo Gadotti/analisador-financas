@@ -92,6 +92,25 @@ Regras de rigor:
   recomendar compra ou venda de forma imperativa."""
 
 
+# Nem todo provedor expõe busca web (o endpoint compatível com Anthropic da
+# Moonshot, por exemplo, só aceita ferramentas `custom`). Sem este aviso o
+# modelo continua lendo "só afirme o que encontrou na busca" e devolve o
+# relatório em branco — foi exatamente o que aconteceu na primeira execução
+# com o Kimi.
+INSTRUCAO_SEM_BUSCA = """
+
+ATENÇÃO — nesta execução você NÃO tem ferramenta de busca web. Onde as instruções acima
+mandam pesquisar, responda pelo conhecimento que você já tem: preencha os campos de texto
+normalmente e reserve o null para os indicadores numéricos de que não tem segurança. Em
+`fonte`, diga que a informação vem do seu conhecimento prévio, com o período a que se
+refere, e não de consulta ao vivo."""
+
+
+def system_prompt(com_busca: bool) -> str:
+    """Instruções do sistema, ajustadas à existência da ferramenta de busca."""
+    return SYSTEM_PROMPT if com_busca else SYSTEM_PROMPT + INSTRUCAO_SEM_BUSCA
+
+
 def _numero_ou_nulo(descricao: str) -> dict:
     return {"anyOf": [{"type": "number"}, {"type": "null"}], "description": descricao}
 
@@ -412,7 +431,13 @@ def montar_parametros(snapshot: dict, config: dict, cfg: dict) -> dict:
     parametros = {
         "model": cfg["modelo"],
         "max_tokens": cfg["max_tokens"],
-        "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": CACHE_EFEMERO}],
+        "system": [
+            {
+                "type": "text",
+                "text": system_prompt(cfg["busca_web"]),
+                "cache_control": CACHE_EFEMERO,
+            }
+        ],
         "output_config": output_config,
         "messages": [{"role": "user", "content": montar_prompt(snapshot, config)}],
     }
@@ -422,15 +447,25 @@ def montar_parametros(snapshot: dict, config: dict, cfg: dict) -> dict:
 
 
 def _criar_resposta(client, parametros: dict, cfg: dict):
-    """Dispara a chamada e traduz qualquer falha em IAIndisponivel."""
+    """Dispara a chamada em streaming e traduz qualquer falha em IAIndisponivel.
+
+    Streaming não é detalhe de desempenho aqui: o SDK recusa de saída uma
+    requisição comum cujo `max_tokens` permita passar de 10 minutos de geração,
+    e é justamente o caso de um modelo de raciocínio com teto alto — sem isto,
+    subir <PREFIXO>MAX_TOKENS troca o truncamento por um erro de conexão.
+    `get_final_message()` devolve a mesma mensagem completa do canal comum.
+    """
     try:
         if cfg["fallback"]:
             # Se os classificadores recusarem, a própria API refaz o pedido
             # no modelo de retaguarda recomendado, na mesma chamada.
-            return client.beta.messages.create(
+            fluxo = client.beta.messages.stream(
                 **parametros, betas=[BETA_FALLBACK], fallbacks="default"
             )
-        return client.messages.create(**parametros)
+        else:
+            fluxo = client.messages.stream(**parametros)
+        with fluxo as transmissao:
+            return transmissao.get_final_message()
     except Exception as exc:
         status = getattr(exc, "status_code", None)
         if status is not None:
@@ -441,6 +476,33 @@ def _criar_resposta(client, parametros: dict, cfg: dict):
         raise IAIndisponivel(
             f"Falha de conexão com a API de IA ({cfg['provedor']}): {exc}"
         ) from None
+
+
+def _conferir_conteudo(dados: dict, snapshot: dict) -> None:
+    """Detecta uma resposta 'vazia': JSON válido e schema respeitado, mas sem
+    substância real. O `output_config.format` garante a forma da resposta, não
+    que o modelo pesquisou e escreveu algo — um provedor que não suporta a
+    ferramenta de busca ou o `effort` pedido pode devolver um rascunho mínimo
+    (campos obrigatórios preenchidos com string vazia ou lista vazia) em vez
+    de recusar. Sem esta checagem essa leitura vazia some silenciosamente por
+    cima da última leitura válida em `persistir`."""
+    if not (dados.get("resumo") or "").strip():
+        raise IAIndisponivel("A IA devolveu o resumo da carteira ('resumo') vazio.")
+
+    tickers = [
+        p["ticker"] for p in snapshot["posicoes"] if p["tipo"] in portfolio.TIPOS_VARIAVEL
+    ]
+    if tickers and not dados.get("ativos"):
+        raise IAIndisponivel(
+            f"A IA não preencheu a ficha de nenhum dos {len(tickers)} ativos de "
+            f"renda variável esperados ({', '.join(tickers)}). Confira se o "
+            "provedor configurado suporta a busca web e o esforço ('effort') "
+            "pedidos no .env."
+        )
+
+    carteira = dados.get("carteira") or {}
+    if not any((valor or "").strip() for valor in carteira.values()):
+        raise IAIndisponivel("A IA devolveu a leitura da carteira ('carteira') vazia.")
 
 
 def _conferir_parada(resposta, cfg: dict, *, exigir_completo: bool = True) -> None:
@@ -528,6 +590,7 @@ def analisar(snapshot: dict, config: dict, *, criar_cliente=None) -> dict:
     _conferir_parada(resposta, cfg)
 
     dados = extrair_json(resposta.content)
+    _conferir_conteudo(dados, snapshot)
     dados["_meta"] = {
         "provedor": cfg["provedor"],
         "modelo": resposta.model,

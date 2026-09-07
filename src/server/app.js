@@ -149,8 +149,10 @@ export function criarServidor(servicos = {}) {
         }
         if (rota === "/api/historico") {
           const limite = Number.parseInt(url.searchParams.get("limite") ?? "60", 10);
+          const quantas = Number.isFinite(limite) ? limite : 60;
           responderJson(res, {
-            serie: storage.historico(Number.isFinite(limite) ? limite : 60),
+            serie: storage.historico(quantas),
+            execucoes: storage.execucoes(quantas),
           });
           return;
         }
