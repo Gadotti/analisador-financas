@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from . import formato, portfolio
+from . import analysis, formato, portfolio
 from .formato import LARGURA, data_br, moeda
 
 SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
@@ -96,7 +96,7 @@ def _emissores_rf(snapshot: dict) -> list[str]:
     if not emissores:
         return []
 
-    linhas = ["", "  Por emissor de renda fixa (% da carteira)"]
+    linhas = ["", "  Por emissor de renda fixa (% da renda fixa)"]
     for e in emissores:
         marcador = "  ⚠ acima do FGC" if e["acima_do_fgc"] else ""
         cobertura = (
@@ -194,7 +194,12 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         )
 
     if fundamentos:
-        limite_conc = snapshot["limite_concentracao_pct"]
+        # Os recortes por ficha pesam sobre a renda variável, então o limite
+        # configurado sobre a carteira vai para a mesma base antes de comparar.
+        bases = snapshot["bases_concentracao"]
+        limite_conc = analysis.limite_na_base(
+            snapshot["limite_concentracao_pct"], bases["renda_variavel"], bases["carteira"]
+        )
         for titulo, chave in (
             ("Por classificação", "por_classificacao"),
             ("Por segmento", "por_segmento"),
@@ -203,7 +208,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
             grupos = fundamentos[chave]
             if len(grupos) <= 1 and chave != "por_segmento":
                 continue
-            out += ["", f"  {titulo} (% da carteira)"]
+            out += ["", f"  {titulo} (% da renda variável)"]
             for g in grupos:
                 marcador = "  ⚠" if g["peso_pct"] > limite_conc else "   "
                 out.append(
@@ -214,7 +219,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         nao_coberto = fundamentos["nao_coberto"]
         if nao_coberto["valor"]:
             out.append(
-                f"  {'Sem ficha (renda fixa)':<28} "
+                f"  {'Sem ficha (renda variável)':<28} "
                 f"{formato.pct(nao_coberto['peso_pct'], 1, sinal=False):>6}"
                 f"  {moeda(nao_coberto['valor']):>15}"
             )
@@ -418,7 +423,7 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
         )
 
     if fundamentos and len(fundamentos["por_segmento"]) > 1:
-        linhas += ["", "🏢 <b>POR SEGMENTO</b>"]
+        linhas += ["", "🏢 <b>POR SEGMENTO</b> <i>(% da renda variável)</i>"]
         for g in fundamentos["por_segmento"][:5]:
             linhas.append(
                 f"• {formato.escapar_html(g['nome'])}: {formato.pct(g['peso_pct'], 1, sinal=False)} "

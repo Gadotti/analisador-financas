@@ -31,7 +31,7 @@ def test_relatorio_minimo_sem_ia(snapshot_exemplo):
 def test_emissor_de_renda_fixa_sai_mesmo_sem_ia(snapshot_exemplo):
     saida = report.texto(snapshot_exemplo)
 
-    assert "Por emissor de renda fixa (% da carteira)" in saida
+    assert "Por emissor de renda fixa (% da renda fixa)" in saida
     assert "Inter" in saida
     assert "4% do FGC" in saida
 
@@ -72,13 +72,31 @@ def test_emissor_acima_do_fgc_e_marcado(snapshot_exemplo):
     assert "acima do FGC" in report.texto(base)
 
 
-def test_recortes_declaram_a_base_e_o_que_nao_cobrem(snapshot_exemplo, ia_exemplo):
+def test_recortes_declaram_a_base_da_renda_variavel(snapshot_exemplo, ia_exemplo):
     saida = report.texto(snapshot_exemplo, ia_exemplo, fundamentos(snapshot_exemplo, ia_exemplo))
 
-    assert "Por segmento (% da carteira)" in saida
-    assert "(renda variável)" not in saida
-    # O CDB é 45,45% da carteira e não tem ficha em nenhum recorte.
-    assert re.search(r"Sem ficha \(renda fixa\)\s+45,5%\s+R\$ 10\.000,00", saida)
+    assert "Por segmento (% da renda variável)" in saida
+    # O FII é 54,5% da carteira, mas 100% da renda variável — a base do recorte.
+    assert re.search(r"Recebíveis\s+100,0%\s+R\$ 12\.000,00", saida)
+    assert "Sem ficha" not in saida, "o CDB não é da base, então nada falta cobrir"
+
+
+def test_renda_variavel_sem_ficha_aparece_como_descoberta(snapshot_exemplo, ia_exemplo):
+    base = copy.deepcopy(snapshot_exemplo)
+    outro_fii = copy.deepcopy(next(p for p in base["posicoes"] if p["tipo"] == "fii"))
+    outro_fii.update({"id": "c3", "ticker": "XPML11", "descricao": "XPML11"})
+    base["posicoes"].append(outro_fii)
+    base["totais"]["valor_atual"] = 34000.0
+    base["bases_concentracao"] = {
+        "carteira": 34000.0,
+        "renda_variavel": 24000.0,
+        "renda_fixa": 10000.0,
+    }
+
+    saida = report.texto(base, ia_exemplo, fundamentos(base, ia_exemplo))
+
+    # A IA leu só o MXRF11: metade da renda variável fica sem ficha.
+    assert re.search(r"Sem ficha \(renda variável\)\s+50,0%\s+R\$ 12\.000,00", saida)
 
 
 def test_sem_ia_nao_inventa_secoes(snapshot_exemplo):

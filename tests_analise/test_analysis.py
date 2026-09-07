@@ -203,10 +203,12 @@ def test_emissores_de_renda_fixa_medem_o_consumo_do_fgc():
         {**CDB_BASE, "valor_atual": 200000.0, "dias_para_vencer": 999},
         {**CDB_BASE, "banco": "BTG", "emissor": "BTG", "valor_atual": 50000.0, "dias_para_vencer": 999},
     ]
-    emissores = analysis._emissores_renda_fixa(posicoes, 500000.0, 250000.0)
+    # A base é o total de renda fixa, não o da carteira: 250 mil dividem 100%.
+    emissores = analysis._emissores_renda_fixa(posicoes, 250000.0, 250000.0)
 
     assert [e["nome"] for e in emissores] == ["Inter", "BTG"]
-    assert emissores[0]["peso_pct"] == 40.0
+    assert emissores[0]["peso_pct"] == 80.0
+    assert emissores[1]["peso_pct"] == 20.0
     assert emissores[0]["fgc_uso_pct"] == 80.0
     assert emissores[0]["acima_do_fgc"] is False
 
@@ -323,6 +325,26 @@ def test_tesouro_aparece_entre_os_emissores_sem_teto_do_fgc(dados_temp, mercado_
     assert emissores["Tesouro Nacional"]["acima_do_fgc"] is False
     assert emissores["Inter"]["garantia"] == "FGC"
     assert emissores["Inter"]["fgc_limite"] == CONFIG_PADRAO["limite_fgc"]
+
+
+def test_bases_de_concentracao_separam_os_regimes(dados_temp, mercado_padrao):
+    mercado_padrao.rotas["MXRF11.SA"] = chart_yahoo(11, 10, "Maxi Renda")
+
+    snapshot = analysis.consolidar(carteira_com([FII, CDB, TESOURO]), usar_cache=False)
+    bases = snapshot["bases_concentracao"]
+
+    assert bases["carteira"] == snapshot["totais"]["valor_atual"]
+    assert bases["renda_variavel"] == 11000.0
+    assert round(bases["renda_variavel"] + bases["renda_fixa"], 2) == bases["carteira"]
+    # Os emissores dividem a renda fixa entre si, e não a carteira inteira.
+    assert round(sum(e["peso_pct"] for e in snapshot["emissores_renda_fixa"]), 1) == 100.0
+
+
+def test_limite_de_concentracao_vai_para_a_base_do_recorte():
+    # 25% de uma carteira em que a renda variável é metade são 50% dela.
+    assert analysis.limite_na_base(25.0, 50000.0, 100000.0) == 50.0
+    assert analysis.limite_na_base(25.0, 100000.0, 100000.0) == 25.0
+    assert analysis.limite_na_base(25.0, 0.0, 100000.0) == 25.0, "sem base, o limite não muda"
 
 
 def test_concentracao_no_tesouro_nao_gera_alerta_de_fgc():

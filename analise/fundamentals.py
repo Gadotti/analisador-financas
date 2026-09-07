@@ -61,12 +61,15 @@ def _tipo_dominante(itens: list[dict]) -> str:
     return max(por_tipo, key=lambda t: por_tipo[t])
 
 
-def _agrupar(fichas: list[dict], campo: str, total_carteira: float) -> list[dict]:
+def _agrupar(fichas: list[dict], campo: str, base: float) -> list[dict]:
     """Soma o valor das posições por categoria (segmento, gestora, classificação).
 
-    O peso é sobre o total da carteira, não sobre o total das fichas: é a mesma
-    base da alocação por classe e do limite de concentração configurado, para
-    que os dois números possam ser comparados na mesma tela.
+    O peso é sobre o total de renda variável (`snapshot.bases_concentracao`), o
+    regime a que toda ficha pertence — não sobre a carteira inteira nem sobre o
+    total das fichas. Diluir um segmento de FII no que está em CDB responderia
+    a outra pergunta, e essa a alocação por classe já responde. O limite de
+    concentração configurado é convertido para a mesma base em
+    `analysis.limite_na_base`.
     """
     grupos: dict[str, list[dict]] = {}
     for f in fichas:
@@ -79,7 +82,7 @@ def _agrupar(fichas: list[dict], campo: str, total_carteira: float) -> list[dict
         saida.append({
             "nome": nome,
             "valor": round(valor, 2),
-            "peso_pct": round(valor / total_carteira * 100, 2) if total_carteira else 0.0,
+            "peso_pct": round(valor / base * 100, 2) if base else 0.0,
             "ativos": [f["ticker"] for f in itens],
             "quantidade": len(itens),
             "tipo": _tipo_dominante(itens),
@@ -87,12 +90,17 @@ def _agrupar(fichas: list[dict], campo: str, total_carteira: float) -> list[dict
     return sorted(saida, key=lambda g: g["valor"], reverse=True)
 
 
-def _nao_coberto(total_carteira: float, valor_rv: float) -> dict:
-    """Parte da carteira que nenhum recorte alcança — o que não tem ficha."""
-    valor = max(0.0, total_carteira - valor_rv)
+def _nao_coberto(base_rv: float, valor_com_ficha: float) -> dict:
+    """Parte da renda variável que nenhum recorte alcança — o que não tem ficha.
+
+    Na base do regime é a posição de renda variável que a IA não leu (um ticker
+    novo, uma leitura parcial); a renda fixa não entra na conta porque não é da
+    base. Normalmente vem zerada, e aí a interface não desenha a faixa.
+    """
+    valor = max(0.0, base_rv - valor_com_ficha)
     return {
         "valor": round(valor, 2),
-        "peso_pct": round(valor / total_carteira * 100, 2) if total_carteira else 0.0,
+        "peso_pct": round(valor / base_rv * 100, 2) if base_rv else 0.0,
     }
 
 
@@ -159,6 +167,8 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
 
     valor_rv = sum(f["valor_atual"] for f in fichas)
     total_carteira = snapshot["totais"]["valor_atual"]
+    # Base dos recortes: o regime das fichas, não a carteira. Ver `_agrupar`.
+    base_rv = snapshot["bases_concentracao"]["renda_variavel"]
 
     # ── Médias ponderadas pelo valor de mercado ──
     com_pvp = [(f["p_vp"], f["valor_atual"]) for f in fichas if f.get("p_vp")]
@@ -207,9 +217,11 @@ def consolidar(snapshot: dict, ia: dict | None) -> dict | None:
             "menor_dy": ordenados_dy[-1]["ticker"] if ordenados_dy else None,
         },
         "valor_total_carteira": round(total_carteira, 2),
-        "nao_coberto": _nao_coberto(total_carteira, valor_rv),
-        "por_classificacao": _agrupar(fichas, "classificacao_rotulo", total_carteira),
-        "por_segmento": _agrupar(fichas, "segmento", total_carteira),
-        "por_gestora": _agrupar(fichas, "gestora", total_carteira),
+        # Base declarada com os recortes: quem exibe o peso precisa dizer sobre o quê.
+        "valor_base_recortes": round(base_rv, 2),
+        "nao_coberto": _nao_coberto(base_rv, valor_rv),
+        "por_classificacao": _agrupar(fichas, "classificacao_rotulo", base_rv),
+        "por_segmento": _agrupar(fichas, "segmento", base_rv),
+        "por_gestora": _agrupar(fichas, "gestora", base_rv),
         "sem_posicao": sem_posicao,
     }

@@ -230,11 +230,16 @@ def snapshot_exemplo():
             },
         ],
         "limite_concentracao_pct": 25.0,
+        "bases_concentracao": {
+            "carteira": 22000.0,
+            "renda_variavel": 12000.0,
+            "renda_fixa": 10000.0,
+        },
         "emissores_renda_fixa": [
             {
                 "nome": "Inter",
                 "valor": 10000.0,
-                "peso_pct": 45.45,
+                "peso_pct": 100.0,
                 "garantia": "FGC",
                 "fgc_limite": 250000.0,
                 "fgc_uso_pct": 4.0,

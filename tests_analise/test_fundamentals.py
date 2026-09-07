@@ -6,13 +6,17 @@ from analise import fundamentals
 
 
 def snapshot_dois(snapshot_exemplo):
-    """Dois FIIs (30 mil e 10 mil) numa carteira de 50 mil.
+    """Dois FIIs (30 mil e 10 mil) e um CDB de 10 mil, numa carteira de 50 mil.
 
-    Os 10 mil restantes não têm ficha — é o que exercita a base da carteira
-    nos recortes e a linha "não coberto".
+    A base dos recortes é a renda variável — 40 mil, não os 50 mil da carteira.
     """
     base = copy.deepcopy(snapshot_exemplo)
     base["totais"]["valor_atual"] = 50000.0
+    base["bases_concentracao"] = {
+        "carteira": 50000.0,
+        "renda_variavel": 40000.0,
+        "renda_fixa": 10000.0,
+    }
     base["posicoes"] = [
         {
             "id": "a1",
@@ -37,6 +41,15 @@ def snapshot_dois(snapshot_exemplo):
             "preco_atual": 150.0,
             "preco_medio": 158.0,
             "quantidade": 66.0,
+        },
+        {
+            "id": "c3",
+            "tipo": "cdb",
+            "descricao": "CDB Inter 110% do CDI",
+            "valor_atual": 10000.0,
+            "valor_investido": 10000.0,
+            "peso_pct": 20.0,
+            "resultado_pct": 0.0,
         },
     ]
     return base
@@ -166,18 +179,42 @@ def test_agrupamentos_ordenados_por_valor(snapshot_exemplo):
     assert f["por_gestora"][0]["ativos"] == ["MXRF11"]
 
 
-def test_peso_dos_recortes_e_sobre_a_carteira_inteira(snapshot_exemplo):
+def test_peso_dos_recortes_e_sobre_a_renda_variavel(snapshot_exemplo):
     f = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())
 
-    # 30000 / 50000 — e não 30000 / 40000, que seria a base da renda variável.
-    assert f["por_segmento"][0]["peso_pct"] == 60.0
+    # 30000 / 40000 — e não 30000 / 50000, que diluiria o FII no CDB.
+    assert f["por_segmento"][0]["peso_pct"] == 75.0
+    assert f["valor_base_recortes"] == 40000.0
     assert f["valor_total_carteira"] == 50000.0
-    assert sum(g["peso_pct"] for g in f["por_segmento"]) == 80.0
+    assert sum(g["peso_pct"] for g in f["por_segmento"]) == 100.0
 
 
-def test_parte_da_carteira_sem_ficha_e_declarada(snapshot_exemplo):
+def test_renda_fixa_nao_entra_como_parte_descoberta(snapshot_exemplo):
     f = fundamentals.consolidar(snapshot_dois(snapshot_exemplo), ia_dois())
 
+    # Toda a renda variável tem ficha; o CDB não é da base, então não falta nada.
+    assert f["nao_coberto"] == {"valor": 0.0, "peso_pct": 0.0}
+
+
+def test_renda_variavel_sem_ficha_e_declarada(snapshot_exemplo):
+    base = snapshot_dois(snapshot_exemplo)
+    base["bases_concentracao"]["renda_variavel"] = 50000.0
+    base["posicoes"].append({
+        "id": "d4",
+        "tipo": "fii",
+        "ticker": "XPML11",
+        "valor_atual": 10000.0,
+        "valor_investido": 10000.0,
+        "peso_pct": 20.0,
+        "resultado_pct": 0.0,
+        "preco_atual": 100.0,
+        "preco_medio": 100.0,
+        "quantidade": 100.0,
+    })
+
+    f = fundamentals.consolidar(base, ia_dois())
+
+    # A IA não leu o XPML11: 10 mil dos 50 mil de renda variável ficam de fora.
     assert f["nao_coberto"] == {"valor": 10000.0, "peso_pct": 20.0}
 
 
@@ -238,6 +275,6 @@ def test_variantes_do_nome_da_gestora_viram_uma_linha_so(snapshot_exemplo):
     )
 
     assert [g["nome"] for g in f["por_gestora"]] == ["XP Asset Management"]
-    assert f["por_gestora"][0]["peso_pct"] == 80.0
+    assert f["por_gestora"][0]["peso_pct"] == 100.0
     assert f["por_gestora"][0]["ativos"] == ["MXRF11", "HGLG11"]
     assert [ficha["gestora"] for ficha in f["fichas"]] == ["XP Asset Management"] * 2

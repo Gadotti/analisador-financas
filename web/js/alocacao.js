@@ -1,15 +1,32 @@
 /**
  * Quadro "Alocação e concentração".
  *
- * Uma base e uma régua: todos os recortes são percentuais da carteira inteira
- * (é o que `fundamentals._agrupar` devolve) e todos usam o mesmo limite de
- * concentração configurado pelo usuário, desenhado como traço na barra.
+ * Uma base por regime, uma régua só: os recortes por ficha pesam sobre o total
+ * de renda variável e os emissores sobre o total de renda fixa (é o que
+ * `fundamentals._agrupar` e `analysis._emissores_renda_fixa` devolvem, sobre as
+ * bases de `snapshot.bases_concentracao`). O limite de concentração é um só,
+ * configurado sobre a carteira, e por isso é convertido para a base de cada
+ * recorte antes de virar traço na barra — ver `limiteNaBase`.
+ *
+ * O rosco continua na base da carteira: ele é justamente a divisão entre os
+ * regimes, que é o que dá sentido às duas bases abaixo dele.
  */
 
 import { $, corClasse, esc, moeda, moedaCurta, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
 const corDe = corClasse;
+
+/**
+ * Reescala o limite configurado (% da carteira) na base do recorte — mesma
+ * conta de `analysis.limite_na_base`, repetida aqui porque o limite vem do
+ * cadastro ao vivo e o traço tem de andar assim que o usuário o muda, sem
+ * esperar uma nova execução da análise.
+ */
+function limiteNaBase(limitePct, base, totalCarteira) {
+  if (!base || !totalCarteira) return limitePct;
+  return (limitePct * totalCarteira) / base;
+}
 
 /**
  * Barra proporcional, com o traço do limite de concentração por cima — omita
@@ -89,15 +106,15 @@ function linhaGrupo(grupo, limitePct) {
   </div>`;
 }
 
-/** Faixa hachurada com a parte da carteira que nenhum recorte alcança. */
+/** Faixa hachurada com a parte da renda variável que nenhum recorte alcança. */
 function linhaDescoberto(naoCoberto, explicar) {
   if (!naoCoberto?.valor) return "";
   const nota = explicar
-    ? `<div class="fgc">Renda fixa não recebe ficha da IA, então fica fora dos recortes.</div>`
+    ? `<div class="fgc">Posição de renda variável que a leitura por IA não cobriu.</div>`
     : "";
   return `<div class="grupo grupo-descoberto">
     <div class="grupo-cabeca">
-      <span class="grupo-nome">Sem ficha · renda fixa</span>
+      <span class="grupo-nome">Sem ficha · renda variável</span>
       <span class="grupo-peso mono">${pct(naoCoberto.peso_pct, 1, false)}</span>
     </div>
     <div class="trilho">
@@ -138,7 +155,7 @@ function blocoEmissores(emissores, limitePct) {
     .join("");
 
   return `<div class="emissores">
-    <div class="emissores-titulo">${icone("escudo", 14)}<span class="microrotulo" style="color:inherit">Emissores de renda fixa</span></div>
+    <div class="emissores-titulo">${icone("escudo", 14)}<span class="microrotulo" style="color:inherit">Emissores de renda fixa · % da renda fixa</span></div>
     ${linhas}
   </div>`;
 }
@@ -151,27 +168,32 @@ function colunaRecorte(titulo, grupos, limitePct, rodape = "") {
   return `<div class="recorte">
     <div class="recorte-topo">
       <span class="microrotulo">${titulo}</span>
-      <span class="mono grupo-valor">${grupos.length} grupo(s)</span>
+      <span class="grupo-valor">% da renda variável</span>
     </div>
     ${corpo}${rodape}
   </div>`;
 }
 
-const legendaRegua = (limitePct) => `<div class="legenda-regua">
+const legendaRegua = (limitePct, limiteRv, limiteRf) => `<div class="legenda-regua">
   <div><span class="amostra-limite"></span>
-    <span>Limite de concentração configurado — ${pct(limitePct, 0, false)}</span></div>
+    <span>Limite de concentração configurado — ${pct(limitePct, 0, false)} da carteira,
+      o mesmo que ${pct(limiteRv, 0, false)} da renda variável e ${pct(limiteRf, 0, false)} da renda fixa</span></div>
   <div><span class="amostra-faixa hachura"></span>
-    <span>Parte da carteira que o recorte não cobre</span></div>
+    <span>Parte da renda variável que o recorte não cobre</span></div>
   <div><span class="amostra-faixa" style="background:linear-gradient(90deg,var(--fii) 0 50%,var(--acao) 50% 100%)"></span>
     <span>A barra herda a cor da classe do ativo</span></div>
 </div>`;
+
+/** Pílula com o valor de uma base — omitida quando o regime está vazio. */
+const pilulaBase = (rotulo, valor) =>
+  valor ? `<span class="pilula mono">${rotulo} · ${moeda(valor)}</span>` : "";
 
 /**
  * Desenha o quadro inteiro.
  *
  * @param {object} snapshot Cálculo determinístico da carteira.
  * @param {object|null} fundamentos Recortes por ficha; ausente sem análise de IA.
- * @param {number} limitePct Limite de concentração configurado.
+ * @param {number} limitePct Limite de concentração configurado (% da carteira).
  */
 export function renderAlocacao(snapshot, fundamentos, limitePct) {
   const classes = Object.entries(snapshot.classes);
@@ -183,17 +205,22 @@ export function renderAlocacao(snapshot, fundamentos, limitePct) {
 
   const naoCoberto = fundamentos?.nao_coberto;
   const emissores = snapshot.emissores_renda_fixa || [];
+  const bases = snapshot.bases_concentracao || {};
+  const total = snapshot.totais.valor_atual;
+  const limiteRv = limiteNaBase(limitePct, bases.renda_variavel, total);
+  const limiteRf = limiteNaBase(limitePct, bases.renda_fixa, total);
 
   $("#alocacao-base").innerHTML =
-    `<span class="pilula mono">Base: carteira · ${moeda(snapshot.totais.valor_atual)}</span>
-     <span class="pilula pilula-limite mono">Limite ${pct(limitePct, 0, false)}</span>`;
+    pilulaBase("Renda variável", bases.renda_variavel) +
+    pilulaBase("Renda fixa", bases.renda_fixa) +
+    `<span class="pilula pilula-limite mono">Limite ${pct(limitePct, 0, false)} da carteira</span>`;
 
   $("#alocacao").innerHTML =
     blocoRosco(snapshot.classes) +
     `<div class="recortes">
-      ${colunaRecorte("Por classificação", fundamentos?.por_classificacao || [], limitePct, linhaDescoberto(naoCoberto, true))}
-      ${colunaRecorte("Por segmento", fundamentos?.por_segmento || [], limitePct, linhaDescoberto(naoCoberto, false))}
-      ${colunaRecorte("Por gestora / emissor", fundamentos?.por_gestora || [], limitePct, blocoEmissores(emissores, limitePct))}
+      ${colunaRecorte("Por classificação", fundamentos?.por_classificacao || [], limiteRv, linhaDescoberto(naoCoberto, true))}
+      ${colunaRecorte("Por segmento", fundamentos?.por_segmento || [], limiteRv, linhaDescoberto(naoCoberto, false))}
+      ${colunaRecorte("Por gestora / emissor", fundamentos?.por_gestora || [], limiteRv, blocoEmissores(emissores, limiteRf))}
     </div>` +
-    legendaRegua(limitePct);
+    legendaRegua(limitePct, limiteRv, limiteRf);
 }

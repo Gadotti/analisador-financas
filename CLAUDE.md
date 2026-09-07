@@ -308,8 +308,8 @@ carrega da API, guarda o último resultado e chama os módulos de `web/js/`, um 
 (`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `equivalencia`, `historico`,
 `configuracoes`), mais `painelPosicao`, que é só o formulário de cadastro, e os de apoio
 (`formato`, `api`, `icones`, `alertas`, `navegacao`). Nenhum cálculo da carteira mora no
-front — a única conta ali é a da tela de equivalência, e o porquê está em "Cuidados
-específicos". As chaves consumidas são as
+front — as duas contas ali são a da tela de equivalência e a régua de concentração de
+`alocacao.js`, e o porquê de cada uma está em "Cuidados específicos". As chaves consumidas são as
 mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
 junto.
 
@@ -328,17 +328,27 @@ recarregar a página e sem roteador. Ícones são SVG de traço em `web/js/icone
 glifos de texto ou emoji. O gráfico do histórico é SVG desenhado à mão em
 `web/js/historico.js`; não adicione biblioteca de gráfico.
 
-**Uma base e uma régua na alocação.** Os três recortes (`por_classificacao`,
-`por_segmento`, `por_gestora`) têm `peso_pct` sobre o **total da carteira**, não sobre o
-total das fichas — é a mesma base da alocação por classe, e por isso `fundamentals`
-devolve também `nao_coberto`, a parte sem ficha (renda fixa). O limite que vale em toda a
-interface é o `alerta_concentracao_pct` do cadastro, publicado no snapshot como
-`limite_concentracao_pct` e desenhado como traço na barra. Não reintroduza um limite fixo
-no front. O recorte por emissor de renda fixa vem de `snapshot.emissores_renda_fixa`
-(calculado em `analysis.py`, com o consumo do teto do FGC), porque `fundamentals` só
-percorre fichas de renda variável.
+**Uma base por regime, uma régua só na alocação.** Cada recorte pesa sobre o regime a que
+os seus itens pertencem, e não sobre a carteira inteira — a divisão entre regimes é o que
+o rosco de classes já mostra, logo acima. Os três recortes por ficha (`por_classificacao`,
+`por_segmento`, `por_gestora`) têm `peso_pct` sobre o **total de renda variável**, e por
+isso `nao_coberto` é a renda variável que a IA não leu (quase sempre zero), não mais a
+renda fixa. O recorte por emissor vem de `snapshot.emissores_renda_fixa` (calculado em
+`analysis.py`, com o consumo do teto do FGC, porque `fundamentals` só percorre fichas de
+renda variável) e pesa sobre o **total de renda fixa** — um título já vencido sai do
+recorte mas fica no total, então esses pesos podem somar menos de 100%.
 
-**A tela de equivalência é a única conta do front.** `web/js/equivalencia.js` converte a taxa
+As bases saem de `analysis._bases_concentracao` e vão no snapshot em
+`bases_concentracao` (`carteira`, `renda_variavel`, `renda_fixa`); `fundamentals` lê a de
+renda variável de lá e a republica em `valor_base_recortes`. O limite continua **um só**:
+o `alerta_concentracao_pct` do cadastro, publicado como `limite_concentracao_pct`. Como
+ele é declarado sobre a carteira, quem desenha o traço o converte para a base do recorte
+com `analysis.limite_na_base` — 25% da carteira são 50% de uma renda variável que responde
+por metade dela. `web/js/alocacao.js` repete essa conversão (`limiteNaBase`) porque lê o
+limite do cadastro ao vivo, para que mudá-lo em Configurações mova o traço na hora, sem
+uma nova execução. Não reintroduza um limite fixo no front.
+
+**A tela de equivalência calcula no front de propósito.** `web/js/equivalencia.js` converte a taxa
 que o usuário digita — uma LCI ofertada em taxa líquida contra um CDB em taxa bruta — e por
 isso responde a cada tecla, sem ida ao Python. A regra de negócio que ela usa não mora lá: as
 alíquotas vêm de `snapshot.ir_renda_fixa`, publicado por `fixed_income.faixas_ir()`, a mesma

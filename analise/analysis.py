@@ -46,22 +46,60 @@ def _cobertura_fgc(valor: float, limite_fgc: float, *, garantido: bool) -> dict:
     }
 
 
-def _emissores_renda_fixa(posicoes: list[dict], total: float, limite_fgc: float) -> list[dict]:
+def _emissores_renda_fixa(posicoes: list[dict], base: float, limite_fgc: float) -> list[dict]:
     """Exposição por emissor de renda fixa, com o consumo do teto do FGC.
 
     É o recorte que falta em `fundamentals`, que só percorre fichas de renda
     variável: nenhum emissor de renda fixa aparece lá.
+
+    `base` é o total de renda fixa (ver `_bases_concentracao`), não o da
+    carteira: a pergunta que o recorte responde é como o dinheiro em renda fixa
+    se divide entre Tesouro e bancos. Um título já vencido continua no total do
+    regime mas sai do recorte, então os pesos podem somar menos de 100%.
     """
     emissores = [
         {
             "nome": nome,
             "valor": round(valor, 2),
-            "peso_pct": round(valor / total * 100, 2) if total else 0.0,
+            "peso_pct": round(valor / base * 100, 2) if base else 0.0,
             **_cobertura_fgc(valor, limite_fgc, garantido=nome != portfolio.EMISSOR_TESOURO),
         }
         for nome, valor in _exposicao_por_emissor(posicoes, portfolio.TIPOS_RENDA_FIXA).items()
     ]
     return sorted(emissores, key=lambda e: e["valor"], reverse=True)
+
+
+def _bases_concentracao(posicoes: list[dict], total: float) -> dict[str, float]:
+    """Total de cada regime — a base dos percentuais do quadro de alocação.
+
+    Os recortes por ficha (classificação, segmento, gestora) pesam sobre o
+    total de renda variável e os emissores sobre o total de renda fixa: diluir
+    um FII na carteira inteira responde a outra pergunta, já respondida pela
+    alocação por classe. A carteira entra na tabela porque é a base do limite
+    de concentração configurado — quem converte o limite para cada regime é
+    `limite_na_base`.
+    """
+    def soma(tipos: tuple[str, ...]) -> float:
+        return round(sum(p["valor_atual"] for p in posicoes if p["tipo"] in tipos), 2)
+
+    return {
+        "carteira": round(total, 2),
+        "renda_variavel": soma(portfolio.TIPOS_VARIAVEL),
+        "renda_fixa": soma(portfolio.TIPOS_RENDA_FIXA),
+    }
+
+
+def limite_na_base(limite_pct: float, base: float, total_carteira: float) -> float:
+    """Converte o limite de concentração (% da carteira) para a base do recorte.
+
+    O usuário configura um limite só, sobre a carteira inteira. Um recorte que
+    pesa sobre um regime precisa da mesma exposição na sua própria régua: 25%
+    da carteira são 50% de uma renda variável que responde por metade dela.
+    Sem a conversão, o traço da barra compararia duas bases diferentes.
+    """
+    if not base or not total_carteira:
+        return limite_pct
+    return round(limite_pct * total_carteira / base, 2)
 
 
 def _alerta(severidade: str, titulo: str, descricao: str, alvo: str = "") -> dict:
@@ -218,6 +256,7 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
             "peso_pct": round(valor / total_atual * 100, 2) if total_atual else 0.0,
         }
 
+    bases = _bases_concentracao(posicoes, total_atual)
     alertas = _gerar_alertas(posicoes, total_atual, config)
 
     variaveis = [p for p in posicoes if p["tipo"] in portfolio.TIPOS_VARIAVEL and not p.get("erro_cotacao")]
@@ -238,8 +277,10 @@ def consolidar(carteira: dict | None = None, *, usar_cache: bool = True) -> dict
         "classes": classes,
         # Uma régua só: todo consumidor lê daqui o limite que o usuário configurou.
         "limite_concentracao_pct": float(config["alerta_concentracao_pct"]),
+        # E uma base por regime, para os recortes do quadro de alocação.
+        "bases_concentracao": bases,
         "emissores_renda_fixa": _emissores_renda_fixa(
-            posicoes, total_atual, float(config["limite_fgc"])
+            posicoes, bases["renda_fixa"], float(config["limite_fgc"])
         ),
         "posicoes": posicoes,
         "alertas": alertas,
