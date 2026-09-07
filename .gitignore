@@ -9,6 +9,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Pacotes de release
+_deploys/
+
 # Cobertura e logs
 coverage/
 *.log
