@@ -9,6 +9,7 @@ const CAMPOS = {
   "#c-prej": "alerta_prejuizo_pct",
   "#c-fatos": "max_fatos",
   "#c-opp": "max_oportunidades",
+  "#c-execucoes": "max_execucoes",
 };
 
 export function renderConfig(carteira) {

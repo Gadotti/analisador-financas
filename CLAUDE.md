@@ -97,6 +97,10 @@ arquivo do dia por cima. Quem monta a linha é `runner._registro_execucao`; a te
 Histórico lista o log e o `_status_execucao` classifica cada rodada em `sucesso`,
 `sem_ia`, `erro` ou `erro_recuperado` (falhou, mas a leitura anterior foi mantida).
 
+O log é uma janela deslizante: `config["max_execucoes"]` (30 por padrão, editável em
+Configurações) é o teto, e `_anexar_execucao` descarta as linhas mais antigas ao gravar a
+nova. O corte é do lado de quem **escreve** — o Node só lê o arquivo já cortado.
+
 Por isso `analise/portfolio.py` é **somente leitura** — sem CRUD, sem gravação, sem
 migração de formato. Se precisar de uma nova regra de validação de posição, ela vai em
 `src/core/portfolio.js` (renda variável e CRUD), `src/core/rendaFixa.js` (CDB e Tesouro) ou

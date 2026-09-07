@@ -35,11 +35,16 @@ export const PAGAMENTOS_TESOURO = rendaFixa.PAGAMENTOS_TESOURO;
 export const CONFIG_PADRAO = Object.freeze({
   max_fatos: 6,
   max_oportunidades: 4,
+  max_execucoes: 30,
   limite_fgc: 250000.0,
   alerta_vencimento_dias: 60,
   alerta_concentracao_pct: 25.0,
   alerta_prejuizo_pct: 15.0,
 });
+
+// Piso por chave; as demais aceitam zero. Um teto de log em zero apagaria o
+// log de execuções inteiro na rodada seguinte.
+const MINIMO_CONFIG = { max_execucoes: 1 };
 
 // ─────────────────────────────────────────────
 // Leitura / escrita
@@ -194,7 +199,7 @@ export function atualizarConfig(patch) {
   }
   for (const [chave, valor] of Object.entries(patch.config || {})) {
     if (chave in CONFIG_PADRAO) {
-      carteira.config[chave] = numero(valor, chave, { minimo: 0 });
+      carteira.config[chave] = numero(valor, chave, { minimo: MINIMO_CONFIG[chave] ?? 0 });
     }
   }
   save(carteira);

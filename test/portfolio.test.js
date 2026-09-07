@@ -178,6 +178,14 @@ describe("persistência e CRUD", () => {
   test("rejeita valores de config negativos", () => {
     expect(() => portfolio.atualizarConfig({ config: { limite_fgc: -1 } })).toThrow(/deve ser >= 0/);
   });
+
+  test("o teto do log de execuções tem 30 de padrão e não aceita zero", () => {
+    expect(portfolio.CONFIG_PADRAO.max_execucoes).toBe(30);
+    expect(portfolio.atualizarConfig({ config: { max_execucoes: "45" } }).config.max_execucoes)
+      .toBe(45);
+    expect(() => portfolio.atualizarConfig({ config: { max_execucoes: 0 } }))
+      .toThrow(/deve ser >= 1/);
+  });
 });
 
 describe("migração do formato antigo", () => {

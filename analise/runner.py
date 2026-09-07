@@ -14,9 +14,9 @@ from datetime import datetime
 from . import ai_insights, analysis, config_ia, fundamentals, portfolio
 from .paths import execucoes_file, garantir_diretorios, history_dir, last_analysis_file
 
-# Teto do log de execuções. Cada linha é pequena; o limite existe só para o
-# arquivo não crescer para sempre em quem roda a análise várias vezes ao dia.
-LIMITE_EXECUCOES = 300
+# Teto do log de execuções quando o cadastro não o declara. O valor real vem de
+# `config["max_execucoes"]`, ajustável na tela de Configurações.
+LIMITE_EXECUCOES_PADRAO = portfolio.CONFIG_PADRAO["max_execucoes"]
 
 
 def executar(
@@ -59,7 +59,7 @@ def executar(
     resultado["duracao_s"] = round(time.monotonic() - inicio, 1)
 
     if salvar:
-        persistir(resultado)
+        persistir(resultado, carteira["config"])
 
     return resultado
 
@@ -135,15 +135,28 @@ def _registro_execucao(registro: dict) -> dict:
     }
 
 
-def _anexar_execucao(registro: dict) -> None:
-    """Acrescenta esta execução ao log, respeitando o teto."""
-    log = execucoes(limite=LIMITE_EXECUCOES - 1)
+def _limite_execucoes(config: dict | None) -> int:
+    """Quantas linhas o log guarda, conforme o cadastro.
+
+    Um valor ausente ou ilegível cai no padrão; abaixo de 1 o log se apagaria
+    inteiro, então esse é o piso.
+    """
+    try:
+        limite = int((config or {}).get("max_execucoes", LIMITE_EXECUCOES_PADRAO))
+    except (TypeError, ValueError):
+        return LIMITE_EXECUCOES_PADRAO
+    return max(1, limite)
+
+
+def _anexar_execucao(registro: dict, limite: int) -> None:
+    """Acrescenta esta execução ao log, descartando as mais antigas além do teto."""
+    log = execucoes(limite=limite - 1) if limite > 1 else []
     log.append(_registro_execucao(registro))
     with open(execucoes_file(), "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
 
 
-def persistir(resultado: dict) -> dict:
+def persistir(resultado: dict, config: dict | None = None) -> dict:
     registro = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
         **resultado,
@@ -156,7 +169,7 @@ def persistir(resultado: dict) -> dict:
     with open(arquivo, "w", encoding="utf-8") as f:
         json.dump(registro, f, ensure_ascii=False, indent=2)
 
-    _anexar_execucao(registro)
+    _anexar_execucao(registro, _limite_execucoes(config))
     return registro
 
 

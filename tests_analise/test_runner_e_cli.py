@@ -275,12 +275,23 @@ def test_execucao_sem_ia_nao_registra_modelo(carteira, mercado):
     assert (execucao["modelo"], execucao["effort"], execucao["buscas_web"]) == (None, None, None)
 
 
-def test_log_de_execucoes_respeita_o_teto(carteira, mercado, monkeypatch):
-    monkeypatch.setattr(runner, "LIMITE_EXECUCOES", 3)
+def test_log_de_execucoes_respeita_o_teto_do_cadastro(carteira, mercado):
+    """Passando do teto, a rodada mais antiga sai para a nova entrar."""
+    (carteira / "portfolio.json").write_text(
+        json.dumps({**CARTEIRA_UM_FII, "config": {"max_execucoes": 3}}), encoding="utf-8"
+    )
     for _ in range(5):
         runner.executar(usar_ia=False)
 
-    assert len(runner.execucoes(limite=99)) == 3
+    log = runner.execucoes(limite=99)
+    assert len(log) == 3
+    assert log == sorted(log, key=lambda e: e["gerado_em"]), "as mais antigas é que saem"
+
+
+def test_teto_do_log_cai_no_padrao_quando_o_cadastro_nao_declara(carteira, mercado):
+    assert runner._limite_execucoes({}) == runner.LIMITE_EXECUCOES_PADRAO == 30
+    assert runner._limite_execucoes({"max_execucoes": "vinte"}) == 30
+    assert runner._limite_execucoes({"max_execucoes": 0}) == 1, "zero apagaria o log"
 
 
 def test_execucoes_ignora_arquivo_ausente_ou_corrompido(dados_temp):

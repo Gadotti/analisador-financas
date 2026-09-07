@@ -29,6 +29,7 @@ EMISSOR_TESOURO = "Tesouro Nacional"
 CONFIG_PADRAO = {
     "max_fatos": 6,
     "max_oportunidades": 4,
+    "max_execucoes": 30,
     "limite_fgc": 250000.0,
     "alerta_vencimento_dias": 60,
     "alerta_concentracao_pct": 25.0,
