@@ -75,9 +75,9 @@ def _bases_concentracao(posicoes: list[dict], total: float) -> dict[str, float]:
     Os recortes por ficha (classificação, segmento, gestora) pesam sobre o
     total de renda variável e os emissores sobre o total de renda fixa: diluir
     um FII na carteira inteira responde a outra pergunta, já respondida pela
-    alocação por classe. A carteira entra na tabela porque é a base do limite
-    de concentração configurado — quem converte o limite para cada regime é
-    `limite_na_base`.
+    alocação por classe. O limite de concentração configurado vale sobre a base
+    do recorte, a mesma do peso exibido — não sobre a carteira. A carteira
+    entra na tabela porque a interface mostra o quanto cada regime representa.
     """
     def soma(tipos: tuple[str, ...]) -> float:
         return round(sum(p["valor_atual"] for p in posicoes if p["tipo"] in tipos), 2)
@@ -87,19 +87,6 @@ def _bases_concentracao(posicoes: list[dict], total: float) -> dict[str, float]:
         "renda_variavel": soma(portfolio.TIPOS_VARIAVEL),
         "renda_fixa": soma(portfolio.TIPOS_RENDA_FIXA),
     }
-
-
-def limite_na_base(limite_pct: float, base: float, total_carteira: float) -> float:
-    """Converte o limite de concentração (% da carteira) para a base do recorte.
-
-    O usuário configura um limite só, sobre a carteira inteira. Um recorte que
-    pesa sobre um regime precisa da mesma exposição na sua própria régua: 25%
-    da carteira são 50% de uma renda variável que responde por metade dela.
-    Sem a conversão, o traço da barra compararia duas bases diferentes.
-    """
-    if not base or not total_carteira:
-        return limite_pct
-    return round(limite_pct * total_carteira / base, 2)
 
 
 def _alerta(severidade: str, titulo: str, descricao: str, alvo: str = "") -> dict:

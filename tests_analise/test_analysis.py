@@ -340,13 +340,6 @@ def test_bases_de_concentracao_separam_os_regimes(dados_temp, mercado_padrao):
     assert round(sum(e["peso_pct"] for e in snapshot["emissores_renda_fixa"]), 1) == 100.0
 
 
-def test_limite_de_concentracao_vai_para_a_base_do_recorte():
-    # 25% de uma carteira em que a renda variável é metade são 50% dela.
-    assert analysis.limite_na_base(25.0, 50000.0, 100000.0) == 50.0
-    assert analysis.limite_na_base(25.0, 100000.0, 100000.0) == 25.0
-    assert analysis.limite_na_base(25.0, 0.0, 100000.0) == 25.0, "sem base, o limite não muda"
-
-
 def test_concentracao_no_tesouro_nao_gera_alerta_de_fgc():
     """O teto do FGC é por banco: o Tesouro Nacional não o consome."""
     posicoes = [

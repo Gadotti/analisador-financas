@@ -81,6 +81,22 @@ def test_recortes_declaram_a_base_da_renda_variavel(snapshot_exemplo, ia_exemplo
     assert "Sem ficha" not in saida, "o CDB não é da base, então nada falta cobrir"
 
 
+def test_marcador_de_concentracao_le_o_limite_na_base_do_recorte(snapshot_exemplo, ia_exemplo):
+    base = copy.deepcopy(snapshot_exemplo)
+    base["limite_concentracao_pct"] = 50.0
+    base["totais"]["valor_atual"] = 100000.0
+    base["bases_concentracao"] = {
+        "carteira": 100000.0,
+        "renda_variavel": 12000.0,
+        "renda_fixa": 88000.0,
+    }
+
+    saida = report.texto(base, ia_exemplo, fundamentos(base, ia_exemplo))
+
+    # 12% da carteira, mas 100% da renda variável: o limite vale na base exibida.
+    assert re.search(r"Recebíveis\s+100,0%.*⚠", saida)
+
+
 def test_renda_variavel_sem_ficha_aparece_como_descoberta(snapshot_exemplo, ia_exemplo):
     base = copy.deepcopy(snapshot_exemplo)
     outro_fii = copy.deepcopy(next(p for p in base["posicoes"] if p["tipo"] == "fii"))

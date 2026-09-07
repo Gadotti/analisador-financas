@@ -13,4 +13,8 @@ __pycache__/
 coverage/
 *.log
 /design
-/data
+/data/history
+data/cache.json
+data/execucoes.json
+data/last_analysis.json
+data/portfolio.json

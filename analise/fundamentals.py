@@ -68,8 +68,8 @@ def _agrupar(fichas: list[dict], campo: str, base: float) -> list[dict]:
     regime a que toda ficha pertence — não sobre a carteira inteira nem sobre o
     total das fichas. Diluir um segmento de FII no que está em CDB responderia
     a outra pergunta, e essa a alocação por classe já responde. O limite de
-    concentração configurado é convertido para a mesma base em
-    `analysis.limite_na_base`.
+    concentração configurado é lido na mesma base: 50% aqui é metade da renda
+    variável.
     """
     grupos: dict[str, list[dict]] = {}
     for f in fichas:

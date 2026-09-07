@@ -308,8 +308,8 @@ carrega da API, guarda o último resultado e chama os módulos de `web/js/`, um 
 (`visaoGeral`, `alocacao`, `posicoes`, `analiseIa`, `equivalencia`, `historico`,
 `configuracoes`), mais `painelPosicao`, que é só o formulário de cadastro, e os de apoio
 (`formato`, `api`, `icones`, `alertas`, `navegacao`). Nenhum cálculo da carteira mora no
-front — as duas contas ali são a da tela de equivalência e a régua de concentração de
-`alocacao.js`, e o porquê de cada uma está em "Cuidados específicos". As chaves consumidas são as
+front — a única conta ali é a da tela de equivalência, e o porquê está em "Cuidados
+específicos". As chaves consumidas são as
 mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
 junto.
 
@@ -341,14 +341,16 @@ recorte mas fica no total, então esses pesos podem somar menos de 100%.
 As bases saem de `analysis._bases_concentracao` e vão no snapshot em
 `bases_concentracao` (`carteira`, `renda_variavel`, `renda_fixa`); `fundamentals` lê a de
 renda variável de lá e a republica em `valor_base_recortes`. O limite continua **um só**:
-o `alerta_concentracao_pct` do cadastro, publicado como `limite_concentracao_pct`. Como
-ele é declarado sobre a carteira, quem desenha o traço o converte para a base do recorte
-com `analysis.limite_na_base` — 25% da carteira são 50% de uma renda variável que responde
-por metade dela. `web/js/alocacao.js` repete essa conversão (`limiteNaBase`) porque lê o
-limite do cadastro ao vivo, para que mudá-lo em Configurações mova o traço na hora, sem
-uma nova execução. Não reintroduza um limite fixo no front.
+o `alerta_concentracao_pct` do cadastro, publicado como `limite_concentracao_pct` e
+desenhado como traço na barra. Ele é lido **na base do recorte**, a mesma do peso que está
+ao lado — 50% é metade da renda variável nos três recortes por ficha e metade da renda
+fixa nos emissores. Não o reescale para a carteira: num regime que vale um terço dela, 50%
+da carteira seriam 150% do recorte, o traço encostaria no fim da escala e nenhuma barra o
+alcançaria. O alerta de concentração por posição (`analysis._gerar_alertas`) segue medindo
+o mesmo limite sobre a carteira — são leituras diferentes da mesma régua, e é por isso que
+a tela declara a base. Não reintroduza um limite fixo no front.
 
-**A tela de equivalência calcula no front de propósito.** `web/js/equivalencia.js` converte a taxa
+**A tela de equivalência é a única conta do front.** `web/js/equivalencia.js` converte a taxa
 que o usuário digita — uma LCI ofertada em taxa líquida contra um CDB em taxa bruta — e por
 isso responde a cada tecla, sem ida ao Python. A regra de negócio que ela usa não mora lá: as
 alíquotas vêm de `snapshot.ir_renda_fixa`, publicado por `fixed_income.faixas_ir()`, a mesma

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from . import analysis, formato, portfolio
+from . import formato, portfolio
 from .formato import LARGURA, data_br, moeda
 
 SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
@@ -194,12 +194,8 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         )
 
     if fundamentos:
-        # Os recortes por ficha pesam sobre a renda variável, então o limite
-        # configurado sobre a carteira vai para a mesma base antes de comparar.
-        bases = snapshot["bases_concentracao"]
-        limite_conc = analysis.limite_na_base(
-            snapshot["limite_concentracao_pct"], bases["renda_variavel"], bases["carteira"]
-        )
+        # O limite vale sobre a base do recorte — aqui, a renda variável.
+        limite_conc = snapshot["limite_concentracao_pct"]
         for titulo, chave in (
             ("Por classificação", "por_classificacao"),
             ("Por segmento", "por_segmento"),
