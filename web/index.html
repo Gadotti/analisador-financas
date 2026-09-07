@@ -235,6 +235,210 @@
       </section>
     </main>
 
+    <!-- ── Disparadores ─────────────────── -->
+    <main class="pagina hidden" id="pg-disparadores">
+      <p class="rodape">
+        <code>scripts/analisar.py</code> é o único ponto do sistema que calcula a carteira, chama a
+        IA e fala com o Telegram — a interface, o terminal e o Agendador de Tarefas do Windows
+        disparam sempre o mesmo script, só com flags diferentes. Esta página lista as três formas e,
+        onde já existe uma rota preparada, deixa o disparo a um clique.
+      </p>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Pela interface</span>
+          <span class="cartao-meta">o mesmo botão do topo, para conferir o comando por trás</span>
+        </div>
+        <div class="disparador-lista">
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Analisar com IA</span>
+              <span class="disparador-desc">Recalcula a carteira e chama o provedor de IA ativo para
+                gerar as fichas por ativo, os riscos e os fatos. Consulta fontes na web e leva mais
+                tempo. Exige IA configurada em Configurações.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-analise-ia">Rodar agora</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Atualizar cotações</span>
+              <span class="disparador-desc">Só recalcula preços e marcação a mercado, sem chamar a
+                IA. As fichas por ativo da última leitura são mantidas (<code>ia_reaproveitada_de</code>),
+                não apagadas.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --sem-ia</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-cotacoes">Rodar agora</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Reenviar última análise ao Telegram</span>
+              <span class="disparador-desc">Envia o relatório já salvo em disco, sem recalcular nada.
+                Útil depois de uma queda de conexão no envio automático.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --enviar-ultima</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-telegram-enviar">Enviar agora</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Testar conexão com o Telegram</span>
+              <span class="disparador-desc">Confirma o token do bot e manda uma mensagem de teste ao
+                chat configurado, sem tocar na carteira.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --testar-telegram</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-telegram-testar">Testar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Testar conexão com a IA</span>
+              <span class="disparador-desc">Ping mínimo ao provedor escolhido — gasta poucos tokens e
+                não altera a carteira nem a análise salva.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --testar-ia --provedor &lt;nome&gt;</span>
+            </div>
+            <div class="disparador-acoes">
+              <select id="disp-ia-provedor" aria-label="Provedor a testar">
+                <option value="anthropic">Anthropic</option>
+                <option value="kimi">Kimi (Moonshot AI)</option>
+              </select>
+              <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-ia-testar">Testar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Pelo terminal</span>
+          <span class="cartao-meta">na pasta do projeto, com o ambiente Python ativo</span>
+        </div>
+        <div class="disparador-lista">
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Análise completa, com relatório no terminal</span>
+              <span class="disparador-desc">Mesmo cálculo do botão “Analisar com IA”, mas imprime o
+                relatório em texto em vez de devolver JSON — é o que se roda para acompanhar ao vivo.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Cálculo e envio ao Telegram em um só comando</span>
+              <span class="disparador-desc">A interface separa isso em dois cliques (analisar, depois
+                reenviar); no terminal os dois saem juntos.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --telegram</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --telegram">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Ignorar o cache de cotações</span>
+              <span class="disparador-desc">Força uma nova busca de preços mesmo que o cache ainda
+                valha — útil para conferir uma cotação que parece desatualizada.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --sem-cache</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --sem-cache">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Rodar sem gravar no histórico</span>
+              <span class="disparador-desc">Calcula e mostra o resultado sem tocar em
+                <code>last_analysis.json</code>, <code>history/</code> ou <code>execucoes.json</code> —
+                uma execução de teste que não deve contar como leitura do dia.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --nao-salvar</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --nao-salvar">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Resultado bruto em JSON</span>
+              <span class="disparador-desc">O mesmo contrato que o servidor Node usa para ler o
+                resultado: só o JSON no stdout, com o progresso no stderr.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --json</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --json">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Testar um provedor que não é o ativo</span>
+              <span class="disparador-desc">O botão “Testar conexão com a IA” já cobre isso, mas pelo
+                terminal dá para testar um provedor específico sem trocar o <code>IA_PROVEDOR</code>
+                do <code>.env</code>.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --testar-ia --provedor kimi</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --testar-ia --provedor kimi">Copiar</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <div class="cartao-topo">
+          <span class="cartao-titulo">Pelo Agendador de Tarefas do Windows</span>
+          <span class="cartao-meta"><code>agendar_tarefa.ps1</code> — registra a rotina de segunda a sexta</span>
+        </div>
+        <div class="disparador-lista">
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Registrar a tarefa padrão</span>
+              <span class="disparador-desc">Análise completa com IA, todo dia útil às 09:00, sem
+                enviar ao Telegram. A saída fica em <code>analise.log</code>.</span>
+              <span class="disparador-comando mono">.\agendar_tarefa.ps1</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Outro horário, com envio ao Telegram</span>
+              <span class="disparador-desc">Troca o horário e liga o envio automático do relatório ao
+                final de cada execução agendada.</span>
+              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -Horario "18:30" -ComTelegram</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando='.\agendar_tarefa.ps1 -Horario "18:30" -ComTelegram'>Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Só cálculos, sem IA</span>
+              <span class="disparador-desc">Agenda a versão mais barata e mais rápida da rotina — o
+                equivalente agendado do botão “Atualizar cotações”.</span>
+              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -SemIA</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1 -SemIA">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Rodar a tarefa agendada agora, fora do horário</span>
+              <span class="disparador-desc">Dispara a tarefa já registrada imediatamente, para testar
+                sem esperar o próximo horário.</span>
+              <span class="disparador-comando mono">Start-ScheduledTask -TaskName PortfolioAnalyzer</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="Start-ScheduledTask -TaskName PortfolioAnalyzer">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Remover a tarefa</span>
+              <span class="disparador-desc">Cancela o agendamento registrado — não afeta nenhuma
+                análise já salva.</span>
+              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -Remover</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1 -Remover">Copiar</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
     <!-- ── Configurações ───────────────── -->
     <main class="pagina hidden" id="pg-configuracoes">
       <form id="form-ambiente">

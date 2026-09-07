@@ -9,6 +9,7 @@ export const TELAS = [
   { id: "analise", rotulo: "Análise", icone: "analise", subtitulo: "Fichas por ativo e leitura da IA" },
   { id: "equivalencia", rotulo: "Equivalência", icone: "balanca", subtitulo: "Quanto uma LCI isenta vale em CDB" },
   { id: "historico", rotulo: "Histórico", icone: "historico", subtitulo: "Evolução das execuções registradas" },
+  { id: "disparadores", rotulo: "Disparadores", icone: "raio", subtitulo: "Todas as formas de rodar a análise" },
   { id: "configuracoes", rotulo: "Configurações", icone: "configuracoes", subtitulo: "Perfil e limites de alerta" },
 ];
 

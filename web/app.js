@@ -10,6 +10,7 @@ import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.
 import { renderAlocacao } from "./js/alocacao.js";
 import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
 import { coletarConfig, renderConfig } from "./js/configuracoes.js";
+import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
 import { renderHistorico } from "./js/historico.js";
@@ -200,6 +201,7 @@ async function aplicarStatus() {
   $("#btn-analise").disabled = !status.ia_disponivel;
   $("#btn-telegram").disabled = !status.telegram_configurado;
   $("#rodape-nav").textContent = `Versão ${status.versao}`;
+  aplicarStatusDisparadores(status);
   if (!status.telegram_configurado) {
     $("#btn-telegram").title = "Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env";
   }
@@ -215,6 +217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ligarPosicoes();
   ligarEquivalencia();
   ligarAmbiente();
+  ligarDisparadores({ rodarAnalise, enviarAoTelegram });
   iniciarNavegacao(abrirTela);
 
   $("#btn-nova").addEventListener("click", () => abrirPainel());

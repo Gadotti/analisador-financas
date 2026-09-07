@@ -29,6 +29,13 @@ const CAMINHOS = {
   excluir: '<path d="M4 5.5h12M8.2 5.5V3.8h3.6v1.7M5.6 5.5l.8 10.7h7.2l.8-10.7"></path>',
   moeda:
     '<circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.8v8.4M12.6 7.6c-.4-.9-1.3-1.3-2.4-1.3-1.4 0-2.4.7-2.4 1.7 0 2.4 5 1 5 3.4 0 1-1 1.7-2.4 1.7-1.1 0-2-.4-2.4-1.3"></path>',
+  raio: '<path d="M11 2.2L4.5 11.5h4.3L8 17.8l7.5-9.6h-4.4z"></path>',
+  terminal:
+    '<path d="M3 4.5h14v11H3z"></path><path d="M5.6 8l2.8 2.4-2.8 2.4M10.6 12.8h3.8"></path>',
+  calendario:
+    '<path d="M3.5 4.5h13v12h-13z"></path><path d="M3.5 7.8h13M6.8 2.8v3M13.2 2.8v3"></path>',
+  copiar:
+    '<path d="M7.5 7.5h9v9h-9z"></path><path d="M4.5 12.5h-1v-9h9v1"></path>',
 };
 
 /** SVG do ícone, pronto para injetar como HTML. */

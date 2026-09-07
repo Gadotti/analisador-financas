@@ -586,6 +586,36 @@ a:hover { color: var(--amber-forte); }
 .segmentado button:hover { color: var(--t1); }
 .segmentado button[aria-pressed="true"] { background: var(--card); color: var(--t1); }
 
+/* ── Disparadores ──────────────────────── */
+
+code {
+  font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  font-size: .93em;
+  color: var(--t2);
+}
+
+.disparador-lista { display: flex; flex-direction: column; }
+.disparador-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--borda);
+}
+.disparador-item:last-child { border-bottom: none; padding-bottom: 0; }
+.disparador-item:first-child { padding-top: 0; }
+.disparador-texto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.disparador-titulo { font-size: var(--f-corpo); font-weight: 600; }
+.disparador-desc { font-size: var(--f-apoio); color: var(--t3); line-height: 1.5; max-width: 62ch; }
+.disparador-comando {
+  font-size: var(--f-apoio); color: var(--azul); background: rgba(77, 171, 247, .1);
+  border-radius: 5px; padding: 3px 7px; width: fit-content; margin-top: 2px;
+}
+.disparador-acoes { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.disparador-acoes select {
+  height: 30px; background: var(--card2); border: 1px solid var(--borda-forte);
+  border-radius: 7px; padding: 0 8px; color: var(--t1);
+  font-size: var(--f-apoio); font-family: inherit; cursor: pointer;
+}
+.btn-copiar { flex-shrink: 0; }
+
 /* ── Painel lateral de cadastro ────────── */
 
 .veu {
@@ -722,4 +752,6 @@ a:hover { color: var(--amber-forte); }
   .busca input { width: 100%; }
   .btn, .nav-item, .btn-icone { min-height: 44px; }
   .btn-icone { min-width: 44px; }
+  .disparador-item { flex-direction: column; align-items: flex-start; }
+  .disparador-acoes { align-self: stretch; }
 }
