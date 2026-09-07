@@ -4,12 +4,6 @@ node_modules/
 # Credenciais
 .env
 
-# Dados locais da carteira
-data/portfolio.json
-data/cache.json
-data/last_analysis.json
-data/history/
-
 # Python
 __pycache__/
 *.pyc
@@ -19,3 +13,4 @@ __pycache__/
 coverage/
 *.log
 /design
+/data
