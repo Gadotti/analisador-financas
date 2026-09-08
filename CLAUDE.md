@@ -372,6 +372,20 @@ porque o CDI é a base da conversão. Por isso `renderMacro` escreve em todo `[d
 `[data-macro-quando]`, e não num id — para acrescentar o quadro a uma terceira tela basta
 repetir a marcação, sem tocar no JS.
 
+**A mensagem do Telegram é HTML, e o corte é por linha.** O Telegram aceita só um HTML
+restrito e recusa a mensagem inteira com **400** se houver tag aberta, entidade partida ou
+mais de 4096 caracteres — então todo texto vindo da IA ou do cadastro passa por
+`formato.escapar_html`, e cada linha de `report.telegram` fecha as próprias tags. É essa
+invariante que permite `_juntar_no_limite` descartar as **últimas linhas inteiras** quando
+não couberem; nunca volte a cortar a string no meio (`mensagem[:4090]`), porque um `<i>`
+aberto derruba o envio. O limite é contado em **unidades UTF-16** (`_unidades_utf16`) — o
+relatório é cheio de emoji, e cada um fora do BMP vale 2. O rodapé com o aviso de que o
+material não é recomendação fica fora do corte e é sempre mantido.
+
+`notifier._conferir` levanta o `description` que a API devolveu ("chat not found",
+"can't parse entities") em vez de `resp.raise_for_status()`: a mensagem dele traz a URL
+chamada, e o **token do bot vai na URL** — ele apareceria no log e na tela do usuário.
+
 **Localizar o Python.** `src/server/analiseExterna.js` usa `PYTHON_BIN` quando definido,
 senão `python` no Windows e `python3` nos demais. Um `ENOENT` no spawn vira uma mensagem
 explicando isso — mantenha esse tratamento.

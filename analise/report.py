@@ -32,6 +32,10 @@ OPP_ICONE = {
 TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB", "tesouro": "TD"}
 CUPOM_ROTULO = {"mensal": "juros mensais", "semestral": "juros semestrais"}
 
+# Teto de uma mensagem do Telegram, contado por ele em unidades UTF-16.
+LIMITE_TELEGRAM = 4096
+AVISO_CORTE = "<i>… relatório cortado no limite de tamanho do Telegram.</i>"
+
 
 # ─────────────────────────────────────────────
 # Terminal
@@ -380,6 +384,41 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
 # Telegram (HTML)
 # ─────────────────────────────────────────────
 
+def _unidades_utf16(texto: str) -> int:
+    """Comprimento como o Telegram conta: unidades UTF-16, não code points.
+
+    Cada emoji fora do BMP vale 2 — medir em caracteres subestima o tamanho e
+    o relatório, cheio de ícones, estouraria o limite mesmo parecendo caber.
+    """
+    return len(texto.encode("utf-16-le")) // 2
+
+
+def _juntar_no_limite(
+    linhas: list[str], rodape: list[str], limite: int = LIMITE_TELEGRAM
+) -> str:
+    """Junta corpo e rodapé sem passar do limite, descartando linhas do corpo.
+
+    O corte é por linha inteira porque cada linha fecha as próprias tags:
+    cortar no meio deixaria um `<b>` ou `<i>` aberto (ou uma entidade `&amp;`
+    partida) e a API devolveria 400 — "can't parse entities". O rodapé é sempre
+    mantido: é onde vai o aviso de que o material não é recomendação.
+    """
+    inteiro = linhas + rodape
+    if _unidades_utf16("\n".join(inteiro)) <= limite:
+        return "\n".join(inteiro)
+
+    teto = limite - _unidades_utf16("\n".join([AVISO_CORTE] + rodape)) - 2
+    mantidas: list[str] = []
+    total = 0
+    for linha in linhas:
+        custo = _unidades_utf16(linha) + 1
+        if total + custo > teto:
+            break
+        mantidas.append(linha)
+        total += custo
+    return "\n".join(mantidas + ["", AVISO_CORTE] + rodape)
+
+
 def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
     t = snapshot["totais"]
     saude = snapshot["saude_carteira"]
@@ -454,12 +493,10 @@ def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = 
         linhas += ["", f"<i>🕓 Leitura herdada da análise de {herdada} — "
                        "esta execução não chamou a IA.</i>"]
 
-    linhas += [
+    rodape = [
         "",
         "<i>⚠️ Valores de renda fixa são estimativas e indicadores foram levantados por IA. "
         "Material informativo, não é recomendação de investimento.</i>",
     ]
 
-    mensagem = "\n".join(linhas)
-    # O Telegram limita mensagens a 4096 caracteres.
-    return mensagem[:4090] + "…" if len(mensagem) > 4096 else mensagem
+    return _juntar_no_limite(linhas, rodape)

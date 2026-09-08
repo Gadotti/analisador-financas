@@ -226,8 +226,30 @@ def test_trunca_no_limite_do_telegram(snapshot_exemplo, ia_exemplo):
     ia = {**ia_exemplo, "resumo": "palavra " * 2000}
     msg = report.telegram(snapshot_exemplo, ia)
 
-    assert len(msg) <= 4096
-    assert msg.endswith("…")
+    assert report._unidades_utf16(msg) <= report.LIMITE_TELEGRAM
+    assert report.AVISO_CORTE in msg
+
+
+def test_corte_nao_deixa_tag_html_aberta(snapshot_exemplo, ia_exemplo):
+    """Um `<i>` partido no meio faz a API devolver 400 (can't parse entities)."""
+    ia = {**ia_exemplo, "resumo": "palavra " * 2000}
+    msg = report.telegram(snapshot_exemplo, ia)
+
+    assert msg.count("<b>") == msg.count("</b>")
+    assert msg.count("<i>") == msg.count("</i>")
+
+
+def test_corte_preserva_o_aviso_de_nao_recomendacao(snapshot_exemplo, ia_exemplo):
+    ia = {**ia_exemplo, "resumo": "palavra " * 2000}
+    msg = report.telegram(snapshot_exemplo, ia)
+
+    assert "não é recomendação de investimento" in msg
+
+
+def test_limite_do_telegram_conta_emoji_como_duas_unidades():
+    """O Telegram mede em UTF-16: contar code points subestima o tamanho."""
+    assert report._unidades_utf16("📊") == 2
+    assert report._unidades_utf16("ação") == 4
 
 
 def test_bloco_de_segmentos_so_com_mais_de_um(snapshot_exemplo, ia_exemplo):

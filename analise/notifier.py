@@ -13,6 +13,24 @@ def configurado() -> bool:
     return bool(os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"))
 
 
+def _conferir(resp, acao: str) -> dict:
+    """Devolve o corpo da resposta ou levanta o motivo que a API informou.
+
+    Não use `raise_for_status()` aqui: a mensagem dele traz a URL chamada, e o
+    token do bot vai na URL — ele acabaria no log e na tela. O `description` do
+    Telegram é o que diz de fato o que houve ("chat not found",
+    "can't parse entities").
+    """
+    if resp.ok:
+        return resp.json()
+
+    try:
+        motivo = resp.json().get("description") or resp.text
+    except ValueError:
+        motivo = resp.text
+    raise RuntimeError(f"Telegram recusou {acao} (HTTP {resp.status_code}): {motivo}")
+
+
 def enviar(mensagem: str) -> dict:
     """Envia uma mensagem HTML ao chat configurado."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -32,8 +50,7 @@ def enviar(mensagem: str) -> dict:
         },
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
-    return resp.json()
+    return _conferir(resp, "o envio da mensagem")
 
 
 def testar() -> str:
@@ -43,8 +60,7 @@ def testar() -> str:
         raise RuntimeError("TELEGRAM_BOT_TOKEN não configurado.")
 
     resp = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=TIMEOUT)
-    resp.raise_for_status()
-    nome = resp.json()["result"].get("first_name", "Bot")
+    nome = _conferir(resp, "a validação do token")["result"].get("first_name", "Bot")
 
     enviar(
         "🤖 <b>Portfolio Analyzer conectado</b>\n"
