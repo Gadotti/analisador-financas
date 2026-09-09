@@ -66,7 +66,7 @@ export function iniciar(argv = []) {
 
   servidor.listen(porta, HOST, () => {
     const { ok, motivo } = ambiente.statusIa();
-    process.stdout.write(`\n  Portfolio Analyzer — ${endereco}\n`);
+    process.stdout.write(`\n  Analisador de Finanças — ${endereco}\n`);
     process.stdout.write(
       `  Análise por IA: ${
         ok

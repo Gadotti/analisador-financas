@@ -1,4 +1,4 @@
-# Portfolio Analyzer
+# Analisador de Finanças
 
 Sistema local de acompanhamento e análise de carteira de investimentos — **FIIs, ações e CDBs**.
 Cotações reais da B3, marcação a mercado de renda fixa, alertas automáticos e uma leitura
@@ -92,7 +92,7 @@ Ou dê duplo clique em **`analisar.bat`**.
 Registra a tarefa no Agendador de Tarefas do Windows, no contexto do seu usuário
 (não exige administrador). A saída de cada execução é gravada em `analise.log`.
 
-Para testar imediatamente: `Start-ScheduledTask -TaskName PortfolioAnalyzer`
+Para testar imediatamente: `Start-ScheduledTask -TaskName AnalisadorFinancas`
 
 ### Interface web
 

@@ -30,7 +30,7 @@ import requests
 from . import cache
 
 TIMEOUT = 60
-UA = {"User-Agent": "Mozilla/5.0 (compatible; PortfolioAnalyzer/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; AnalisadorFinancas/1.0)"}
 
 CSV_URL = (
     "https://www.tesourotransparente.gov.br/ckan/dataset/"

@@ -63,7 +63,7 @@ def testar() -> str:
     nome = _conferir(resp, "a validação do token")["result"].get("first_name", "Bot")
 
     enviar(
-        "🤖 <b>Portfolio Analyzer conectado</b>\n"
+        "🤖 <b>Analisador de Finanças conectado</b>\n"
         "Os relatórios da sua carteira serão enviados aqui."
     )
     return nome

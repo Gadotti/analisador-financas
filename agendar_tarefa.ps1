@@ -15,7 +15,7 @@
 
 param(
     [string]$Horario = "09:00",
-    [string]$NomeTarefa = "PortfolioAnalyzer",
+    [string]$NomeTarefa = "AnalisadorFinancas",
     [switch]$ComTelegram,
     [switch]$SemIA,
     [switch]$Remover

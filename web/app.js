@@ -1,5 +1,5 @@
 /**
- * Portfolio Analyzer — ponto de entrada da interface local.
+ * Analisador de Finanças — ponto de entrada da interface local.
  *
  * Só orquestra: carrega os dados da API, guarda o último resultado e manda
  * cada módulo desenhar a sua parte. Nenhuma regra de cálculo mora aqui.

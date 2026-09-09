@@ -20,7 +20,7 @@ import requests
 from . import cache
 
 TIMEOUT = 15
-UA = {"User-Agent": "Mozilla/5.0 (compatible; PortfolioAnalyzer/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; AnalisadorFinancas/1.0)"}
 
 TTL_COTACAO = 15 * 60      # 15 minutos
 TTL_INDICADOR = 12 * 3600  # 12 horas
