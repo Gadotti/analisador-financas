@@ -37,7 +37,9 @@ OPP_ICONE = {
     "renda_fixa": "🏦",
     "rebalanceamento": "⚖️",
 }
-TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB", "tesouro": "TD"}
+TIPO_ROTULO = {
+    "fii": "FII", "acao": "Ação", "cdb": "CDB", "lci": "LCI", "lca": "LCA", "tesouro": "TD",
+}
 CUPOM_ROTULO = {"mensal": "juros mensais", "semestral": "juros semestrais"}
 
 
@@ -58,12 +60,13 @@ def _cupons(p: dict) -> str:
 
 
 def _nome_na_tabela(p: dict) -> str:
-    """Coluna ATIVO de um título: o banco no CDB, o papel no Tesouro.
+    """Coluna ATIVO de um título: o banco no papel bancário, o papel no Tesouro.
 
-    O prefixo "Tesouro" sai porque a coluna do tipo já traz "TD"; o que
-    identifica o papel é a família e o ano de vencimento.
+    A sigla sai porque a coluna do tipo já a traz — num CDB, numa LCI ou numa
+    LCA o que identifica a posição é o emissor. No Tesouro, o prefixo "Tesouro"
+    sai pelo mesmo motivo: identificam o papel a família e o ano de vencimento.
     """
-    if p["tipo"] == "cdb":
+    if p["tipo"] in portfolio.TIPOS_BANCARIOS:
         return p["banco"]
     return p["descricao"].removeprefix("Tesouro ")
 
@@ -71,8 +74,9 @@ def _nome_na_tabela(p: dict) -> str:
 def _marcacao(p: dict) -> str:
     """Linha do título público: a taxa travada e quanto ele vale na curva.
 
-    Só o Tesouro aparece aqui — o CDB não tem preço de revenda publicado, então
-    para ele a curva já é o valor da posição, e repeti-la não diria nada.
+    Só o Tesouro aparece aqui — o papel bancário não tem preço de revenda
+    publicado, então para ele a curva já é o valor da posição, e repeti-la não
+    diria nada.
     """
     origem = "informada" if p.get("taxa_origem") == "cadastro" else "do pregão da compra"
     return (
@@ -83,11 +87,17 @@ def _marcacao(p: dict) -> str:
 
 
 def _linha_renda_fixa(p: dict) -> list[str]:
-    """Detalhe abaixo da linha da posição: emissor, prazo e valor líquido."""
+    """Detalhe abaixo da linha da posição: emissor, prazo e valor líquido.
+
+    O "isento de IR" da LCI e da LCA fica ao lado do valor líquido de
+    propósito: é ali que a isenção aparece na conta, e sem ela um 95% do CDI
+    parece pior do que um CDB de 100%.
+    """
     situacao = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
+    isencao = " · isento de IR" if p.get("isento_ir") else ""
     linhas = [
         f"         {p['emissor']} · {data_br(p['data_vencimento'])} · {situacao}"
-        f" · líquido estimado {moeda(p['valor_liquido'])}"
+        f" · líquido estimado {moeda(p['valor_liquido'])}{isencao}"
     ]
     if p.get("marcado_a_mercado"):
         linhas.append(_marcacao(p))
@@ -362,7 +372,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
     out += [
         "",
         borda,
-        "  CDB é estimado na curva; o Tesouro usa o preço de revenda do último pregão.",
+        "  Papel bancário é estimado na curva; o Tesouro, pelo preço de revenda.",
         "  Indicadores de mercado levantados por IA — confira antes de decidir.",
         "  Este material é informativo e não constitui recomendação de investimento.",
         borda,

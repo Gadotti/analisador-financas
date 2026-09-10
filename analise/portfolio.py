@@ -16,14 +16,24 @@ from .paths import portfolio_file
 VERSAO = 2
 
 TIPOS_VARIAVEL = ("fii", "acao")
-TIPOS_RENDA_FIXA = ("cdb", "tesouro")
+TIPOS_RENDA_FIXA = ("cdb", "lci", "lca", "tesouro")
 TIPOS = TIPOS_VARIAVEL + TIPOS_RENDA_FIXA
 
+# Renda fixa emitida por banco: tem um emissor no cadastro e consome teto do
+# FGC. O título público não entra aqui — quem responde por ele é o Tesouro
+# Nacional, e o campo `banco` nem existe na posição.
+TIPOS_BANCARIOS = ("cdb", "lci", "lca")
+
 INDEXADORES_CDB = ("CDI", "PRE", "IPCA")
+INDEXADORES_LETRA = ("CDI", "PRE", "IPCA")
 INDEXADORES_TESOURO = ("SELIC", "PRE", "IPCA")
 
 PAGAMENTOS_CDB = ("vencimento", "mensal")
+PAGAMENTOS_LETRA = ("vencimento", "mensal", "semestral")
 PAGAMENTOS_TESOURO = ("vencimento", "semestral")
+
+# Sigla de cada papel bancário, para o nome de exibição de quem não tem nome.
+SIGLA_BANCARIA = {"cdb": "CDB", "lci": "LCI", "lca": "LCA"}
 
 EMISSOR_TESOURO = "Tesouro Nacional"
 
@@ -156,7 +166,9 @@ def descricao(pos: dict) -> str:
         return pos["ticker"]
     if pos.get("nome"):
         return pos["nome"]
-    return "Tesouro Direto" if pos["tipo"] == "tesouro" else f"CDB {pos.get('banco', '')}"
+    if pos["tipo"] == "tesouro":
+        return "Tesouro Direto"
+    return f"{SIGLA_BANCARIA[pos['tipo']]} {pos.get('banco', '')}".strip()
 
 
 def tickers(carteira: dict) -> list[str]:

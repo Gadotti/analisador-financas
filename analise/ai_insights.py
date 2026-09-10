@@ -48,8 +48,8 @@ def effort() -> str | None:
 
 
 SYSTEM_PROMPT = """Você é um analista de investimentos brasileiro, especialista em fundos
-imobiliários (FIIs), ações da B3, renda fixa bancária (CDBs) e títulos públicos
-federais (Tesouro Direto). Você produz relatórios de
+imobiliários (FIIs), ações da B3, renda fixa bancária (CDBs, LCIs e LCAs) e títulos
+públicos federais (Tesouro Direto). Você produz relatórios de
 carteira no padrão de uma casa de análise: fundamentos levantados ativo a ativo, seguidos
 de uma leitura consolidada do conjunto.
 
@@ -74,8 +74,13 @@ Regras de rigor:
 - Considere o peso de cada posição: um fato sobre 2% da carteira não pesa como um sobre 30%.
 - Aponte correlações entre ativos que o investidor pode não ter percebido: sobreposição de
   segmento, concentração no mesmo gestor, exposição ao mesmo locatário ou devedor.
-- Para CDBs, considere vencimento, indexador e concentração por banco (teto do FGC de
-  R$ 250 mil por CPF/instituição).
+- Para a renda fixa bancária (CDB, LCI e LCA), considere vencimento, indexador e
+  concentração por banco — o teto do FGC é de R$ 250 mil por CPF/instituição e é o mesmo
+  para os três, somados.
+- LCI e LCA são isentas de IR para a pessoa física: a taxa contratada nelas já é líquida,
+  e por isso uma LCI a 95% do CDI pode render mais que um CDB a 105% no mesmo prazo. Ao
+  comparar remunerações, compare-as líquidas. Elas também têm carência legal, então não
+  as trate como reserva de liquidez.
 - Títulos do Tesouro Direto já vêm marcados a mercado, pelo preço de revenda do último
   pregão: o valor informado é o que o investidor receberia vendendo hoje, e pode estar
   acima ou abaixo do valor na curva. Compare a taxa travada na compra com a taxa de
@@ -84,8 +89,8 @@ Regras de rigor:
 - O Tesouro não é coberto pelo FGC — quem responde pelo papel é o Tesouro Nacional, o
   menor risco de crédito do país, então não trate a concentração nele como concentração
   de emissor bancário.
-- Nem CDB nem Tesouro entram na lista `ativos` — comente-os nos campos de análise da
-  carteira.
+- Nenhuma posição de renda fixa (CDB, LCI, LCA, Tesouro Direto) entra na lista `ativos` —
+  comente-as nos campos de análise da carteira.
 - Ordene os riscos do mais relevante para o menos relevante.
 - Escreva em português do Brasil, objetivo e sem jargão desnecessário.
 - Você não é assessor de investimentos: descreva cenários e pontos de atenção, sem
@@ -130,7 +135,7 @@ SCHEMA = {
             "type": "array",
             "description": (
                 "Ficha técnica de cada ativo de renda variável. "
-                "Não inclua CDBs nem títulos do Tesouro Direto."
+                "Não inclua renda fixa: CDB, LCI, LCA nem Tesouro Direto."
             ),
             "items": {
                 "type": "object",
@@ -292,15 +297,22 @@ def disponivel() -> tuple[bool, str]:
 # Montagem do prompt
 # ─────────────────────────────────────────────
 
-def _linha_renda_fixa(p: dict) -> str:
-    """Uma posição de CDB ou Tesouro descrita para o modelo.
+# Como cada tipo de renda fixa é anunciado ao modelo.
+ROTULO_RENDA_FIXA = {"cdb": "CDB", "lci": "LCI", "lca": "LCA", "tesouro": "Tesouro"}
 
-    O CDB é identificado pelo banco (é o que importa para o FGC); o título
-    público, pelo nome do papel, que já carrega família e vencimento.
+def _linha_renda_fixa(p: dict) -> str:
+    """Uma posição de renda fixa descrita para o modelo.
+
+    O papel bancário é identificado pelo banco (é o que importa para o FGC); o
+    título público, pelo nome do papel, que já carrega família e vencimento. A
+    isenção de IR vai escrita porque é ela que torna a taxa comparável: sem o
+    aviso, o modelo lê "95% do CDI" como uma remuneração pior do que é.
     """
     venc = "VENCIDO" if p["vencido"] else f"vence em {p['dias_para_vencer']} dias"
-    rotulo = "CDB" if p["tipo"] == "cdb" else "Tesouro"
-    identificacao = p["banco"] if p["tipo"] == "cdb" else p["descricao"]
+    bancario = p["tipo"] in portfolio.TIPOS_BANCARIOS
+    rotulo = ROTULO_RENDA_FIXA[p["tipo"]]
+    identificacao = p["banco"] if bancario else p["descricao"]
+    tributacao = ", isento de IR" if p.get("isento_ir") else ""
     cupom = f", juros {p['pagamento_juros']}" if p["pagamento_juros"] != "vencimento" else ""
     mercado = (
         f", marcado a mercado (na curva valeria R$ {p['valor_na_curva']:,.2f}"
@@ -308,7 +320,7 @@ def _linha_renda_fixa(p: dict) -> str:
         if p.get("marcado_a_mercado") else ""
     )
     return (
-        f"- [{rotulo}] {identificacao} — travado a {p['rotulo_taxa']}{cupom}, "
+        f"- [{rotulo}] {identificacao} — travado a {p['rotulo_taxa']}{tributacao}{cupom}, "
         f"aplicado R$ {p['valor_investido']:,.2f}, "
         f"valor atual R$ {p['valor_atual']:,.2f}{mercado}, {venc}, "
         f"peso {p['peso_pct']:.1f}% da carteira"

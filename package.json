@@ -1,7 +1,7 @@
 {
   "name": "analisador-financas",
   "version": "2.0.0",
-  "description": "Acompanhamento e analise de carteira de investimentos (FIIs, acoes e CDBs) com cotacoes reais da B3, marcacao a mercado de renda fixa, alertas e leitura de mercado por IA.",
+  "description": "Acompanhamento e analise de carteira de investimentos (FIIs, acoes, CDB, LCI, LCA e Tesouro Direto) com cotacoes reais da B3, marcacao a mercado de renda fixa, alertas e leitura de mercado por IA.",
   "type": "module",
   "private": true,
   "engines": {

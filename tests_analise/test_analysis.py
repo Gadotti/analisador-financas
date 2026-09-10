@@ -198,6 +198,22 @@ def test_exposicao_por_banco_soma_e_compara_com_o_fgc():
     assert "R$ 300.000,00" in fgc["descricao"]
 
 
+def test_teto_do_fgc_soma_cdb_e_letra_do_mesmo_banco():
+    """O teto é por CPF/instituição, não por papel: CDB, LCI e LCA dividem um."""
+    posicoes = [
+        {**CDB_BASE, "valor_atual": 150000.0, "dias_para_vencer": 999},
+        {**CDB_BASE, "tipo": "lci", "descricao": "LCI Inter", "valor_atual": 90000.0,
+         "dias_para_vencer": 999},
+        {**CDB_BASE, "tipo": "lca", "descricao": "LCA Inter", "valor_atual": 90000.0,
+         "dias_para_vencer": 999},
+    ]
+    alertas = analysis._gerar_alertas(posicoes, 330000.0, CONFIG_PADRAO)
+
+    fgc = next(a for a in alertas if "teto do FGC" in a["titulo"])
+    assert "R$ 330.000,00" in fgc["descricao"]
+    assert "Inter" in fgc["alvo"]
+
+
 def test_emissores_de_renda_fixa_medem_o_consumo_do_fgc():
     posicoes = [
         {**CDB_BASE, "valor_atual": 200000.0, "dias_para_vencer": 999},
@@ -338,6 +354,39 @@ def test_bases_de_concentracao_separam_os_regimes(dados_temp, mercado_padrao):
     assert round(bases["renda_variavel"] + bases["renda_fixa"], 2) == bases["carteira"]
     # Os emissores dividem a renda fixa entre si, e não a carteira inteira.
     assert round(sum(e["peso_pct"] for e in snapshot["emissores_renda_fixa"]), 1) == 100.0
+
+
+def test_letra_de_credito_entra_nas_classes_e_no_recorte_por_emissor(
+    dados_temp, mercado_padrao
+):
+    lci = {
+        "id": "d4",
+        "tipo": "lci",
+        "banco": "Sofisa",
+        "nome": "LCI Sofisa 95% do CDI",
+        "valor_inicial": 5000.0,
+        "indexador": "CDI",
+        "taxa": 95.0,
+        "data_aplicacao": "2025-01-02",
+        "data_vencimento": "2099-01-04",
+        "pagamento_juros": "vencimento",
+        "liquidez_diaria": False,
+        "observacao": "",
+    }
+    snapshot = analysis.consolidar(carteira_com([CDB, lci]), usar_cache=False)
+    posicao = next(p for p in snapshot["posicoes"] if p["tipo"] == "lci")
+    emissores = {e["nome"]: e for e in snapshot["emissores_renda_fixa"]}
+
+    assert snapshot["classes"]["lci"]["rotulo"] == "LCIs"
+    assert posicao["isento_ir"] is True
+    assert posicao["ir_valor"] == 0.0
+    assert posicao["banco"] == "Sofisa"
+    assert posicao["emissor"] == "Sofisa"
+    # A letra é renda fixa: entra na base do regime e no consumo do FGC.
+    assert emissores["Sofisa"]["garantia"] == "FGC"
+    assert snapshot["bases_concentracao"]["renda_fixa"] == round(
+        snapshot["totais"]["valor_atual"], 2
+    )
 
 
 def test_concentracao_no_tesouro_nao_gera_alerta_de_fgc():

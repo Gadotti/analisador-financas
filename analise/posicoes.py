@@ -3,7 +3,8 @@
 Uma função por natureza de ativo, porque as fontes não têm nada em comum:
 
   - renda variável lê a cotação da B3 (`market`);
-  - CDB é carregado na curva pelo indexador contratado (`fixed_income`);
+  - papel bancário (CDB, LCI, LCA) é carregado na curva pelo indexador
+    contratado (`fixed_income`);
   - título público troca a curva pelo preço de revenda do último pregão
     (`tesouro_direto`), mantendo o valor de curva ao lado.
 
@@ -133,6 +134,7 @@ def _renda_fixa_sem_taxa(pos: dict) -> dict:
         "data_aplicacao": pos["data_aplicacao"],
         "data_vencimento": pos["data_vencimento"],
         "pagamento_juros": pos.get("pagamento_juros") or "vencimento",
+        "isento_ir": fixed_income.regime(pos["tipo"])["isento_ir"],
         "valor_investido": aplicado,
         "valor_atual": aplicado,
         "valor_liquido": aplicado,
@@ -188,6 +190,7 @@ def _campos_calculados(pos: dict, titulo: dict, calc: dict, origem: str) -> dict
         "ir_aliquota_pct": calc["ir_aliquota_pct"],
         "ir_valor": calc["ir_valor"],
         "custodia_valor": calc["custodia_valor"],
+        "isento_ir": calc["isento_ir"],
         "dias_para_vencer": calc["dias_para_vencer"],
         "vencido": calc["vencido"],
         "observacao": pos.get("observacao", ""),
@@ -216,12 +219,12 @@ def _mercado_do_titulo(calc: dict, tesouro: dict | None) -> dict:
 
 
 def renda_fixa(pos: dict, hoje: date, macro: dict, tesouro: dict | None = None) -> dict:
-    """Marca a mercado um CDB ou um título do Tesouro Direto.
+    """Marca a mercado um papel bancário ou um título do Tesouro Direto.
 
-    O CDB é carregado na curva, que é o que o banco paga: não há mercado
-    secundário para o investidor pessoa física. O título público tem preço de
-    revenda publicado todo pregão, então `valor_atual` é esse preço, e o valor
-    na curva segue ao lado, em `valor_na_curva`.
+    CDB, LCI e LCA são carregados na curva, que é o que o banco paga: não há
+    mercado secundário para o investidor pessoa física. O título público tem
+    preço de revenda publicado todo pregão, então `valor_atual` é esse preço, e
+    o valor na curva segue ao lado, em `valor_na_curva`.
 
     `valor_atual` e `resultado` medem só o que segue aplicado no papel: num
     título com cupom periódico os juros já sacados aparecem à parte, em
@@ -247,7 +250,7 @@ def renda_fixa(pos: dict, hoje: date, macro: dict, tesouro: dict | None = None) 
             calculada[extra] = calc[extra]
 
     # O banco emissor continua num campo próprio: o teto do FGC só vale para o
-    # CDB, e o Tesouro não tem banco algum por trás.
-    if pos["tipo"] == "cdb":
+    # papel bancário, e o Tesouro não tem banco algum por trás.
+    if pos["tipo"] in portfolio.TIPOS_BANCARIOS:
         calculada["banco"] = pos["banco"]
     return calculada

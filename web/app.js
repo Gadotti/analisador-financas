@@ -25,7 +25,7 @@ import { ligarPosicoes, renderPosicoes } from "./js/posicoes.js";
 import { renderFatos, renderMacro, renderResumo, renderRiscos } from "./js/visaoGeral.js";
 
 const AVISOS = [
-  "CDB é estimado na curva com o CDI vigente; o Tesouro usa o preço de revenda do último pregão publicado pelo Tesouro Nacional. O extrato da instituição é a fonte oficial.",
+  "CDB, LCI e LCA são estimados na curva com o CDI vigente; o Tesouro usa o preço de revenda do último pregão publicado pelo Tesouro Nacional. O extrato da instituição é a fonte oficial.",
   "P/VP, dividend yield, patrimônio e segmento são levantados por IA a partir de fontes públicas; confira antes de decidir.",
   "Este material é informativo e não constitui recomendação de investimento.",
 ];

@@ -2,7 +2,7 @@
  * Listagem de posições — uma tabela agrupada por classe de ativo.
  *
  * Cada classe declara as suas próprias colunas, porque não têm o mesmo
- * assunto: um CDB não tem P/VP e um FII não tem vencimento. Mas todas
+ * assunto: uma LCI não tem P/VP e um FII não tem vencimento. Mas todas
  * terminam nas mesmas quatro — valor, resultado, peso e ações — e por isso a
  * tabela continua sendo uma só: os números ficam alinhados de ponta a ponta e
  * cada grupo ganha o seu cabeçalho e o seu subtotal.
@@ -13,7 +13,9 @@
 import { $, classeSinal, dataBR, esc, moeda, mostrar, num, pct } from "./formato.js";
 import { icone } from "./icones.js";
 
-const ROTULO_TIPO = { fii: "FII", acao: "AÇÃO", cdb: "CDB", tesouro: "TESOURO" };
+const ROTULO_TIPO = {
+  fii: "FII", acao: "AÇÃO", cdb: "CDB", lci: "LCI", lca: "LCA", tesouro: "TESOURO",
+};
 
 const CUPOM_ROTULO = { mensal: "juros mensais", semestral: "juros semestrais" };
 
@@ -26,9 +28,11 @@ const estado = {
   escalaPeso: 1,
 };
 
-/** Coluna de identificação: o banco nomeia o CDB; o Tesouro, o próprio papel. */
-const nomeDaLinha = (posicao) =>
-  ({ cdb: posicao.banco, tesouro: posicao.nome })[posicao.tipo] || posicao.ticker;
+/**
+ * Coluna de identificação: o banco nomeia o papel bancário; o Tesouro, o
+ * próprio título; a renda variável, o ticker. Nenhum tipo tem os três.
+ */
+const nomeDaLinha = (posicao) => posicao.banco || posicao.nome || posicao.ticker;
 
 /** Chave de comparação para busca e ordenação: sem acento e em minúsculas. */
 const semAcento = (texto) =>
@@ -139,7 +143,12 @@ const COLUNA_LIQUIDO = {
     calculada ? celula(moeda(calculada.valor_liquido), jurosRecebidos(calculada)) : "—",
 };
 
-const COLUNAS_CDB = [
+/**
+ * CDB, LCI e LCA se leem pelo mesmo recorte — o banco emissor, a taxa
+ * contratada e o prazo. A isenção de IR entra sob a remuneração porque é lá
+ * que ela muda a leitura: 95% do CDI isentos rendem mais que 100% tributados.
+ */
+const COLUNAS_BANCARIAS = [
   {
     rotulo: "Emissor",
     celula: ({ posicao, calculada }) =>
@@ -154,6 +163,7 @@ const COLUNAS_CDB = [
     celula: ({ posicao, calculada }) =>
       celula(
         esc(calculada?.rotulo_taxa || "—"),
+        calculada?.isento_ir ? "isento de IR" : "",
         posicao.liquidez_diaria ? "liquidez diária" : ""
       ),
   },
@@ -260,7 +270,9 @@ const COLUNAS_COMUNS = [
 const GRUPOS = [
   { tipo: "fii", rotulo: "Fundos imobiliários", colunas: COLUNAS_VARIAVEL },
   { tipo: "acao", rotulo: "Ações", colunas: COLUNAS_VARIAVEL },
-  { tipo: "cdb", rotulo: "CDBs", colunas: COLUNAS_CDB },
+  { tipo: "cdb", rotulo: "CDBs", colunas: COLUNAS_BANCARIAS },
+  { tipo: "lci", rotulo: "Letras de crédito imobiliário", colunas: COLUNAS_BANCARIAS },
+  { tipo: "lca", rotulo: "Letras de crédito do agronegócio", colunas: COLUNAS_BANCARIAS },
   { tipo: "tesouro", rotulo: "Tesouro Direto", colunas: COLUNAS_TESOURO },
 ];
 

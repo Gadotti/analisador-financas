@@ -1,6 +1,7 @@
 # Analisador de Finanças
 
-Sistema local de acompanhamento e análise de carteira de investimentos — **FIIs, ações e CDBs**.
+Sistema local de acompanhamento e análise de carteira de investimentos — **FIIs, ações,
+renda fixa bancária (CDB, LCI e LCA) e Tesouro Direto**.
 Cotações reais da B3, marcação a mercado de renda fixa, alertas automáticos e uma leitura
 diária de mercado gerada por IA com busca web.
 
@@ -130,8 +131,8 @@ temporário (via `IA_ENV_FILE`), para nunca ler o `.env` real do projeto.
 **FIIs e ações** — ticker, quantidade e preço médio (data da compra é opcional).
 A cotação atual é buscada automaticamente.
 
-**CDBs** — banco emissor, valor aplicado, indexador, taxa, data de aplicação, data de
-vencimento e a forma de pagamento dos juros.
+**CDBs, LCIs e LCAs** — banco emissor, valor aplicado, indexador, taxa, data de aplicação,
+data de vencimento e a forma de pagamento dos juros.
 
 | Indexador | O que informar na taxa | Exemplo |
 |---|---|---|
@@ -143,10 +144,17 @@ vencimento e a forma de pagamento dos juros.
 |---|---|
 | `No vencimento` (padrão) | O rendimento capitaliza e sai tudo no resgate |
 | `Mensal` | Todo aniversário da aplicação paga os juros do mês e o principal segue intacto |
+| `Semestral` (LCI, LCA) | O mesmo, a cada seis meses |
 
-Num CDB de juros mensais, o valor da posição é só o que continua aplicado — o principal
-mais o rendimento do mês em curso. Os cupons já sacados aparecem à parte, líquidos de IR,
-na linha da posição e no relatório.
+Num título de juros periódicos, o valor da posição é só o que continua aplicado — o
+principal mais o rendimento do período em curso. Os cupons já sacados aparecem à parte,
+líquidos de IR, na linha da posição e no relatório.
+
+**LCI e LCA são isentas de IR** para a pessoa física: a taxa contratada nelas já é líquida,
+e o sistema marca a posição como isenta em vez de descontar a tabela regressiva. É o que
+torna 95% do CDI numa LCI melhor que 105% num CDB de mesmo prazo — a tela **Equivalência**
+faz essa conversão para você antes de aplicar. Como têm carência legal, o cadastro não
+oferece a elas a marcação de liquidez diária.
 
 ---
 
@@ -155,12 +163,13 @@ na linha da posição e no relatório.
 **Sem IA, de forma determinística:**
 
 - Valor atual, resultado acumulado e variação do dia de cada posição
-- Marcação a mercado de CDBs em dias úteis (base 252) com o CDI vigente, incluindo o
-  IR regressivo para estimar o valor líquido
-- Cronograma de cupons dos CDBs de juros mensais: quanto já foi recebido líquido, quantos
-  pagamentos ocorreram e a data do próximo (sempre em dia útil)
+- Marcação a mercado da renda fixa bancária em dias úteis (base 252) com o CDI vigente,
+  incluindo o IR regressivo — ou a isenção da LCI e da LCA — para estimar o valor líquido
+- Cronograma de cupons dos títulos de juros periódicos: quanto já foi recebido líquido,
+  quantos pagamentos ocorreram e a data do próximo (sempre em dia útil)
 - Alocação por classe e peso de cada ativo na carteira
-- Alertas de vencimento de CDB, exposição por banco acima do teto do FGC,
+- Alertas de vencimento de renda fixa, exposição por banco acima do teto do FGC (que soma
+  o CDB, a LCI e a LCA do mesmo emissor, porque o teto é por CPF/instituição),
   concentração excessiva em um ativo e prejuízo relevante em renda variável
 
 **Com IA (opcional):** busca notícias e dados recentes de cada ativo e do cenário macro,
@@ -186,7 +195,7 @@ Cotações ficam em cache por 15 minutos e indicadores por 12 horas, em `data/ca
 analise/                 MOTOR DE ANÁLISE (Python)
   portfolio.py           leitura da carteira
   market.py              cotações e indicadores macro, com cache
-  fixed_income.py        marcação a mercado de CDBs, dias úteis e IR
+  fixed_income.py        marcação a mercado da renda fixa, dias úteis e IR
   analysis.py            consolidação da carteira e alertas (sem IA)
   fundamentals.py        métricas agregadas a partir das fichas da IA
   config_ia.py           provedor, modelo, esforço e chave, lidos do .env
@@ -268,9 +277,9 @@ O servidor expõe uma API própria, útil para integrar com outras ferramentas:
 
 ## Limitações conhecidas
 
-- **Valores de CDB são estimativas.** O cálculo projeta o CDI de hoje sobre todo o período
-  decorrido e não considera carência, IOF nos primeiros 30 dias nem eventuais taxas. O
-  extrato do banco é sempre a fonte oficial.
+- **Valores de renda fixa bancária são estimativas.** O cálculo projeta o CDI de hoje sobre
+  todo o período decorrido e não considera carência, IOF nos primeiros 30 dias nem eventuais
+  taxas. O extrato do banco é sempre a fonte oficial.
 - **IPCA+ usa o índice divulgado**, que tem defasagem de algumas semanas em relação ao mês
   corrente. Num CDB IPCA+ de juros mensais, a correção acumulada é repartida entre os
   cupons na proporção dos dias úteis de cada um — uma aproximação, já que o índice não é

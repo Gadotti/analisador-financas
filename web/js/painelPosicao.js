@@ -9,24 +9,63 @@ const ROTULO_TAXA = {
   IPCA: "Spread sobre IPCA (% a.a.)",
 };
 
+const INDEXADORES_BANCARIO = [
+  ["CDI", "% do CDI"],
+  ["PRE", "Prefixado (% a.a.)"],
+  ["IPCA", "IPCA + (% a.a.)"],
+];
+
+const NO_VENCIMENTO = ["vencimento", "No vencimento"];
+const MENSAL = ["mensal", "Mensal"];
+const SEMESTRAL = ["semestral", "Semestral"];
+
 /**
- * O que muda entre um CDB e um título do Tesouro no formulário: o indexador
- * disponível e a periodicidade do cupom. O resto dos campos é comum aos dois.
+ * O que cada tipo de renda fixa muda no formulário: as opções de indexador e
+ * de cupom, os campos que só ele usa (`banco`, `nome`, `liquidez`) e a dica
+ * abaixo do rótulo da taxa. O resto é comum a todos.
+ *
+ * É esta tabela que decide o que aparece e o que é coletado — o HTML só marca
+ * cada campo opcional com `data-campo`. Um tipo novo entra aqui, e não como
+ * uma classe nova no HTML mais um `if` no coletor.
  */
 const FORMULARIO_RF = {
   cdb: {
-    indexadores: [["CDI", "% do CDI"], ["PRE", "Prefixado (% a.a.)"], ["IPCA", "IPCA + (% a.a.)"]],
-    pagamentos: [["vencimento", "No vencimento"], ["mensal", "Mensal"]],
+    indexadores: INDEXADORES_BANCARIO,
+    pagamentos: [NO_VENCIMENTO, MENSAL],
+    banco: true,
+    liquidez: true,
+  },
+  lci: {
+    indexadores: INDEXADORES_BANCARIO,
+    pagamentos: [NO_VENCIMENTO, MENSAL, SEMESTRAL],
+    banco: true,
+    // A taxa contratada numa letra de crédito já é líquida: sem o aviso, 95%
+    // do CDI parece pior do que um CDB de 100%, que ainda paga IR.
+    dica: "Isenta de IR: a taxa contratada já é líquida.",
+  },
+  lca: {
+    indexadores: INDEXADORES_BANCARIO,
+    pagamentos: [NO_VENCIMENTO, MENSAL, SEMESTRAL],
+    banco: true,
+    dica: "Isenta de IR: a taxa contratada já é líquida.",
   },
   tesouro: {
     indexadores: [["SELIC", "Selic + (% a.a.)"], ["PRE", "Prefixado (% a.a.)"], ["IPCA", "IPCA + (% a.a.)"]],
-    pagamentos: [["vencimento", "No vencimento"], ["semestral", "Semestral"]],
+    pagamentos: [NO_VENCIMENTO, SEMESTRAL],
+    nome: true,
     // A taxa do título público sai do pregão da compra; digitá-la é opcional.
     taxaOpcional: true,
+    dica: "Em branco, é buscada no pregão da compra.",
   },
 };
 
+/** Campos que só alguns tipos usam, marcados com `data-campo` no HTML. */
+const CAMPOS_OPCIONAIS = ["banco", "nome", "liquidez"];
+
 const ehRendaFixa = (tipo) => tipo in FORMULARIO_RF;
+
+/** O tipo escolhido usa este campo opcional? */
+const usa = (tipo, campo) => Boolean(FORMULARIO_RF[tipo]?.[campo]);
 
 const tipoSelecionado = () => $('#seletor-tipo [aria-pressed="true"]').dataset.tipo;
 
@@ -46,8 +85,11 @@ function selecionarTipo(tipo) {
   const rendaFixa = ehRendaFixa(tipo);
   $$(".campo-rv").forEach((el) => el.classList.toggle("hidden", rendaFixa));
   $$(".campo-rf").forEach((el) => el.classList.toggle("hidden", !rendaFixa));
-  $$(".campo-cdb").forEach((el) => el.classList.toggle("hidden", tipo !== "cdb"));
-  $$(".campo-tesouro").forEach((el) => el.classList.toggle("hidden", tipo !== "tesouro"));
+  CAMPOS_OPCIONAIS.forEach((campo) =>
+    $$(`[data-campo="${campo}"]`).forEach((el) =>
+      el.classList.toggle("hidden", !usa(tipo, campo))
+    )
+  );
 
   if (rendaFixa) {
     preencherSelect("#f-indexador", FORMULARIO_RF[tipo].indexadores);
@@ -57,15 +99,16 @@ function selecionarTipo(tipo) {
 }
 
 const atualizarRotuloTaxa = (tipo) => {
-  const opcional = FORMULARIO_RF[tipo]?.taxaOpcional;
+  const regra = FORMULARIO_RF[tipo];
   const base = ROTULO_TAXA[$("#f-indexador").value] || "Taxa";
-  $("#f-taxa-label").textContent = opcional ? `${base} — opcional` : base;
-  $("#f-taxa-dica").classList.toggle("hidden", !opcional);
+  $("#f-taxa-label").textContent = regra?.taxaOpcional ? `${base} — opcional` : base;
+  $("#f-taxa-dica").textContent = regra?.dica || "";
+  $("#f-taxa-dica").classList.toggle("hidden", !regra?.dica);
 };
 
 function preencherRendaFixa(posicao) {
   $("#f-banco").value = posicao.banco || "";
-  $("#f-nome-tesouro").value = posicao.tipo === "tesouro" ? posicao.nome || "" : "";
+  $("#f-nome-titulo").value = usa(posicao.tipo, "nome") ? posicao.nome || "" : "";
   $("#f-valor-inicial").value = posicao.valor_inicial ?? "";
   $("#f-indexador").value = posicao.indexador || $("#f-indexador").value;
   $("#f-taxa").value = posicao.taxa ?? "";
@@ -122,15 +165,15 @@ export function coletarPainel() {
   if (ehRendaFixa(tipo)) {
     return {
       ...base,
-      banco: tipo === "cdb" ? $("#f-banco").value : "",
-      nome: tipo === "tesouro" ? $("#f-nome-tesouro").value : "",
+      banco: usa(tipo, "banco") ? $("#f-banco").value : "",
+      nome: usa(tipo, "nome") ? $("#f-nome-titulo").value : "",
       valor_inicial: $("#f-valor-inicial").value,
       indexador: $("#f-indexador").value,
       taxa: $("#f-taxa").value,
       data_aplicacao: $("#f-data-aplicacao").value,
       data_vencimento: $("#f-data-vencimento").value,
       pagamento_juros: $("#f-pagamento-juros").value,
-      liquidez_diaria: tipo === "cdb" && $("#f-liquidez").checked,
+      liquidez_diaria: usa(tipo, "liquidez") && $("#f-liquidez").checked,
     };
   }
   return {

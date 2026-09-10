@@ -25,6 +25,16 @@ const CDB = {
   data_vencimento: "2027-01-04",
 };
 
+const LCI = {
+  tipo: "lci",
+  banco: "Sofisa",
+  valor_inicial: 5000,
+  indexador: "cdi",
+  taxa: 95,
+  data_aplicacao: "2025-01-02",
+  data_vencimento: "2027-01-04",
+};
+
 const TESOURO = {
   tipo: "tesouro",
   valor_inicial: 20000,
@@ -65,6 +75,35 @@ describe("normalizar", () => {
     expect(pos.pagamento_juros).toBe("mensal");
   });
 
+  test.each([
+    ["lci", "LCI Sofisa 95% do CDI"],
+    ["lca", "LCA Sofisa 95% do CDI"],
+  ])("normaliza uma %s e gera o nome padrão", (tipo, nome) => {
+    expect(portfolio.normalizar({ ...LCI, tipo })).toMatchObject({
+      tipo,
+      banco: "Sofisa",
+      indexador: "CDI",
+      nome,
+      pagamento_juros: "vencimento",
+      liquidez_diaria: false,
+    });
+  });
+
+  test("aceita letra de crédito com juros semestrais", () => {
+    const pos = portfolio.normalizar({ ...LCI, pagamento_juros: "SEMESTRAL" });
+    expect(pos.pagamento_juros).toBe("semestral");
+  });
+
+  test.each(["cdb", "lci", "lca"])("quem responde por um %s é o banco emissor", (tipo) => {
+    const pos = portfolio.normalizar({ ...LCI, tipo });
+    expect(portfolio.emissorDe(pos)).toBe("Sofisa");
+  });
+
+  test("a letra de crédito é papel bancário, e o Tesouro não", () => {
+    expect(portfolio.TIPOS_BANCARIOS).toEqual(["cdb", "lci", "lca"]);
+    expect(portfolio.TIPOS_RENDA_FIXA).toEqual(["cdb", "lci", "lca", "tesouro"]);
+  });
+
   test("preserva o id quando informado", () => {
     expect(portfolio.normalizar({ ...FII, id: "abc123" }).id).toBe("abc123");
   });
@@ -72,6 +111,8 @@ describe("normalizar", () => {
   test.each([
     ["tipo inválido", { ...FII, tipo: "cripto" }, /Tipo invalido/],
     ["indexador inválido", { ...CDB, indexador: "SELIC" }, /Indexador invalido/],
+    ["Selic em LCI", { ...LCI, indexador: "SELIC" }, /Indexador invalido/],
+    ["banco em branco na LCA", { ...LCI, tipo: "lca", banco: "" }, /'banco' e obrigatorio/],
     ["pagamento de juros inválido", { ...CDB, pagamento_juros: "trimestral" }, /Pagamento de juros invalido/],
     ["ticker ausente", { tipo: "fii" }, /'ticker' e obrigatorio/],
     ["quantidade vazia", { ...FII, quantidade: "" }, /'quantidade' e obrigatorio/],
@@ -106,6 +147,8 @@ describe("rotuloTaxa e descricao", () => {
   test.each([
     [{ tipo: "acao", ticker: "PETR4" }, "PETR4"],
     [{ tipo: "cdb", banco: "Inter" }, "CDB Inter"],
+    [{ tipo: "lci", banco: "Sofisa" }, "LCI Sofisa"],
+    [{ tipo: "lca", banco: "Sofisa" }, "LCA Sofisa"],
     [{ tipo: "cdb", nome: "CDB X", banco: "Y" }, "CDB X"],
     [{ tipo: "tesouro", nome: "Tesouro Selic 2029" }, "Tesouro Selic 2029"],
     [{ tipo: "tesouro" }, "Tesouro Direto"],

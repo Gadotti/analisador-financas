@@ -22,6 +22,8 @@
   --fii: #c38600;
   --acao: #2f8fd8;
   --cdb: #00a184;
+  --lci: #2ec4d6;
+  --lca: #9ec93a;
   --tesouro: #9b83e8;
 
   /* Estados semânticos */
@@ -437,6 +439,8 @@ a:hover { color: var(--amber-forte); }
 .etiqueta-fii { background: rgba(195, 134, 0, .18); color: var(--fii); }
 .etiqueta-acao { background: rgba(47, 143, 216, .18); color: var(--acao); }
 .etiqueta-cdb { background: rgba(0, 161, 132, .18); color: var(--cdb); }
+.etiqueta-lci { background: rgba(46, 196, 214, .18); color: var(--lci); }
+.etiqueta-lca { background: rgba(158, 201, 58, .18); color: var(--lca); }
 .etiqueta-tesouro { background: rgba(155, 131, 232, .18); color: var(--tesouro); }
 
 /* ── Lista de posições ─────────────────── */
@@ -707,9 +711,12 @@ a:hover { color: var(--amber-forte); }
   flex-wrap: wrap; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--borda-forte);
 }
 
-.segmentado { display: flex; gap: 4px; padding: 4px; background: var(--card2); border-radius: 9px; }
+.segmentado {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;
+  background: var(--card2); border-radius: 9px;
+}
 .segmentado button {
-  flex-grow: 1; height: 32px; border: none; border-radius: 6px; cursor: pointer;
+  flex: 1 0 52px; height: 32px; border: none; border-radius: 6px; cursor: pointer;
   background: none; color: var(--t2); font-family: inherit;
   font-size: var(--f-apoio); font-weight: 600; transition: .15s;
 }

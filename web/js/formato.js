@@ -31,6 +31,8 @@ export const COR_CLASSE = {
   fii: "var(--fii)",
   acao: "var(--acao)",
   cdb: "var(--cdb)",
+  lci: "var(--lci)",
+  lca: "var(--lca)",
   tesouro: "var(--tesouro)",
 };
 export const corClasse = (tipo) => COR_CLASSE[tipo] || "var(--t3)";

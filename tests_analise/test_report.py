@@ -330,8 +330,49 @@ def test_emissor_do_tesouro_nao_mostra_consumo_de_fgc(snapshot_exemplo):
     assert "acima do FGC" not in saida
 
 
-def test_rodape_distingue_a_curva_do_cdb_do_mercado_do_tesouro(snapshot_exemplo):
+LCI_CALCULADA = {
+    "id": "d4",
+    "tipo": "lci",
+    "descricao": "LCI Sofisa 95% do CDI",
+    "banco": "Sofisa",
+    "emissor": "Sofisa",
+    "indexador": "CDI",
+    "taxa": 95.0,
+    "rotulo_taxa": "95% do CDI",
+    "data_aplicacao": "2025-01-02",
+    "data_vencimento": "2027-01-04",
+    "pagamento_juros": "vencimento",
+    "isento_ir": True,
+    "valor_investido": 5000.0,
+    "valor_atual": 5400.0,
+    "valor_liquido": 5400.0,
+    "resultado": 400.0,
+    "resultado_pct": 8.0,
+    "dias_para_vencer": 490,
+    "vencido": False,
+    "peso_pct": 19.0,
+    "observacao": "",
+    "aviso": None,
+}
+
+
+def test_letra_sai_na_tabela_pelo_banco_e_anuncia_a_isencao(snapshot_exemplo):
+    """A sigla já está na coluna do tipo; o que identifica a posição é o banco."""
+    snapshot = copy.deepcopy(snapshot_exemplo)
+    snapshot["posicoes"].append(LCI_CALCULADA)
+    saida = report.texto(snapshot)
+
+    assert "[ LCI] Sofisa" in saida
+    assert "Sofisa · 04/01/2027 · vence em 490 dias" in saida
+    assert "isento de IR" in saida
+
+
+def test_cdb_nao_anuncia_isencao(snapshot_exemplo):
+    assert "isento de IR" not in report.texto(snapshot_exemplo)
+
+
+def test_rodape_distingue_a_curva_do_papel_bancario_do_mercado_do_tesouro(snapshot_exemplo):
     saida = report.texto(com_tesouro(snapshot_exemplo))
 
-    assert "CDB é estimado na curva" in saida
-    assert "Tesouro usa o preço de revenda do último pregão" in saida
+    assert "Papel bancário é estimado na curva" in saida
+    assert "o Tesouro, pelo preço de revenda" in saida

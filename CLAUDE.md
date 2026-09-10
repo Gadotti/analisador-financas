@@ -4,8 +4,8 @@ Orientações para o Claude Code trabalhar neste repositório.
 
 ## O que é
 
-Sistema local de análise de carteira de investimentos brasileira (FIIs, ações da B3, CDBs e
-títulos do Tesouro Direto).
+Sistema local de análise de carteira de investimentos brasileira (FIIs, ações da B3, renda
+fixa bancária — CDB, LCI e LCA — e títulos do Tesouro Direto).
 Roda inteiramente na máquina do usuário: dados em arquivos JSON, servidor web ouvindo apenas
 em `127.0.0.1`.
 
@@ -104,8 +104,8 @@ nova. O corte é do lado de quem **escreve** — o Node só lê o arquivo já co
 
 Por isso `analise/portfolio.py` é **somente leitura** — sem CRUD, sem gravação, sem
 migração de formato. Se precisar de uma nova regra de validação de posição, ela vai em
-`src/core/portfolio.js` (renda variável e CRUD), `src/core/rendaFixa.js` (CDB e Tesouro) ou
-`src/core/validacao.js` (conversão e mensagem de erro de um campo).
+`src/core/portfolio.js` (renda variável e CRUD), `src/core/rendaFixa.js` (papel bancário e
+Tesouro) ou `src/core/validacao.js` (conversão e mensagem de erro de um campo).
 
 ### Injeção de dependência
 
@@ -161,7 +161,11 @@ ativo do dia sem depender da data em que a suíte roda.
 `test/web/configuracoes.test.js` trava o contrato entre as metades da tela —
 coleta o formulário e passa o resultado pelo `atualizarConfig` de verdade, para que
 um campo declarado só numa das tabelas apareça como falha em vez de ser descartado
-em silêncio.
+em silêncio. `test/web/painelPosicao.test.js` faz o mesmo pelo cadastro: confere que
+as opções que o painel oferece são exatamente as que `REGRAS` aceita e que o que o
+formulário coleta passa por `normalizar` — uma opção só na tela viraria erro de
+validação na cara do usuário, e um tipo novo que o coletor não conhece gravaria a
+posição sem o campo que só ele tem.
 
 **pytest (`tests_analise/`)** — motor de análise. Fixtures em `conftest.py`: `env_ia` é
 **autouse** e aponta `IA_ENV_FILE` para um `.env` temporário (sem isso os testes leriam a
@@ -239,12 +243,14 @@ sem acento e sem os termos de razão social — e junta as chaves em que uma é 
 outra; `fundamentals` reescreve a ficha com o rótulo canônico antes de agrupar. Não peça
 essa unificação ao modelo: a saída dele não é estável entre execuções.
 
-**CDB vale a curva; Tesouro vale o mercado.** São dois regimes, e a diferença é de fato,
-não de gosto: não existe mercado secundário de CDB para pessoa física, então a curva é o
-que o banco paga; o título público tem preço de revenda publicado todo pregão.
+**Papel bancário vale a curva; Tesouro vale o mercado.** São dois regimes, e a diferença é
+de fato, não de gosto: não existe mercado secundário de CDB, LCI ou LCA para pessoa física,
+então a curva é o que o banco paga; o título público tem preço de revenda publicado todo
+pregão.
 
-- **CDB** — `analise/fixed_income.valorizar` projeta o CDI de hoje sobre todo o período
-  decorrido, capitaliza em dias úteis (base 252) e aplica o IR regressivo. É estimativa.
+- **CDB, LCI e LCA** — `analise/fixed_income.valorizar` projeta o CDI de hoje sobre todo o
+  período decorrido, capitaliza em dias úteis (base 252) e aplica o IR regressivo. É
+  estimativa.
 - **Tesouro** — a curva é calculada do mesmo jeito, mas `fixed_income.marcar_a_mercado`
   troca o valor por `quantidade × PU de venda` do último pregão. A curva não é jogada
   fora: fica em `valor_na_curva`, que é o que o papel rende para quem carrega até o fim.
@@ -252,6 +258,16 @@ que o banco paga; o título público tem preço de revenda publicado todo pregã
 
 O IR e a custódia saem de `_liquidar`, chamado pelos dois caminhos: a alíquota incide
 sobre o ganho de cada regime, não sobre o do outro.
+
+**A isenção da LCI e da LCA é regime de liquidação, não campo de cadastro.** Quem paga IR e
+quem paga custódia à B3 está declarado numa tabela só, `fixed_income.REGIME`, ao lado do
+cálculo que a aplica — `_liquidar` e `_juros_recebidos` leem de lá, e `_custodia_b3` não
+volta a comparar `tipo != "tesouro"`. Um tipo novo de renda fixa é uma linha nova ali.
+
+A isenção precisa **aparecer** em toda saída que mostra uma taxa, porque sem ela 95% do CDI
+parece pior que um CDB de 100%: `valorizar` publica `isento_ir` na posição, e o relatório, a
+tabela de posições, o formulário e o prompt da IA dizem "isento de IR". Não recalcule a
+isenção a partir do tipo em cada consumidor — leia o campo.
 
 **A taxa do Tesouro não é digitada.** `analise/tesouro_direto.py` lê o CSV "Taxas dos
 Títulos Ofertados pelo Tesouro Direto" e resolve duas coisas por título:
@@ -276,17 +292,26 @@ Se a busca falhar e não houver taxa no cadastro, a posição entra pelo valor a
 `erro_cotacao` — mesmo tratamento da renda variável sem cotação. Uma taxa informada no
 cadastro sempre vence a buscada: é a que está no extrato da corretora.
 
-**Dois tipos de renda fixa, um esqueleto só.** `cdb` e `tesouro` compartilham valor
-aplicado, indexador, taxa, prazo e forma de pagamento dos juros. Divergem em três pontos,
-declarados na tabela `REGRAS` de `src/core/rendaFixa.js` (e espelhados em
-`analise/portfolio.py`):
+**Quatro tipos de renda fixa, um esqueleto só.** `cdb`, `lci`, `lca` e `tesouro`
+compartilham valor aplicado, indexador, taxa, prazo e forma de pagamento dos juros. Divergem
+no que a tabela `REGRAS` de `src/core/rendaFixa.js` declara (e `analise/portfolio.py`
+espelha):
 
-| | CDB | Tesouro |
-|---|---|---|
-| Indexadores | CDI, PRE, IPCA | SELIC, PRE, IPCA |
-| Cupom | `vencimento` ou `mensal` | `vencimento` ou `semestral` |
-| Emissor | o banco, com teto do FGC | Tesouro Nacional, sem FGC |
-| Taxa no cadastro | obrigatória | opcional (buscada) |
+| | CDB | LCI e LCA | Tesouro |
+|---|---|---|---|
+| Indexadores | CDI, PRE, IPCA | CDI, PRE, IPCA | SELIC, PRE, IPCA |
+| Cupom | `vencimento` ou `mensal` | `vencimento`, `mensal` ou `semestral` | `vencimento` ou `semestral` |
+| Emissor | o banco, com teto do FGC | o banco, com teto do FGC | Tesouro Nacional, sem FGC |
+| Taxa no cadastro | obrigatória | obrigatória | opcional (buscada) |
+| IR no resgate | regressivo | isento | regressivo |
+
+CDB, LCI e LCA saem da mesma fábrica, `papelBancario(sigla, pagamentos)`: do ponto de vista
+do cadastro são o mesmo papel — um banco emissor, uma taxa contratada e um prazo —, e o que
+os separa é a sigla que nomeia a posição e o cupom oferecido. Não copie o bloco do CDB para
+declarar um quarto papel bancário. A carência legal da LCI e da LCA é o motivo de a
+interface não oferecer a elas a caixa de liquidez diária, como já não a oferece ao Tesouro;
+o **prazo mínimo não é validado**, porque a carência mudou com o tempo e recusar um papel
+antigo, já comprado, seria errado.
 
 Tesouro Selic é a exceção do cupom: paga tudo no vencimento, e `REGRAS.tesouro.conferir`
 recusa a combinação — ela não existe no Tesouro Direto e nunca teria preço para casar.
@@ -294,14 +319,15 @@ recusa a combinação — ela não existe no Tesouro Direto e nunca teria preço
 O CDI é multiplicativo (110% do CDI); a Selic é aditiva (Selic + 0,09% a.a.) — veja
 `_taxa_efetiva`. Só o Tesouro paga custódia à B3 (0,20% a.a., isenta na primeira faixa em
 Tesouro Selic), descontada do `valor_liquido` em `_custodia_b3`. O nome padrão de um título
-sai de `nomeTesouro()` no padrão em que o Tesouro Direto o publica ("Tesouro IPCA+ 2029 com
-Juros Semestrais"); o usuário pode sobrescrevê-lo.
+sai de `REGRAS[tipo].nomePadrao` — a sigla mais o banco e a taxa no papel bancário,
+`nomeTesouro()` no padrão em que o Tesouro Direto o publica ("Tesouro IPCA+ 2029 com Juros
+Semestrais"); o usuário pode sobrescrever o do Tesouro.
 
-Ao acrescentar um terceiro tipo de renda fixa, ele entra em `REGRAS`, em `INTERVALO_CUPOM`
-e, se for título público, em `tesouro_direto.TIPO_TITULO` — não em mais um `if` espalhado
-pelo relatório e pelo front.
+Ao acrescentar um quinto tipo de renda fixa, ele entra em `REGRAS`, em `fixed_income.REGIME`,
+em `INTERVALO_CUPOM` e, se for título público, em `tesouro_direto.TIPO_TITULO` — não em mais
+um `if` espalhado pelo relatório e pelo front.
 
-**Título com cupom não capitaliza.** No modo `mensal` (CDB) ou `semestral` (Tesouro) cada
+**Título com cupom não capitaliza.** No modo `mensal` ou `semestral` cada
 aniversário da aplicação — ajustado para o dia útil seguinte — paga os juros do período e o
 principal segue intacto, com o IR retido em cada cupom pelo prazo decorrido até ele. Por
 isso `valor_atual` e `resultado` medem só o que continua aplicado; os cupons já sacados
@@ -310,9 +336,13 @@ saíram da carteira e vivem em `juros_recebidos_*`, com o acumulado dos dois em
 `valor_atual` das posições, e a carteira deixaria de fechar.
 
 **O FGC é do banco, não do país.** `emissores_renda_fixa` lista todo emissor de renda fixa,
-mas só o CDB consome teto do FGC (`analysis.TIPOS_COM_FGC`); a linha do Tesouro Nacional vem
-com `fgc_limite: None` e `garantia: "Tesouro Nacional"`, e nunca dispara o alerta de teto
-estourado. O alerta de concentração por posição, esse sim, vale para qualquer ativo.
+mas só o papel bancário consome teto do FGC (`analysis.TIPOS_COM_FGC`, que é a própria
+`portfolio.TIPOS_BANCARIOS` para não existir uma segunda relação capaz de divergir dela); a
+linha do Tesouro Nacional vem com `fgc_limite: None` e `garantia: "Tesouro Nacional"`, e
+nunca dispara o alerta de teto estourado. O teto é **por CPF/instituição, não por papel**:
+o CDB, a LCI e a LCA do mesmo banco somam num consumo só, que é o que `_exposicao_por_emissor`
+já fazia ao agrupar por emissor. O alerta de concentração por posição, esse sim, vale para
+qualquer ativo.
 
 **Front-end.** `web/` é HTML, CSS e JS puros, servidos como estáticos em `/static/`.
 Não introduza build step, bundler ou framework. O JS usa **módulos ESM nativos do
@@ -352,6 +382,15 @@ ponta a ponta. Uma classe nova entra em `GRUPOS` com o seu array; uma informaç�
 como coluna ou como linha de apoio de uma célula (`celula(principal, ...apoios)`), nunca
 como um `if` dentro do laço que desenha as linhas. Busca, ordenação e recolhimento são
 estado local do módulo — o `app.js` não os conhece.
+
+**O painel de cadastro declara os campos de cada tipo, e o HTML só os marca.** Em
+`web/js/painelPosicao.js`, `FORMULARIO_RF` diz por tipo quais são as opções de indexador e
+de cupom, quais campos opcionais ele usa (`banco`, `nome`, `liquidez`) e qual é a dica sob o
+rótulo da taxa; no HTML, esses campos levam só `data-campo="banco"`. É a mesma tabela que
+decide o que **aparece** e o que é **coletado** — antes eram uma classe por tipo
+(`.campo-cdb`, `.campo-tesouro`) mais um `if` no coletor, duas listas para uma decisão só, e
+um tipo novo esquecido em qualquer das duas gravava a posição sem o campo. Um tipo novo é
+uma linha em `FORMULARIO_RF`, e o `.campo` correspondente já existe no HTML.
 
 A interface tem seis telas trocadas pelo hash da URL (`#posicoes`, `#equivalencia`, …), sem
 recarregar a página e sem roteador. Ícones são SVG de traço em `web/js/icones.js` — nunca

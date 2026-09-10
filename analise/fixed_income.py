@@ -1,21 +1,24 @@
-"""Marcação a mercado aproximada de renda fixa: CDBs e Tesouro Direto.
+"""Marcação a mercado aproximada de renda fixa: CDB, LCI, LCA e Tesouro Direto.
 
 Convenções adotadas (padrão do mercado brasileiro):
   - Rendimento capitalizado em dias úteis (base 252) para CDI, Selic e
-    prefixado. O CDB rende um percentual do CDI; o Tesouro Selic rende a
-    Selic mais um ágio ou deságio somado à taxa.
+    prefixado. O papel bancário rende um percentual do CDI; o Tesouro Selic
+    rende a Selic mais um ágio ou deságio somado à taxa.
   - IPCA+ multiplica o IPCA acumulado do período pelo juro real, este
     também capitalizado em dias úteis (base 252).
-  - IR regressivo sobre o rendimento, conforme prazo da aplicação.
-  - Com cupom periódico (mensal no CDB, semestral no Tesouro), cada
-    aniversário da aplicação paga o rendimento do período e o principal segue
-    intacto: não há capitalização de um período para o outro, e o IR é retido
-    em cada pagamento pelo prazo decorrido até ele.
+  - IR regressivo sobre o rendimento, conforme prazo da aplicação — exceto
+    em LCI e LCA, isentas para a pessoa física.
+  - Com cupom periódico, cada aniversário da aplicação paga o rendimento do
+    período e o principal segue intacto: não há capitalização de um período
+    para o outro, e o IR é retido em cada pagamento pelo prazo decorrido até
+    ele.
   - Só o Tesouro Direto paga custódia à B3, descontada do valor líquido.
 
 Os valores são ESTIMATIVAS: as taxas usadas são as vigentes hoje, projetadas
-para todo o período decorrido, e o Tesouro é carregado na curva, sem a
-marcação a mercado do papel. O extrato da instituição é a fonte oficial.
+para todo o período decorrido. O Tesouro ainda troca essa curva pelo preço de
+revenda do pregão em `marcar_a_mercado`; o papel bancário não tem preço
+publicado, e para ele a curva é o que resta. O extrato da instituição é a
+fonte oficial.
 """
 
 from __future__ import annotations
@@ -41,6 +44,33 @@ TABELA_IR = (
     (720, 0.175),
     (float("inf"), 0.15),
 )
+
+# O que muda de um tipo de título para o outro na hora de liquidar. São só dois
+# eixos, e nenhum deles é opinião:
+#
+#   - LCI e LCA são isentas de IR para a pessoa física (Lei 11.033/2004, art.
+#     3º, II), então a taxa contratada nelas já é líquida;
+#   - só o Tesouro Direto paga custódia à B3 — o papel bancário não é
+#     custodiado lá.
+#
+# Um tipo novo de renda fixa entra nesta tabela, não num `if` no meio do
+# cálculo. Espelha `REGRAS` de `src/core/rendaFixa.js`, que declara o cadastro.
+REGIME = {
+    "cdb": {"isento_ir": False, "custodia_b3": False},
+    "lci": {"isento_ir": True, "custodia_b3": False},
+    "lca": {"isento_ir": True, "custodia_b3": False},
+    "tesouro": {"isento_ir": False, "custodia_b3": True},
+}
+
+
+def regime(tipo: str) -> dict:
+    """Como o título é tributado e se paga custódia à B3."""
+    try:
+        return REGIME[tipo]
+    except KeyError:
+        raise ValueError(
+            f"Tipo de renda fixa desconhecido: {tipo!r}. Use: {', '.join(REGIME)}."
+        ) from None
 
 
 # ─────────────────────────────────────────────
@@ -120,8 +150,7 @@ def datas_pagamento(
 ) -> list[date]:
     """Aniversários da aplicação já pagos até `ate`, em dia útil.
 
-    `intervalo_meses` é 1 para o cupom mensal do CDB e 6 para o semestral
-    do Tesouro.
+    `intervalo_meses` é 1 para o cupom mensal e 6 para o semestral.
     """
     datas: list[date] = []
     periodo = 1
@@ -138,6 +167,11 @@ def aliquota_ir(dias_corridos: int) -> float:
         if dias_corridos <= limite:
             return aliquota
     return 0.15
+
+
+def _aliquota(dias_corridos: int, *, isento: bool) -> float:
+    """Alíquota que de fato incide: zero no papel isento, a tabela nos demais."""
+    return 0.0 if isento else aliquota_ir(dias_corridos)
 
 
 def _rotulo_faixa(inicio: int, fim: int | None) -> str:
@@ -217,10 +251,11 @@ def _liquidar(
     `valor_bruto` de entrada, porque o IR incide sobre o ganho efetivamente
     realizado em cada um deles.
     """
+    regras = regime(tipo)
     rendimento = valor_bruto - principal
-    ir_pct = aliquota_ir(dc)
+    ir_pct = _aliquota(dc, isento=regras["isento_ir"])
     ir_valor = max(rendimento, 0) * ir_pct
-    custodia = _custodia_b3(tipo, indexador, valor_bruto, du)
+    custodia = _custodia_b3(regras, indexador, valor_bruto, du)
     return {
         "ir_aliquota_pct": round(ir_pct * 100, 2),
         "ir_valor": round(ir_valor, 2),
@@ -229,13 +264,13 @@ def _liquidar(
     }
 
 
-def _custodia_b3(tipo: str, indexador: str, valor_bruto: float, du: int) -> float:
+def _custodia_b3(regras: dict, indexador: str, valor_bruto: float, du: int) -> float:
     """Custódia da B3 acumulada no período, só para o Tesouro Direto.
 
     A cobrança incide sobre o valor da posição; em Tesouro Selic, a primeira
     faixa é isenta.
     """
-    if tipo != "tesouro":
+    if not regras["custodia_b3"]:
         return 0.0
     base = valor_bruto
     if indexador == "SELIC":
@@ -277,6 +312,7 @@ def _juros_recebidos(
     correcao: float | None,
     du_total: int,
     intervalo_meses: int,
+    isento_ir: bool,
 ) -> dict:
     """Soma os juros já pagos nos aniversários do título, com o IR de cada um."""
     datas = datas_pagamento(aplicacao, vencimento, referencia, intervalo_meses)
@@ -286,7 +322,7 @@ def _juros_recebidos(
         du = dias_uteis(desde, pagamento)
         juros = principal * (_fator_periodo(taxa_efetiva, du, du_total, correcao) - 1)
         bruto += juros
-        ir += juros * aliquota_ir((pagamento - aplicacao).days)
+        ir += juros * _aliquota((pagamento - aplicacao).days, isento=isento_ir)
         desde = pagamento
     return {
         "desde": desde,
@@ -328,7 +364,7 @@ def valorizar(
     já foi pago saiu da posição e aparece em `juros_recebidos_*`.
 
     Args:
-        titulo: posição normalizada do tipo "cdb" ou "tesouro".
+        titulo: posição normalizada de um dos tipos de `REGIME`.
         hoje: data de referência (padrão: data corrente).
         cdi_anual_pct: CDI anualizado vigente, em % a.a.
         selic_anual_pct: meta Selic vigente, em % a.a. (só para Tesouro Selic).
@@ -342,6 +378,7 @@ def valorizar(
     referencia = min(hoje, vencimento)
 
     tipo = titulo.get("tipo") or "cdb"
+    regras = regime(tipo)
     principal = float(titulo["valor_inicial"])
     indexador = titulo["indexador"]
     taxa_efetiva = _taxa_efetiva(
@@ -359,7 +396,7 @@ def valorizar(
         recebidos = _juros_recebidos(
             principal, aplicacao, vencimento, referencia,
             taxa_efetiva=taxa_efetiva, correcao=correcao, du_total=du_total,
-            intervalo_meses=intervalo,
+            intervalo_meses=intervalo, isento_ir=regras["isento_ir"],
         )
     else:
         recebidos = _sem_pagamentos(aplicacao)
@@ -407,6 +444,9 @@ def valorizar(
         "ir_aliquota_pct": liquidacao["ir_aliquota_pct"],
         "ir_valor": liquidacao["ir_valor"],
         "custodia_valor": liquidacao["custodia_valor"],
+        # Num papel isento a taxa contratada já é líquida: quem exibe o título
+        # precisa dizer isso, senão um 95% do CDI parece pior do que é.
+        "isento_ir": regras["isento_ir"],
         "indexador_liquidacao": indexador,
         "valor_na_curva": round(valor_bruto, 2),
         "dias_corridos": dc,

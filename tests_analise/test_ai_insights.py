@@ -178,6 +178,26 @@ def test_prompt_descreve_posicoes_perfil_alertas_e_tarefa(snapshot_exemplo):
     assert "no máximo 3 pontos de observação" in prompt
 
 
+def test_prompt_anuncia_a_isencao_da_letra_de_credito(snapshot_exemplo):
+    """Sem o aviso, o modelo leria 95% do CDI como pior que os 110% do CDB."""
+    snapshot = copy.deepcopy(snapshot_exemplo)
+    snapshot["posicoes"].append({
+        **snapshot["posicoes"][1],
+        "id": "d4",
+        "tipo": "lci",
+        "descricao": "LCI Sofisa 95% do CDI",
+        "banco": "Sofisa",
+        "emissor": "Sofisa",
+        "taxa": 95.0,
+        "rotulo_taxa": "95% do CDI",
+        "isento_ir": True,
+    })
+    prompt = ia.montar_prompt(snapshot, CONFIG)
+
+    assert "[LCI] Sofisa — travado a 95% do CDI, isento de IR" in prompt
+    assert "[CDB] Inter — travado a 110% do CDI," in prompt
+
+
 def test_prompt_sem_perfil_nem_alertas(snapshot_exemplo):
     snapshot = copy.deepcopy(snapshot_exemplo)
     snapshot["perfil"] = ""

@@ -744,6 +744,8 @@
       <button type="button" data-tipo="fii" aria-pressed="true">FII</button>
       <button type="button" data-tipo="acao" aria-pressed="false">Ação</button>
       <button type="button" data-tipo="cdb" aria-pressed="false">CDB</button>
+      <button type="button" data-tipo="lci" aria-pressed="false">LCI</button>
+      <button type="button" data-tipo="lca" aria-pressed="false">LCA</button>
       <button type="button" data-tipo="tesouro" aria-pressed="false">Tesouro</button>
     </div>
 
@@ -765,13 +767,13 @@
         <input id="f-data-compra" type="date">
       </div>
 
-      <div class="campo campo-cdb hidden">
+      <div class="campo hidden" data-campo="banco">
         <label for="f-banco">Banco emissor</label>
         <input id="f-banco" placeholder="Banco Inter" autocomplete="off">
       </div>
-      <div class="campo campo-tesouro hidden campo-largo">
-        <label for="f-nome-tesouro">Nome do título (opcional)</label>
-        <input id="f-nome-tesouro" placeholder="Gerado do indexador e do vencimento" autocomplete="off">
+      <div class="campo hidden campo-largo" data-campo="nome">
+        <label for="f-nome-titulo">Nome do título (opcional)</label>
+        <input id="f-nome-titulo" placeholder="Gerado do indexador e do vencimento" autocomplete="off">
       </div>
       <div class="campo campo-rf hidden">
         <label for="f-valor-inicial">Valor aplicado (R$)</label>
@@ -785,8 +787,9 @@
         <label for="f-taxa" id="f-taxa-label">Taxa (% do CDI)</label>
         <!-- A dica vem antes do controle: o input é alinhado à base da célula
              (margin-top: auto), então texto abaixo dele o desalinharia do
-             campo vizinho na mesma linha da grade. -->
-        <span class="campo-dica hidden" id="f-taxa-dica">Em branco, é buscada no pregão da compra.</span>
+             campo vizinho na mesma linha da grade. O texto sai da tabela de
+             tipos em `painelPosicao.js`, porque muda com o tipo escolhido. -->
+        <span class="campo-dica hidden" id="f-taxa-dica"></span>
         <input id="f-taxa" type="number" step="any" min="0" placeholder="110">
       </div>
       <div class="campo campo-rf hidden">
@@ -801,7 +804,7 @@
         <label for="f-pagamento-juros">Pagamento dos juros</label>
         <select id="f-pagamento-juros"></select>
       </div>
-      <div class="campo campo-check campo-cdb hidden campo-largo">
+      <div class="campo campo-check hidden campo-largo" data-campo="liquidez">
         <input id="f-liquidez" type="checkbox">
         <label for="f-liquidez">Liquidez diária</label>
       </div>

@@ -1,4 +1,4 @@
-"""Marcação a mercado de CDBs: calendário, IR e capitalização."""
+"""Marcação a mercado de renda fixa: calendário, IR e capitalização."""
 
 from datetime import date
 
@@ -12,6 +12,7 @@ from analise.fixed_income import (
     dias_uteis,
     feriados_nacionais,
     proximo_dia_util,
+    regime,
     somar_meses,
     valorizar,
 )
@@ -332,8 +333,9 @@ def test_custodia_de_titulo_nao_selic_incide_sobre_o_valor_inteiro():
     assert calc["custodia_valor"] == round(esperado, 2)
 
 
-def test_cdb_nao_paga_custodia_de_b3():
-    calc = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+@pytest.mark.parametrize("tipo", ["cdb", "lci", "lca"])
+def test_papel_bancario_nao_paga_custodia_de_b3(tipo):
+    calc = valorizar({**CDB_CDI, "tipo": tipo}, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
 
     assert calc["custodia_valor"] == 0.0
     assert calc["valor_liquido"] == round(calc["valor_bruto"] - calc["ir_valor"], 2)
@@ -376,3 +378,50 @@ def test_faixas_de_ir_repetem_a_aliquota_aplicada_no_resgate():
     for faixa in faixas_ir():
         dia = faixa["ate_dias"] or faixa["de_dias"]
         assert aliquota_ir(dia) * 100 == faixa["aliquota_pct"]
+
+
+# ─────────────────────────────────────────────
+# LCI e LCA — isentas de IR
+# ─────────────────────────────────────────────
+
+def test_letra_de_credito_nao_paga_ir():
+    calc = valorizar({**CDB_CDI, "tipo": "lci", "taxa": 95.0}, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["isento_ir"] is True
+    assert calc["ir_aliquota_pct"] == 0.0
+    assert calc["ir_valor"] == 0.0
+    assert calc["valor_liquido"] == calc["valor_bruto"]
+    assert calc["rendimento_liquido"] == calc["rendimento_bruto"]
+
+
+def test_cdb_continua_tributado():
+    calc = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["isento_ir"] is False
+    assert calc["ir_valor"] > 0
+
+
+def test_cupom_de_lca_nao_retem_ir():
+    """Num papel isento não há retenção em cada aniversário, só o juro cheio."""
+    lca = {**CDB_CDI, "tipo": "lca", "pagamento_juros": "mensal"}
+    calc = valorizar(lca, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["pagamentos_realizados"] == 12
+    assert calc["juros_recebidos_bruto"] > 0
+    assert calc["juros_recebidos_ir"] == 0.0
+    assert calc["juros_recebidos_liquido"] == calc["juros_recebidos_bruto"]
+
+
+def test_letra_isenta_supera_um_cdb_de_taxa_maior():
+    """É o ponto da isenção: 95% do CDI líquidos batem 105% brutos."""
+    hoje = date(2026, 1, 2)
+    lci = valorizar({**CDB_CDI, "tipo": "lci", "taxa": 95.0}, hoje=hoje, cdi_anual_pct=15.0)
+    cdb = valorizar({**CDB_CDI, "taxa": 105.0}, hoje=hoje, cdi_anual_pct=15.0)
+
+    assert cdb["valor_bruto"] > lci["valor_bruto"], "o CDB rende mais na curva"
+    assert lci["valor_liquido"] > cdb["valor_liquido"], "e menos no bolso"
+
+
+def test_regime_recusa_tipo_desconhecido():
+    with pytest.raises(ValueError, match="cripto"):
+        regime("cripto")

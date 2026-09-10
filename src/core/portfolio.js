@@ -2,12 +2,12 @@
  * Persistência e validação da carteira em arquivo JSON.
  *
  * Tipos de posição suportados:
- *   - "fii" / "acao" : ticker, quantidade, preço médio
- *   - "cdb"          : banco emissor, valor aplicado, indexador, taxa e prazo
- *   - "tesouro"      : título do Tesouro Direto, com os mesmos campos de prazo
+ *   - "fii" / "acao"      : ticker, quantidade, preço médio
+ *   - "cdb" / "lci" / "lca": banco emissor, valor aplicado, indexador, taxa e prazo
+ *   - "tesouro"           : título do Tesouro Direto, com os mesmos campos de prazo
  *
- * As regras dos dois tipos de renda fixa moram em `rendaFixa.js`; aqui ficam
- * só a leitura, a gravação e o CRUD do arquivo.
+ * As regras dos tipos de renda fixa moram em `rendaFixa.js`; aqui ficam só a
+ * leitura, a gravação e o CRUD do arquivo.
  */
 
 import fs from "node:fs";
@@ -33,11 +33,13 @@ export const VERSAO = 2;
 
 export const TIPOS_VARIAVEL = ["fii", "acao"];
 export const TIPOS_RENDA_FIXA = rendaFixa.TIPOS_RENDA_FIXA;
+export const TIPOS_BANCARIOS = rendaFixa.TIPOS_BANCARIOS;
 export const TIPOS = [...TIPOS_VARIAVEL, ...TIPOS_RENDA_FIXA];
 
-export const INDEXADORES_CDB = rendaFixa.INDEXADORES_CDB;
+export const INDEXADORES_BANCARIO = rendaFixa.INDEXADORES_BANCARIO;
 export const INDEXADORES_TESOURO = rendaFixa.INDEXADORES_TESOURO;
 export const PAGAMENTOS_CDB = rendaFixa.PAGAMENTOS_CDB;
+export const PAGAMENTOS_LETRA = rendaFixa.PAGAMENTOS_LETRA;
 export const PAGAMENTOS_TESOURO = rendaFixa.PAGAMENTOS_TESOURO;
 
 /**

@@ -10,10 +10,20 @@ from datetime import date, datetime
 
 from . import fixed_income, formato, market, portfolio, posicoes as marcacao
 
-CLASSES = {"fii": "FIIs", "acao": "Ações", "cdb": "CDBs", "tesouro": "Tesouro Direto"}
+CLASSES = {
+    "fii": "FIIs",
+    "acao": "Ações",
+    "cdb": "CDBs",
+    "lci": "LCIs",
+    "lca": "LCAs",
+    "tesouro": "Tesouro Direto",
+}
 
-# O FGC cobre depósito bancário; título público responde pelo Tesouro Nacional.
-TIPOS_COM_FGC = ("cdb",)
+# O FGC cobre depósito e letra de crédito bancária — CDB, LCI e LCA consomem o
+# mesmo teto por CPF/instituição. Título público responde pelo Tesouro
+# Nacional, então não há teto a estourar. A lista é a dos papéis bancários para
+# que não exista uma segunda relação capaz de divergir dela.
+TIPOS_COM_FGC = portfolio.TIPOS_BANCARIOS
 
 
 # ─────────────────────────────────────────────

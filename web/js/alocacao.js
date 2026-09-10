@@ -132,6 +132,8 @@ function coberturaDoEmissor(emissor) {
 function blocoEmissores(emissores, limitePct) {
   if (!emissores?.length) return "";
 
+  // A cor aqui separa banco de Tesouro, e não um papel do outro: o recorte é
+  // por emissor, e o mesmo banco pode ter CDB, LCI e LCA na mesma linha.
   const linhas = emissores
     .map(
       (e) => `<div class="grupo">

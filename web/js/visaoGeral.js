@@ -14,7 +14,7 @@ const COR_SINAL = { pos: "var(--verde)", neg: "var(--vermelho)", zero: "var(--t3
 // só para agrupar o que `snapshot.classes` já calculou, sem refazer conta.
 const GRUPOS_RESULTADO = [
   { chave: "variavel", rotulo: "Renda variável", tipos: ["fii", "acao"] },
-  { chave: "fixa", rotulo: "Renda fixa", tipos: ["cdb", "tesouro"] },
+  { chave: "fixa", rotulo: "Renda fixa", tipos: ["cdb", "lci", "lca", "tesouro"] },
 ];
 
 /** Soma o que `analysis.consolidar` já calculou por classe, agora por regime. */
