@@ -24,6 +24,7 @@ Python; o cadastro e a apresentação moram **só** no Node.
 ```bash
 # Análise (Python)
 python scripts/analisar.py --sem-ia    # cálculo no terminal, sem chamar a API
+python scripts/analisar.py --previa-telegram   # a mensagem de hoje, sem enviar
 python scripts/analisar.py --help      # todas as flags
 python -m pytest                       # testes do motor de análise
 python -m pytest tests_analise/test_fixed_income.py -q
@@ -153,6 +154,14 @@ chame-o num `finally`), `envIaTemporario()` isola a configuração de IA num `.e
 temporário apontado por `IA_ENV_FILE`, `gravarAnalise()` simula o que o Python grava.
 A ponte com o Python é testada disparando **scripts Python mínimos** escritos num
 diretório temporário, nunca o script real.
+
+`tests_analise/test_relevancia.py` cobre a seleção da mensagem curta injetando
+`hoje`: é assim que se testa "no marco de 15 dias fala, no 14º cala" e o rodízio do
+ativo do dia sem depender da data em que a suíte roda.
+`test/web/configuracoes.test.js` trava o contrato entre as metades da tela —
+coleta o formulário e passa o resultado pelo `atualizarConfig` de verdade, para que
+um campo declarado só numa das tabelas apareça como falha em vez de ser descartado
+em silêncio.
 
 **pytest (`tests_analise/`)** — motor de análise. Fixtures em `conftest.py`: `env_ia` é
 **autouse** e aponta `IA_ENV_FILE` para um `.env` temporário (sem isso os testes leriam a
@@ -317,6 +326,23 @@ específicos". As chaves consumidas são as
 mesmas do JSON que o Python produz — se mudar o formato de um snapshot, atualize o front
 junto.
 
+**Campo de formulário é componente do sistema, não do cartão.** Todo número,
+seletor, caixa de marcar e área de texto usa `.campo` dentro de uma `.grade-form`
+(`style.css`): rótulo acima em micro maiúsculo, controle de 40px, foco em âmbar.
+Um campo novo — em qualquer tela — herda isso; não crie uma classe de campo para
+um cartão só. O "Máx. de tokens" e o "Esforço" do cartão de IA são a referência, e
+os limiares do Telegram passaram a segui-la depois de terem nascido com um
+componente próprio, menor e diferente de todo o resto. Precisa ajustar o
+**arranjo**, e não o controle? Aí sim entra um modificador de contêiner — como
+`.campo-largo`, que já existia, ou `.grade-form-compacta`, que limita a largura da
+coluna numa linha de poucos campos.
+
+Ao acrescentar CSS, **procure o nome da classe antes** (`grep -rn "nome" web/`).
+Um nome genérico reusado por acidente vence por cascata e quebra a tela alheia: a
+chave do Telegram nasceu como `.trilho`, o mesmo nome da barra de alocação, e
+transformou toda barra de peso da carteira numa pílula de 30px em Visão geral e
+em Posições. Há teste travando esse caso.
+
 **A tabela de posições declara as colunas, não as escreve.** `web/js/posicoes.js` quebra a
 listagem em um grupo por classe de ativo, e cada classe traz o seu próprio array de colunas
 (`{ rotulo, num, mono, celula(item) }`) — um CDB não tem P/VP, um FII não tem vencimento.
@@ -372,10 +398,14 @@ porque o CDI é a base da conversão. Por isso `renderMacro` escreve em todo `[d
 `[data-macro-quando]`, e não num id — para acrescentar o quadro a uma terceira tela basta
 repetir a marcação, sem tocar no JS.
 
-**A mensagem do Telegram é HTML, e o corte é por linha.** O Telegram aceita só um HTML
+**A mensagem do Telegram é HTML, e o corte é por linha.** As duas mensagens moram em
+`analise/mensagem.py` (`telegram`, o relatório inteiro, e `telegram_resumo`, o envio de
+cada dia); `analise/report.py` ficou só com o relatório de terminal, e o que os dois
+formatos compartilham — ícones, rótulos e `leitura_herdada` — está em `analise/formato.py`.
+O Telegram aceita só um HTML
 restrito e recusa a mensagem inteira com **400** se houver tag aberta, entidade partida ou
 mais de 4096 caracteres — então todo texto vindo da IA ou do cadastro passa por
-`formato.escapar_html`, e cada linha de `report.telegram` fecha as próprias tags. É essa
+`formato.escapar_html`, e cada linha fecha as próprias tags. É essa
 invariante que permite `_juntar_no_limite` descartar as **últimas linhas inteiras** quando
 não couberem; nunca volte a cortar a string no meio (`mensagem[:4090]`), porque um `<i>`
 aberto derruba o envio. O limite é contado em **unidades UTF-16** (`_unidades_utf16`) — o
@@ -385,6 +415,125 @@ material não é recomendação fica fora do corte e é sempre mantido.
 `notifier._conferir` levanta o `description` que a API devolveu ("chat not found",
 "can't parse entities") em vez de `resp.raise_for_status()`: a mensagem dele traz a URL
 chamada, e o **token do bot vai na URL** — ele apareceria no log e na tela do usuário.
+
+**O envio de cada dia é o resumo, não o relatório.** `report.telegram` (o relatório
+inteiro) continua existindo, mas só sob demanda — `--completo`, ou `?completo=1` na rota.
+O envio automático manda a mensagem curta de `mensagem.telegram_resumo`, montada a partir
+da seleção de **`analise/relevancia.py`**. São três responsabilidades separadas:
+
+| Módulo | Responde |
+|---|---|
+| `analise/gatilhos.py` | quando cada bloco tem algo a dizer, e o que ele diz |
+| `analise/relevancia.py` | junta, pontua, corta pelo orçamento e monta a seleção |
+| `analise/mensagem.py` | como a seleção vira HTML do Telegram |
+
+Não escreva HTML em `gatilhos` nem regra de seleção em `mensagem`. Um bloco devolver
+lista vazia **é** o gatilho — não existe um `gatilho()` separado do `montar()`, seriam
+duas funções para uma decisão só.
+
+O princípio é *estado vive na interface, o Telegram carrega evento*. O estado da carteira
+entra em **uma linha** (`_linha_estado`) só para dar escala; o resto da mensagem é o que
+mudou. `notifier.enviar(..., silencioso=True)` usa `disable_notification` nos dias sem
+severidade `alerta`, para que o aparelho tocar continue significando algo.
+
+**Interruptor e gatilho: é o gatilho que faz a mensagem variar.** Cada bloco tem um
+`ativo` no cadastro (pode aparecer?) e um limiar (merece aparecer **hoje**?). Só o
+interruptor daria uma mensagem configurável mas fixa; o limiar é o que deixa a maioria dos
+blocos calada na maioria dos dias. **A seleção é função pura** do snapshot desta execução
+mais o cadastro: não lê histórico, não guarda estado, não toca a rede — `hoje` é injetável
+para os testes. Onde o limiar não serve, quem varia é o calendário:
+
+- `_calendario_rf` fala nos **marcos** de dias que faltam (`marcos_dias`, 30/15/7/3/1 por
+  padrão), e não numa janela: "faltam menos de 30 dias" citaria o mesmo vencimento trinta
+  vezes seguidas, o marco o cita cinco vezes, em dias distintos.
+- `_aprofundamento` escolhe o ativo do dia por `dia_do_ano % nº de fichas`, ordenadas por
+  ticker — a ordem em que a IA devolve as fichas não é estável entre execuções, e sem o
+  `sorted` o rodízio repetiria ou pularia ativos.
+- `_resumo_ia` e `_semanal` saem do dia da semana (`dias_semana`, `dia_semana`).
+
+`gatilhos.BLOCOS` é a tabela que declara **a ordem de leitura e o peso** de cada bloco. Um
+bloco novo é uma linha nova ali, não um `if` no meio do montador — mesmo padrão de
+`REGRAS` em `rendaFixa.js` e de `GRUPOS` em `web/js/posicoes.js`. A tela de Configurações
+tem a sua própria tabela espelhada em `BLOCOS` de `web/js/configuracoes.js`, com os
+rótulos.
+
+**O corte é por relevância, a exibição é por bloco.** `_no_orcamento` aplica dois
+critérios de propósito: **quem entra** é decidido pela relevância
+(`peso do bloco × severidade × (1 + peso da posição)`), **quem vem antes** pela ordem da
+tabela. Ordenar a exibição pela relevância embaralharia as posições em movimento com os
+alertas. Por isso o `aprofundamento` tem o menor peso: é o enchimento do dia calmo e é o
+primeiro a sair quando o dia é cheio. `_juntar_no_limite` fica como rede de segurança —
+não é mais ele que decide o que cabe.
+
+**Alerta em curso é uma linha, não um bloco.** Sem histórico não há como saber se um
+alerta é novo. Os que ficam abaixo de `severidade_minima` (ou que não couberam no
+orçamento) não desaparecem: `_em_curso` os conta, e a mensagem traz "3 alerta(s) em
+curso". Repetir o texto inteiro de todos eles todo dia é justamente o que se quer evitar.
+
+**Selic, CDI e IPCA são a única comparação com o passado.** Eles mudam poucas vezes por
+ano e a mudança reprecifica a carteira inteira, então a mudança **é** a notícia. O valor
+anterior sai de `runner._macro_anterior`, que aproveita a leitura de `ultima_analise()`
+que `executar` já fazia para herdar as fichas de IA — **nenhum arquivo novo e nenhuma
+leitura a mais**; `relevancia.macro_comparavel` guarda só os três indicadores no registro,
+não o `macro` inteiro. Duas armadilhas travadas por teste:
+
+- `market._ultimo_valor` devolve um **padrão embutido** com `fonte: "padrao"` quando o BCB
+  não responde. `_valor_macro` recusa esse padrão dos dois lados da comparação — sem isso,
+  uma falha de rede anunciaria uma mudança que não houve.
+- Numa execução intradiária o "anterior" é a rodada anterior de **hoje**, e é essa a
+  leitura desejada: a mudança é anunciada uma vez, na rodada em que apareceu.
+
+**A configuração mora no cadastro, e é espelhada nas duas metades.** O bloco `telegram` de
+`config` fica em `data/portfolio.json` — escrito pelo Node, lido pelo Python, como todo o
+resto do arquivo. `TELEGRAM_PADRAO` existe nas duas metades
+(`analise/portfolio.py` e `src/core/portfolio.js`) e **as duas tabelas precisam continuar
+idênticas**: um campo acrescentado só de um lado é descartado em silêncio pelo mesclador
+do outro. O mesclador é profundo de propósito (`telegram_do_cadastro` /
+`telegramDoCadastro`): um espalhamento raso trocaria o padrão inteiro pelo bloco parcial
+do arquivo, e um cadastro gravado antes de um limiar existir perderia esse limiar.
+
+No Node, `campoTelegram` **deriva o tipo do próprio padrão** — padrão booleano exige
+booleano, numérico exige número, lista exige lista de inteiros — para que não exista uma
+segunda tabela de tipos capaz de divergir da primeira. `MAXIMO_TELEGRAM` guarda os tetos;
+um `dia_semana: 7` aceito desligaria o bloco semanal em silêncio.
+
+**A tela dos limiares é recolhível, um bloco por linha.** Onze blocos com até três
+limiares cada não cabem abertos sem encolher os campos abaixo do padrão do
+sistema. Cada bloco é um `<details>` — o mesmo idioma nativo dos alertas e do
+contexto de mercado, sem JS — com a caixa de marcar (entra ou não na mensagem) e,
+à direita, na mesma linha, o **resumo dos limiares**: "limiar 3% · peso mín. 3% ·
+máx. 3", montado por `resumoDoBloco` a partir dos próprios campos. Sem o resumo, a
+dobra esconderia os valores e obrigaria a abrir bloco por bloco para conferir um
+número; um ouvinte de `input` o mantém em dia enquanto se digita.
+
+Recolhido, o bloco tem **exatamente os 40px de um controle de `.campo`** — 38px de
+`min-height` no `summary` mais as duas bordas —, para a lista alinhar com o campo
+logo acima dela e com o resto da tela. É `min-height`, e não espaçamento vertical:
+a altura da linha do nome tem fração, e somar padding nunca fecharia em 40
+redondo. Centrar o conteúdo dentro dela dá, de graça, um alvo de clique da altura
+inteira da linha.
+
+O bloco aberto cresce **na própria célula do grid**, e é para isso que serve o
+`align-items: start` da `.grade-blocos`. Não devolva o `grid-column: 1 / -1` que
+já esteve ali: o cartão saltava para a largura da tela e reordenava os vizinhos
+sob o cursor de quem tinha acabado de clicar. Por isso são duas colunas e não
+três — com ~520px de linha, os limiares de um bloco cabem lado a lado e a dobra
+cresce uma fileira de campos em vez de três. Só `dias_semana` leva `campo-largo`.
+
+O `name` compartilhado dos `<details>` faz do conjunto um acordeão exclusivo, sem
+JS; recolher não perde nada, porque os campos seguem no DOM e `coletarConfig` os
+lê fechados. A caixa de marcar é **irmã** do `<details>`, não filha do
+`<summary>`: dentro dele, clicar na caixa também abriria a dobra.
+
+**A prévia é o que torna os limiares calibráveis.** `--previa-telegram` devolve a mensagem
+que *seria* enviada hoje sem enviar nada, e o botão da tela de Configurações a exibe. O
+texto é montado pelo Python e o front só o mostra — a regra de "nenhum cálculo da carteira
+no front" continua valendo. Sem a prévia, ajustar um limiar seria adivinhação.
+
+**`ultimo_pagamento` é calendário, não histórico.** `fixed_income._juros_recebidos` já
+calculava as datas dos cupons pagos; expor a última permite anunciar "cupom creditado
+hoje" sem consultar execução anterior nenhuma. É o único campo novo que a mensagem curta
+exigiu.
 
 **Localizar o Python.** `src/server/analiseExterna.js` usa `PYTHON_BIN` quando definido,
 senão `python` no Windows e `python3` nos demais. Um `ENOENT` no spawn vira uma mensagem

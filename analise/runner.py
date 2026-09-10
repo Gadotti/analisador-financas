@@ -11,7 +11,7 @@ import json
 import time
 from datetime import datetime
 
-from . import ai_insights, analysis, config_ia, fundamentals, portfolio
+from . import ai_insights, analysis, config_ia, fundamentals, portfolio, relevancia
 from .paths import execucoes_file, garantir_diretorios, history_dir, last_analysis_file
 
 # Teto do log de execuções quando o cadastro não o declara. O valor real vem de
@@ -35,6 +35,9 @@ def executar(
     """
     inicio = time.monotonic()
     carteira = portfolio.load()
+    # Uma leitura só da análise anterior, aproveitada por dois consumidores: a
+    # herança das fichas de IA e a comparação dos indicadores macro.
+    anterior = ultima_analise()
     snapshot = analysis.consolidar(carteira, usar_cache=usar_cache)
 
     resultado = {
@@ -44,6 +47,7 @@ def executar(
         "ia_erro": None,
         "ia_solicitada": usar_ia,
         "ia_reaproveitada_de": None,
+        "macro_anterior": _macro_anterior(anterior),
         "duracao_s": None,
     }
 
@@ -52,7 +56,7 @@ def executar(
             snapshot, carteira["config"], analisar_com_ia
         )
     if resultado["ia"] is None:
-        _reaproveitar_ia(resultado)
+        _reaproveitar_ia(resultado, anterior)
 
     # Métricas derivadas das fichas: aritmética local, não estimativa do modelo.
     resultado["fundamentos"] = fundamentals.consolidar(snapshot, resultado["ia"])
@@ -76,7 +80,22 @@ def _analisar_com_ia(snapshot: dict, config: dict, analisador) -> tuple[dict | N
         return None, f"Falha inesperada na analise por IA: {exc}"
 
 
-def _reaproveitar_ia(resultado: dict) -> None:
+def _macro_anterior(anterior: dict | None) -> dict | None:
+    """Indicadores macro da análise anterior, para o bloco de mudança da mensagem.
+
+    Só os três que a mensagem compara (`relevancia.macro_comparavel`), e não o
+    `macro` inteiro: os índices e o horário de consulta não entram em
+    comparação nenhuma, e este registro é gravado em disco a cada execução.
+
+    Numa execução intradiária o "anterior" é a rodada anterior de hoje, e é
+    exatamente essa a leitura desejada: a mudança de um indicador é anunciada
+    uma vez, na rodada em que ela apareceu.
+    """
+    macro = ((anterior or {}).get("snapshot") or {}).get("macro")
+    return relevancia.macro_comparavel(macro)
+
+
+def _reaproveitar_ia(resultado: dict, anterior: dict | None) -> None:
     """Herda a leitura da última análise salva quando esta execução não tem uma.
 
     Uma execução sem IA (`--sem-ia`, o botão "Atualizar cotações") ou uma
@@ -88,8 +107,11 @@ def _reaproveitar_ia(resultado: dict) -> None:
     As fichas são herdadas cruas: `fundamentals` recalcula pesos e valores com o
     snapshot de agora. `ia_reaproveitada_de` carrega a data de origem para que
     interface e relatório não apresentem a leitura antiga como recém-feita.
+
+    `anterior` é a análise já lida por `executar`, e não uma segunda abertura
+    do arquivo.
     """
-    ia = (ultima_analise() or {}).get("ia")
+    ia = (anterior or {}).get("ia")
     if not ia or not ia.get("ativos"):
         return
     resultado["ia"] = ia

@@ -51,12 +51,13 @@ async function copiarComando(botao) {
 /**
  * @param {object} acoes
  * @param {(comIa: boolean) => Promise<void>} acoes.rodarAnalise Já usado pelos botões do topo.
- * @param {() => Promise<void>} acoes.enviarAoTelegram Idem.
+ * @param {(completo?: boolean) => Promise<void>} acoes.enviarAoTelegram Idem.
  */
 export function ligarDisparadores({ rodarAnalise, enviarAoTelegram }) {
   $("#btn-disp-analise-ia").addEventListener("click", () => rodarAnalise(true));
   $("#btn-disp-cotacoes").addEventListener("click", () => rodarAnalise(false));
-  $("#btn-disp-telegram-enviar").addEventListener("click", enviarAoTelegram);
+  $("#btn-disp-telegram-enviar").addEventListener("click", () => enviarAoTelegram(false));
+  $("#btn-disp-telegram-completo").addEventListener("click", () => enviarAoTelegram(true));
   $("#btn-disp-telegram-testar").addEventListener("click", testarTelegram);
   $("#btn-disp-ia-testar").addEventListener("click", testarIa);
   $$(".btn-copiar").forEach((botao) => botao.addEventListener("click", () => copiarComando(botao)));
@@ -67,5 +68,6 @@ export function aplicarStatusDisparadores(status) {
   $("#btn-disp-analise-ia").disabled = !status.ia_disponivel;
   $("#btn-disp-ia-testar").disabled = !status.ia_disponivel;
   $("#btn-disp-telegram-enviar").disabled = !status.telegram_configurado;
+  $("#btn-disp-telegram-completo").disabled = !status.telegram_configurado;
   $("#btn-disp-telegram-testar").disabled = !status.telegram_configurado;
 }

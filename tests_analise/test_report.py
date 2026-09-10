@@ -3,7 +3,7 @@
 import copy
 import re
 
-from analise import fundamentals, report
+from analise import fundamentals, mensagem, report
 
 
 def fundamentos(snapshot_exemplo, ia_exemplo):
@@ -174,12 +174,12 @@ def test_marca_a_leitura_herdada_de_outra_data(snapshot_exemplo, ia_exemplo):
     ia = {**ia_exemplo, "_meta": {**ia_exemplo["_meta"], "gerado_em": "2026-08-28T09:00:00"}}
 
     assert "Leitura herdada da análise de 28/08/2026 às 09:00" in report.texto(snapshot_exemplo, ia)
-    assert "Leitura herdada" in report.telegram(snapshot_exemplo, ia)
+    assert "Leitura herdada" in mensagem.telegram(snapshot_exemplo, ia)
 
 
 def test_leitura_do_proprio_dia_nao_e_marcada(snapshot_exemplo, ia_exemplo):
     assert "Leitura herdada" not in report.texto(snapshot_exemplo, ia_exemplo)
-    assert "Leitura herdada" not in report.telegram(snapshot_exemplo, ia_exemplo)
+    assert "Leitura herdada" not in mensagem.telegram(snapshot_exemplo, ia_exemplo)
 
 
 def test_linhas_nao_estouram_a_largura(snapshot_exemplo, ia_exemplo):
@@ -194,7 +194,7 @@ def test_linhas_nao_estouram_a_largura(snapshot_exemplo, ia_exemplo):
 
 
 def test_mensagem_basica_em_html(snapshot_exemplo):
-    msg = report.telegram(snapshot_exemplo)
+    msg = mensagem.telegram(snapshot_exemplo)
 
     assert "<b>Relatório de Carteira</b>" in msg
     assert "01/09/2026 — 10:30" in msg
@@ -205,7 +205,7 @@ def test_mensagem_basica_em_html(snapshot_exemplo):
 
 
 def test_mensagem_com_ia_traz_indicadores_e_conclusao(snapshot_exemplo, ia_exemplo):
-    msg = report.telegram(snapshot_exemplo, ia_exemplo, fundamentos(snapshot_exemplo, ia_exemplo))
+    msg = mensagem.telegram(snapshot_exemplo, ia_exemplo, fundamentos(snapshot_exemplo, ia_exemplo))
 
     assert "P/VP médio <b>0,98</b>" in msg
     assert "Renda estimada" in msg
@@ -216,7 +216,7 @@ def test_mensagem_com_ia_traz_indicadores_e_conclusao(snapshot_exemplo, ia_exemp
 
 def test_escapa_html_do_conteudo(snapshot_exemplo, ia_exemplo):
     ia = {**ia_exemplo, "resumo": "Risco <alto> & relevante"}
-    msg = report.telegram(snapshot_exemplo, ia)
+    msg = mensagem.telegram(snapshot_exemplo, ia)
 
     assert "Risco &lt;alto&gt; &amp; relevante" in msg
     assert "<alto>" not in msg
@@ -224,16 +224,16 @@ def test_escapa_html_do_conteudo(snapshot_exemplo, ia_exemplo):
 
 def test_trunca_no_limite_do_telegram(snapshot_exemplo, ia_exemplo):
     ia = {**ia_exemplo, "resumo": "palavra " * 2000}
-    msg = report.telegram(snapshot_exemplo, ia)
+    msg = mensagem.telegram(snapshot_exemplo, ia)
 
-    assert report._unidades_utf16(msg) <= report.LIMITE_TELEGRAM
-    assert report.AVISO_CORTE in msg
+    assert mensagem._unidades_utf16(msg) <= mensagem.LIMITE_TELEGRAM
+    assert mensagem.AVISO_CORTE in msg
 
 
 def test_corte_nao_deixa_tag_html_aberta(snapshot_exemplo, ia_exemplo):
     """Um `<i>` partido no meio faz a API devolver 400 (can't parse entities)."""
     ia = {**ia_exemplo, "resumo": "palavra " * 2000}
-    msg = report.telegram(snapshot_exemplo, ia)
+    msg = mensagem.telegram(snapshot_exemplo, ia)
 
     assert msg.count("<b>") == msg.count("</b>")
     assert msg.count("<i>") == msg.count("</i>")
@@ -241,25 +241,25 @@ def test_corte_nao_deixa_tag_html_aberta(snapshot_exemplo, ia_exemplo):
 
 def test_corte_preserva_o_aviso_de_nao_recomendacao(snapshot_exemplo, ia_exemplo):
     ia = {**ia_exemplo, "resumo": "palavra " * 2000}
-    msg = report.telegram(snapshot_exemplo, ia)
+    msg = mensagem.telegram(snapshot_exemplo, ia)
 
     assert "não é recomendação de investimento" in msg
 
 
 def test_limite_do_telegram_conta_emoji_como_duas_unidades():
     """O Telegram mede em UTF-16: contar code points subestima o tamanho."""
-    assert report._unidades_utf16("📊") == 2
-    assert report._unidades_utf16("ação") == 4
+    assert mensagem._unidades_utf16("📊") == 2
+    assert mensagem._unidades_utf16("ação") == 4
 
 
 def test_bloco_de_segmentos_so_com_mais_de_um(snapshot_exemplo, ia_exemplo):
     f = fundamentos(snapshot_exemplo, ia_exemplo)
-    assert "POR SEGMENTO" not in report.telegram(snapshot_exemplo, ia_exemplo, f)
+    assert "POR SEGMENTO" not in mensagem.telegram(snapshot_exemplo, ia_exemplo, f)
 
     f["por_segmento"].append(
         {"nome": "Logística", "valor": 5000.0, "peso_pct": 25.0, "ativos": ["HGLG11"], "quantidade": 1}
     )
-    msg = report.telegram(snapshot_exemplo, ia_exemplo, f)
+    msg = mensagem.telegram(snapshot_exemplo, ia_exemplo, f)
     assert "POR SEGMENTO" in msg
     assert "Logística: 25,0%" in msg
 

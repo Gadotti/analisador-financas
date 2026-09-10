@@ -188,6 +188,100 @@ describe("persistência e CRUD", () => {
   });
 });
 
+describe("configuração da mensagem do Telegram", () => {
+  test("os padrões espelham o bloco lido pelo Python", () => {
+    const { telegram } = portfolio.configPadrao();
+
+    expect(telegram.max_itens).toBe(6);
+    expect(telegram.calendario_rf.marcos_dias).toEqual([30, 15, 7, 3, 1]);
+    expect(telegram.alertas.severidade_minima).toBe("atencao");
+  });
+
+  test("cada cópia dos padrões é independente da outra", () => {
+    const uma = portfolio.configPadrao();
+    const outra = portfolio.configPadrao();
+
+    uma.telegram.movimento.limiar_pct = 99;
+
+    expect(outra.telegram.movimento.limiar_pct).toBe(3);
+    expect(portfolio.TELEGRAM_PADRAO.movimento.limiar_pct).toBe(3);
+  });
+
+  test("um bloco parcial gravado no arquivo não apaga os limiares que faltam", () => {
+    const completo = portfolio.telegramDoCadastro({ movimento: { limiar_pct: 9 } });
+
+    expect(completo.movimento).toEqual({
+      ativo: true, limiar_pct: 9, peso_minimo_pct: 3, max: 3,
+    });
+    expect(completo.max_itens).toBe(6);
+  });
+
+  test("grava um patch parcial sem tocar nos demais blocos", () => {
+    const { config } = portfolio.atualizarConfig({
+      config: { telegram: { movimento: { limiar_pct: "4,5" }, max_itens: "8" } },
+    });
+
+    expect(config.telegram.movimento.limiar_pct).toBe(4.5);
+    expect(config.telegram.movimento.peso_minimo_pct).toBe(3);
+    expect(config.telegram.max_itens).toBe(8);
+    expect(config.telegram.alertas.severidade_minima).toBe("atencao");
+  });
+
+  test("o interruptor aceita o booleano do checkbox e a string do select", () => {
+    const desligado = portfolio.atualizarConfig({
+      config: { telegram: { macro: { ativo: false }, alertas: { ativo: "false" } } },
+    });
+
+    expect(desligado.config.telegram.macro.ativo) .toBe(false);
+    expect(desligado.config.telegram.alertas.ativo).toBe(false);
+  });
+
+  test("os marcos de calendário vêm de um texto separado por vírgulas", () => {
+    const { config } = portfolio.atualizarConfig({
+      config: { telegram: { calendario_rf: { marcos_dias: "60, 30, 30, 7" } } },
+    });
+
+    expect(config.telegram.calendario_rf.marcos_dias).toEqual([60, 30, 7]);
+  });
+
+  test("dia da semana fora de 0-6 é recusado", () => {
+    expect(() =>
+      portfolio.atualizarConfig({ config: { telegram: { semanal: { dia_semana: 7 } } } }),
+    ).toThrow(/deve ser <= 6/);
+  });
+
+  test("severidade fora da lista é recusada com a lista na mensagem", () => {
+    expect(() =>
+      portfolio.atualizarConfig({
+        config: { telegram: { alertas: { severidade_minima: "urgente" } } },
+      }),
+    ).toThrow(/info, atencao, alerta/);
+  });
+
+  test("marco de calendário fracionado é recusado", () => {
+    expect(() =>
+      portfolio.atualizarConfig({
+        config: { telegram: { calendario_rf: { marcos_dias: "30, 7.5" } } },
+      }),
+    ).toThrow(/aceita inteiros/);
+  });
+
+  test("um interruptor com valor sem sentido é recusado", () => {
+    expect(() =>
+      portfolio.atualizarConfig({ config: { telegram: { macro: { ativo: "talvez" } } } }),
+    ).toThrow(/verdadeiro ou falso/);
+  });
+
+  test("chave desconhecida dentro do bloco é ignorada", () => {
+    const { config } = portfolio.atualizarConfig({
+      config: { telegram: { movimento: { invento: 1 }, bloco_inventado: { ativo: true } } },
+    });
+
+    expect(config.telegram.movimento).not.toHaveProperty("invento");
+    expect(config.telegram).not.toHaveProperty("bloco_inventado");
+  });
+});
+
 describe("migração do formato antigo", () => {
   test("converte tickers soltos e mantém o perfil", () => {
     fs.writeFileSync(

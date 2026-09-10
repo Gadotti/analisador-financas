@@ -7,6 +7,7 @@ lugar só, evitando duas regras divergentes para o mesmo arquivo.
 
 from __future__ import annotations
 
+import copy
 import json
 from datetime import date
 
@@ -26,6 +27,33 @@ PAGAMENTOS_TESOURO = ("vencimento", "semestral")
 
 EMISSOR_TESOURO = "Tesouro Nacional"
 
+# Mensagem curta do Telegram. Cada bloco tem um interruptor (`ativo` — pode
+# aparecer?) e um limiar (merece aparecer HOJE?). É o limiar que faz a mensagem
+# variar de um dia para o outro sem que nada seja memorizado: na maioria dos
+# dias, a maioria dos blocos não dispara. Ver `analise.relevancia`.
+#
+# `dias_semana` segue `date.weekday()`: 0 = segunda, 6 = domingo.
+TELEGRAM_PADRAO = {
+    "max_itens": 6,
+    "so_se_relevante": False,
+    "silencioso_sem_alerta": True,
+    "variacao_dia": {"ativo": True, "limiar_pct": 0.5},
+    "macro": {"ativo": True, "limiar_pp": 0.01},
+    "movimento": {"ativo": True, "limiar_pct": 3.0, "peso_minimo_pct": 3.0, "max": 3},
+    "calendario_rf": {"ativo": True, "marcos_dias": [30, 15, 7, 3, 1], "max": 2},
+    "alertas": {"ativo": True, "severidade_minima": "atencao", "max": 3},
+    "fatos_ia": {
+        "ativo": True, "severidade_minima": "atencao", "peso_minimo_pct": 5.0, "max": 3,
+    },
+    "riscos_ia": {"ativo": True, "severidade_minima": "alerta", "max": 2},
+    "indicadores": {
+        "ativo": True, "p_vp_minimo": 0.85, "p_vp_maximo": 1.15, "dy_minimo_pct": 8.0,
+    },
+    "aprofundamento": {"ativo": True, "por_dia": 1},
+    "resumo_ia": {"ativo": True, "dias_semana": [4]},
+    "semanal": {"ativo": True, "dia_semana": 4},
+}
+
 CONFIG_PADRAO = {
     "max_fatos": 6,
     "max_oportunidades": 4,
@@ -34,7 +62,33 @@ CONFIG_PADRAO = {
     "alerta_vencimento_dias": 60,
     "alerta_concentracao_pct": 25.0,
     "alerta_prejuizo_pct": 15.0,
+    "telegram": TELEGRAM_PADRAO,
 }
+
+
+def config_padrao() -> dict:
+    """Cópia independente dos padrões, com o bloco do Telegram já profundo.
+
+    `dict(CONFIG_PADRAO)` é raso e devolveria o MESMO dicionário de
+    `telegram` a todos os chamadores — escrever num deles mudaria o padrão do
+    processo inteiro.
+    """
+    return {**CONFIG_PADRAO, "telegram": copy.deepcopy(TELEGRAM_PADRAO)}
+
+
+def telegram_do_cadastro(bruto: dict | None) -> dict:
+    """Bloco `telegram` gravado em disco sobre os padrões, um nível abaixo também.
+
+    Um `update` raso trocaria o padrão inteiro pelo bloco parcial do arquivo, e
+    um cadastro gravado antes de um limiar novo existir perderia esse limiar.
+    """
+    completo = copy.deepcopy(TELEGRAM_PADRAO)
+    for chave, valor in (bruto or {}).items():
+        if isinstance(completo.get(chave), dict) and isinstance(valor, dict):
+            completo[chave].update(valor)
+        else:
+            completo[chave] = valor
+    return completo
 
 
 class CarteiraError(RuntimeError):
@@ -46,7 +100,7 @@ def carteira_vazia() -> dict:
         "versao": VERSAO,
         "perfil": "",
         "posicoes": [],
-        "config": dict(CONFIG_PADRAO),
+        "config": config_padrao(),
     }
 
 
@@ -62,8 +116,10 @@ def load() -> dict:
     except json.JSONDecodeError as exc:
         raise CarteiraError(f"Carteira corrompida em {arquivo}: {exc}") from None
 
-    config = dict(CONFIG_PADRAO)
-    config.update(dados.get("config") or {})
+    bruta = dados.get("config") or {}
+    config = config_padrao()
+    config.update(bruta)
+    config["telegram"] = telegram_do_cadastro(bruta.get("telegram"))
     dados["config"] = config
     dados.setdefault("perfil", "")
     dados.setdefault("posicoes", [])

@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   enviarUltimaAoTelegram,
+  previaTelegram,
   executarAnalise,
   interpretadorPython,
   rodarScript,
@@ -136,6 +137,17 @@ describe("atalhos", () => {
     ["análise com IA", () => executarAnalise({ usarIa: true, script }), ["--json"]],
     ["análise sem IA", () => executarAnalise({ usarIa: false, script }), ["--json", "--sem-ia"]],
     ["reenvio ao Telegram", () => enviarUltimaAoTelegram({ script }), ["--json", "--enviar-ultima"]],
+    [
+      "reenvio do relatório inteiro",
+      () => enviarUltimaAoTelegram({ completo: true, script }),
+      ["--json", "--enviar-ultima", "--completo"],
+    ],
+    ["prévia da mensagem", () => previaTelegram({ script }), ["--json", "--previa-telegram"]],
+    [
+      "prévia do relatório inteiro",
+      () => previaTelegram({ completo: true, script }),
+      ["--json", "--previa-telegram", "--completo"],
+    ],
     ["teste do Telegram", () => testarTelegram({ script }), ["--json", "--testar-telegram"]],
     ["teste da IA sem provedor", () => testarIa(undefined, { script }), ["--json", "--testar-ia"]],
     [

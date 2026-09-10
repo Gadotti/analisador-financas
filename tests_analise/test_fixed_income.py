@@ -224,6 +224,21 @@ def test_ir_de_cada_cupom_usa_o_prazo_ate_ele():
     )
 
 
+def test_ultimo_pagamento_e_a_data_do_cupom_mais_recente():
+    """Calendário puro: e o que permite anunciar "cupom creditado hoje"."""
+    mensal = valorizar(CDB_MENSAL, hoje=date(2025, 4, 10), cdi_anual_pct=15.0)
+
+    assert mensal["pagamentos_realizados"] == 3
+    assert mensal["ultimo_pagamento"] == "2025-04-02"
+    assert mensal["proximo_pagamento"] == "2025-05-02"
+
+
+def test_sem_cupom_nao_ha_ultimo_pagamento():
+    calc = valorizar(CDB_CDI, hoje=date(2026, 1, 2), cdi_anual_pct=15.0)
+
+    assert calc["ultimo_pagamento"] is None
+
+
 def test_antes_do_primeiro_aniversario_nada_muda():
     mensal = valorizar(CDB_MENSAL, hoje=date(2025, 1, 20), cdi_anual_pct=15.0)
     acumulado = valorizar(CDB_CDI, hoje=date(2025, 1, 20), cdi_anual_pct=15.0)

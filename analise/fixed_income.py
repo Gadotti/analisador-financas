@@ -249,7 +249,14 @@ def _custodia_b3(tipo: str, indexador: str, valor_bruto: float, du: int) -> floa
 
 def _sem_pagamentos(aplicacao: date) -> dict:
     """Cronograma de quem não paga juros no meio do caminho."""
-    return {"desde": aplicacao, "quantidade": 0, "bruto": 0.0, "ir": 0.0, "proximo": None}
+    return {
+        "desde": aplicacao,
+        "quantidade": 0,
+        "bruto": 0.0,
+        "ir": 0.0,
+        "proximo": None,
+        "ultimo": None,
+    }
 
 
 def _proximo_pagamento(
@@ -287,6 +294,7 @@ def _juros_recebidos(
         "bruto": bruto,
         "ir": ir,
         "proximo": _proximo_pagamento(aplicacao, vencimento, len(datas), intervalo_meses),
+        "ultimo": datas[-1] if datas else None,
     }
 
 
@@ -371,6 +379,7 @@ def valorizar(
     total_bruto = rendimento_bruto + recebidos["bruto"]
     total_liquido = rendimento_liquido + recebido_liquido
     proximo = recebidos["proximo"]
+    ultimo = recebidos["ultimo"]
 
     return {
         "valor_inicial": round(principal, 2),
@@ -383,6 +392,10 @@ def valorizar(
         "pagamento_juros": pagamento,
         "pagamentos_realizados": recebidos["quantidade"],
         "proximo_pagamento": proximo.isoformat() if proximo else None,
+        # Data do último cupom já pago. É calendário puro, derivado do mesmo
+        # cronograma: permite anunciar "cupom creditado hoje" sem consultar
+        # nenhum histórico de execuções anteriores.
+        "ultimo_pagamento": ultimo.isoformat() if ultimo else None,
         "juros_recebidos_bruto": round(recebidos["bruto"], 2),
         "juros_recebidos_ir": round(recebidos["ir"], 2),
         "juros_recebidos_liquido": round(recebido_liquido, 2),

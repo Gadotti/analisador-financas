@@ -44,6 +44,19 @@ def test_enviar_devolve_o_corpo_quando_aceito(telegram):
     assert telegram.enviadas[0]["corpo"]["parse_mode"] == "HTML"
 
 
+def test_envio_toca_o_aparelho_por_padrao(telegram):
+    notifier.enviar("olá")
+
+    assert telegram.enviadas[0]["corpo"]["disable_notification"] is False
+
+
+def test_envio_silencioso_entrega_sem_notificar(telegram):
+    """Dia sem severidade `alerta` chega sem som — ver `relevancia.selecionar`."""
+    notifier.enviar("olá", silencioso=True)
+
+    assert telegram.enviadas[0]["corpo"]["disable_notification"] is True
+
+
 def test_erro_traz_a_descricao_da_api(telegram):
     telegram.caixa["resposta"] = RespostaTelegram(
         {"ok": False, "error_code": 400, "description": "Bad Request: chat not found"},

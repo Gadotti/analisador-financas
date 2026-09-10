@@ -16,7 +16,15 @@ import crypto from "node:crypto";
 import { garantirDiretorios, portfolioFile } from "../config/paths.js";
 import { agoraISO } from "../util/datas.js";
 import * as rendaFixa from "./rendaFixa.js";
-import { ValidacaoError, data, numero, opcao, texto } from "./validacao.js";
+import {
+  ValidacaoError,
+  booleano,
+  data,
+  listaDeInteiros,
+  numero,
+  opcao,
+  texto,
+} from "./validacao.js";
 
 export { ValidacaoError } from "./validacao.js";
 export { EMISSOR_TESOURO, emissorDe, nomeTesouro, rotuloTaxa } from "./rendaFixa.js";
@@ -32,6 +40,35 @@ export const INDEXADORES_TESOURO = rendaFixa.INDEXADORES_TESOURO;
 export const PAGAMENTOS_CDB = rendaFixa.PAGAMENTOS_CDB;
 export const PAGAMENTOS_TESOURO = rendaFixa.PAGAMENTOS_TESOURO;
 
+/**
+ * Mensagem curta do Telegram — espelho de `analise.portfolio.TELEGRAM_PADRAO`.
+ *
+ * Quem lê e aplica estes limiares é o Python (`analise.relevancia`); aqui eles
+ * existem para serem validados e gravados. Cada bloco tem um interruptor
+ * (`ativo` — pode aparecer?) e um limiar (merece aparecer HOJE?), e é o limiar
+ * que faz a mensagem variar de um dia para o outro sem nada memorizado.
+ *
+ * `dias_semana` segue o `weekday()` do Python: 0 = segunda, 6 = domingo.
+ */
+export const TELEGRAM_PADRAO = Object.freeze({
+  max_itens: 6,
+  so_se_relevante: false,
+  silencioso_sem_alerta: true,
+  variacao_dia: { ativo: true, limiar_pct: 0.5 },
+  macro: { ativo: true, limiar_pp: 0.01 },
+  movimento: { ativo: true, limiar_pct: 3.0, peso_minimo_pct: 3.0, max: 3 },
+  calendario_rf: { ativo: true, marcos_dias: [30, 15, 7, 3, 1], max: 2 },
+  alertas: { ativo: true, severidade_minima: "atencao", max: 3 },
+  fatos_ia: { ativo: true, severidade_minima: "atencao", peso_minimo_pct: 5.0, max: 3 },
+  riscos_ia: { ativo: true, severidade_minima: "alerta", max: 2 },
+  indicadores: { ativo: true, p_vp_minimo: 0.85, p_vp_maximo: 1.15, dy_minimo_pct: 8.0 },
+  aprofundamento: { ativo: true, por_dia: 1 },
+  resumo_ia: { ativo: true, dias_semana: [4] },
+  semanal: { ativo: true, dia_semana: 4 },
+});
+
+export const SEVERIDADES = ["info", "atencao", "alerta"];
+
 export const CONFIG_PADRAO = Object.freeze({
   max_fatos: 6,
   max_oportunidades: 4,
@@ -40,18 +77,87 @@ export const CONFIG_PADRAO = Object.freeze({
   alerta_vencimento_dias: 60,
   alerta_concentracao_pct: 25.0,
   alerta_prejuizo_pct: 15.0,
+  telegram: TELEGRAM_PADRAO,
 });
 
 // Piso por chave; as demais aceitam zero. Um teto de log em zero apagaria o
 // log de execuções inteiro na rodada seguinte.
 const MINIMO_CONFIG = { max_execucoes: 1 };
 
+// Teto por chave do bloco do Telegram. O dia da semana é o único com limite
+// superior — 6 é domingo, e 7 não existe.
+const MAXIMO_TELEGRAM = { dia_semana: 6, dias_semana: 6 };
+
+/** Cópia independente dos padrões: `CONFIG_PADRAO` tem um nível aninhado. */
+export function configPadrao() {
+  return { ...CONFIG_PADRAO, telegram: structuredClone(TELEGRAM_PADRAO) };
+}
+
+/**
+ * Bloco `telegram` gravado em disco sobre os padrões, um nível abaixo também.
+ *
+ * Um espalhamento raso trocaria o padrão inteiro pelo bloco parcial do
+ * arquivo, e um cadastro gravado antes de um limiar novo existir perderia esse
+ * limiar. Espelha `analise.portfolio.telegram_do_cadastro`.
+ */
+export function telegramDoCadastro(bruto) {
+  const completo = structuredClone(TELEGRAM_PADRAO);
+  for (const [chave, valor] of Object.entries(bruto || {})) {
+    const padrao = completo[chave];
+    if (ehBloco(padrao) && ehBloco(valor)) {
+      Object.assign(completo[chave], valor);
+    } else {
+      completo[chave] = valor;
+    }
+  }
+  return completo;
+}
+
+const ehBloco = (valor) =>
+  typeof valor === "object" && valor !== null && !Array.isArray(valor);
+
+/**
+ * Converte um campo do bloco `telegram` usando o próprio padrão como molde.
+ *
+ * O tipo sai de `TELEGRAM_PADRAO`: padrão booleano exige booleano, numérico
+ * exige número, lista exige lista de inteiros. Não existe uma segunda tabela
+ * de tipos para divergir da primeira.
+ */
+function campoTelegram(bruto, padrao, campo, chave) {
+  const maximo = MAXIMO_TELEGRAM[chave] ?? null;
+  if (typeof padrao === "boolean") return booleano(bruto, campo);
+  if (typeof padrao === "number") return numero(bruto, campo, { minimo: 0, maximo });
+  if (Array.isArray(padrao)) return listaDeInteiros(bruto, campo, { maximo });
+  return opcao(bruto, campo, SEVERIDADES, { rotulo: `Campo '${campo}'` });
+}
+
+/** Aplica um patch parcial ao bloco `telegram`, validando campo a campo. */
+function telegramComPatch(atual, patch) {
+  const saida = telegramDoCadastro(atual);
+  for (const [chave, valor] of Object.entries(patch || {})) {
+    const padrao = TELEGRAM_PADRAO[chave];
+    if (padrao === undefined) continue;
+
+    if (!ehBloco(padrao)) {
+      saida[chave] = campoTelegram(valor, padrao, `telegram.${chave}`, chave);
+      continue;
+    }
+    for (const [sub, valorSub] of Object.entries(valor || {})) {
+      if (padrao[sub] === undefined) continue;
+      saida[chave][sub] = campoTelegram(
+        valorSub, padrao[sub], `telegram.${chave}.${sub}`, sub,
+      );
+    }
+  }
+  return saida;
+}
+
 // ─────────────────────────────────────────────
 // Leitura / escrita
 // ─────────────────────────────────────────────
 
 export function carteiraVazia() {
-  return { versao: VERSAO, perfil: "", posicoes: [], config: { ...CONFIG_PADRAO } };
+  return { versao: VERSAO, perfil: "", posicoes: [], config: configPadrao() };
 }
 
 /** Carrega a carteira, migrando formatos antigos quando necessário. */
@@ -75,7 +181,8 @@ export function load() {
     save(dados);
   }
 
-  dados.config = { ...CONFIG_PADRAO, ...(dados.config || {}) };
+  dados.config = { ...configPadrao(), ...(dados.config || {}) };
+  dados.config.telegram = telegramDoCadastro((dados.config || {}).telegram);
   dados.perfil = dados.perfil ?? "";
   dados.posicoes = dados.posicoes ?? [];
   return dados;
@@ -198,7 +305,9 @@ export function atualizarConfig(patch) {
     carteira.perfil = texto(patch.perfil, "perfil", { obrigatorio: false });
   }
   for (const [chave, valor] of Object.entries(patch.config || {})) {
-    if (chave in CONFIG_PADRAO) {
+    if (chave === "telegram") {
+      carteira.config.telegram = telegramComPatch(carteira.config.telegram, valor);
+    } else if (chave in CONFIG_PADRAO) {
       carteira.config[chave] = numero(valor, chave, { minimo: MINIMO_CONFIG[chave] ?? 0 });
     }
   }

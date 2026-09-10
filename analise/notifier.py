@@ -31,8 +31,13 @@ def _conferir(resp, acao: str) -> dict:
     raise RuntimeError(f"Telegram recusou {acao} (HTTP {resp.status_code}): {motivo}")
 
 
-def enviar(mensagem: str) -> dict:
-    """Envia uma mensagem HTML ao chat configurado."""
+def enviar(mensagem: str, *, silencioso: bool = False) -> dict:
+    """Envia uma mensagem HTML ao chat configurado.
+
+    `silencioso` entrega a mensagem sem tocar o aparelho — é o que a mensagem
+    curta usa nos dias sem nada de severidade `alerta`, para que a notificação
+    sonora continue significando algo.
+    """
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not (token and chat_id):
@@ -47,6 +52,7 @@ def enviar(mensagem: str) -> dict:
             "text": mensagem,
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
+            "disable_notification": silencioso,
         },
         timeout=TIMEOUT,
     )

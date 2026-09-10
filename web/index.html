@@ -274,12 +274,24 @@
 
           <div class="disparador-item">
             <div class="disparador-texto">
-              <span class="disparador-titulo">Reenviar última análise ao Telegram</span>
-              <span class="disparador-desc">Envia o relatório já salvo em disco, sem recalcular nada.
-                Útil depois de uma queda de conexão no envio automático.</span>
+              <span class="disparador-titulo">Reenviar a mensagem do dia ao Telegram</span>
+              <span class="disparador-desc">Envia a mensagem curta da análise já salva em disco, sem
+                recalcular nada — só o que cruzou os limiares de Configurações. Útil depois de uma
+                queda de conexão no envio automático.</span>
               <span class="disparador-comando mono">python scripts/analisar.py --enviar-ultima</span>
             </div>
             <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-telegram-enviar">Enviar agora</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Enviar o relatório completo ao Telegram</span>
+              <span class="disparador-desc">O relatório inteiro, com alocação, posições e a leitura
+                da IA, em vez da mensagem curta. É sempre notificado, e vai cortado no limite de
+                4096 caracteres do Telegram quando não couber.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --enviar-ultima --completo</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-telegram-completo">Enviar agora</button>
           </div>
 
           <div class="disparador-item">
@@ -493,6 +505,44 @@
             registradas é o teto do log do Histórico: passando dele, a rodada mais antiga
             sai para a nova entrar.
           </p>
+        </section>
+
+        <section class="cartao" style="margin-top:16px">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Mensagem do Telegram</span>
+            <span class="cartao-meta">o que entra no envio de cada dia</span>
+          </div>
+          <p class="rodape">
+            Cada bloco tem um interruptor — pode aparecer? — e um limiar — merece aparecer
+            hoje? É o limiar que faz a mensagem variar: na maioria dos dias, a maioria dos
+            blocos fica calada. O relatório inteiro continua no botão de envio.
+          </p>
+
+          <div class="grade-form grade-form-compacta">
+            <div class="campo">
+              <label for="tg-max-itens">Máx. de itens na mensagem</label>
+              <input id="tg-max-itens" type="number" step="1" min="0">
+            </div>
+            <div class="campo campo-check">
+              <input type="checkbox" id="tg-silencioso">
+              <label for="tg-silencioso">Silenciar quando não houver alerta grave</label>
+            </div>
+            <div class="campo campo-check">
+              <input type="checkbox" id="tg-so-relevante">
+              <label for="tg-so-relevante">Não enviar em dia sem novidade</label>
+            </div>
+          </div>
+
+          <div id="tg-blocos" class="grade-blocos"></div>
+
+          <div class="linha-teste">
+            <button type="button" class="btn btn-testar btn-sm" id="btn-previa-telegram">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.8 10s2.9-5 8.2-5 8.2 5 8.2 5-2.9 5-8.2 5-8.2-5-8.2-5z"></path><circle cx="10" cy="10" r="2.2"></circle></svg>
+              Pré-visualizar mensagem de hoje
+            </button>
+            <span class="teste-status" id="tg-previa-status"></span>
+          </div>
+          <pre class="previa-telegram hidden" id="tg-previa"></pre>
         </section>
 
         <section class="cartao" style="margin-top:16px">

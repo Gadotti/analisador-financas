@@ -545,6 +545,136 @@ a:hover { color: var(--amber-forte); }
 .chave-selo.chave-selo-ok { color: var(--t2); }
 .chave-selo.chave-selo-ok::before { background: var(--verde); }
 
+/* ── Mensagem do Telegram ──────────────────────────────────────────────
+   Onze blocos, até três limiares cada: abertos de uma vez eles competem entre
+   si e não caberiam na tela sem encolher os campos abaixo do tamanho que eles
+   têm no resto do sistema. Cada bloco é uma linha recolhível — a decisão que
+   importa (entra ou não na mensagem) fica à vista, os limiares ficam a um
+   clique e, quando abertos, usam a `.grade-form` e o `.campo` de sempre. */
+/* Variante da grade de campos para uma linha de poucos itens: sem o teto de
+   largura, três campos dividiriam o cartão inteiro e um número de um dígito
+   ganharia um controle de 400px. `align-items: end` alinha as caixas de
+   marcar, que têm 40px, com os controles, que ficam na base da célula. */
+.grade-form-compacta {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 264px));
+  align-items: end;
+  margin-top: 14px;
+}
+
+/* Duas colunas de linhas largas. O bloco aberto cresce na própria célula do
+   grid — `align-items: start` garante que os vizinhos da fileira não estiquem
+   junto. Nada de `grid-column: 1 / -1` no aberto: ele saltava para a largura
+   da tela e reordenava os cartões sob o cursor de quem tinha clicado. Com
+   ~570px de linha, os limiares abertos ficam lado a lado e o bloco cresce uma
+   fileira de campos, não três. */
+.grade-blocos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  gap: 8px; margin-top: 16px; align-items: start;
+}
+/* Recolhido, o bloco tem os mesmos 40px dos controles de `.campo` — é o que
+   deixa a lista alinhada com o campo logo acima dela e com o resto da tela.
+   Daí a altura mínima e o conteúdo centrado, sem espaçamento vertical.
+   Aberto, ele volta a alinhar pelo topo e ganha o espaçamento de cartão. */
+.bloco-tg {
+  display: flex; gap: 10px; min-height: 40px;
+  background: var(--card2); border: 1px solid var(--borda);
+  border-radius: 9px; padding: 0 12px;
+}
+.bloco-tg:has(.bloco-tg-dobra[open]) { padding: 10px 12px 12px; }
+.chave-bloco-tg {
+  flex-shrink: 0; align-self: center; width: 15px; height: 15px; margin: 0;
+  accent-color: var(--amber); cursor: pointer;
+}
+/* Aberto, a caixa sobe para a linha do nome e lá fica. */
+.bloco-tg:has(.bloco-tg-dobra[open]) .chave-bloco-tg { align-self: flex-start; margin-top: 2px; }
+.chave-bloco-tg:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* Dobra recolhida: <details> nativo, como nos alertas e no contexto de
+   mercado. O nome e a seta ficam na primeira linha; o resumo dos limiares
+   ocupa a segunda, para caber sem truncar. */
+.bloco-tg-dobra { flex: 1; min-width: 0; }
+/* Nome à esquerda, resumo à direita, seta ancorada na quina. A seta sai do
+   fluxo de propósito: assim o resumo pode passar para uma segunda linha numa
+   janela estreita sem arrastá-la para baixo. */
+.bloco-tg-dobra > summary {
+  position: relative; padding-right: 21px;
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px;
+  cursor: pointer; list-style: none;
+}
+/* 38px de summary + as duas bordas do bloco = os 40px de um `.campo`. É
+   `min-height`, e não espaçamento, porque a altura da linha do nome tem
+   fração e a soma nunca fecharia exatamente em 40. Centrar dentro dela dá,
+   de graça, um alvo de clique da altura inteira da linha. */
+.bloco-tg-dobra > summary { min-height: 38px; align-items: center; }
+.bloco-tg-dobra[open] > summary { min-height: 0; align-items: baseline; }
+.bloco-tg-dobra > summary::-webkit-details-marker { display: none; }
+.bloco-tg-dobra > summary:hover .bloco-tg-nome { color: var(--amber-forte); }
+.bloco-tg-dobra > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.bloco-tg-nome {
+  flex: 1; min-width: 0; font-size: var(--f-apoio); font-weight: 600; color: var(--t1);
+}
+/* Centrada na altura do summary — que muda de 38px recolhido para uma linha
+   quando aberto —, e não presa ao topo. A translação entra nas duas regras de
+   `transform` porque a segunda substituiria a primeira. */
+.bloco-tg-seta {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  color: var(--t3); transition: transform .15s ease;
+}
+.bloco-tg-dobra[open] .bloco-tg-seta { transform: translateY(-50%) rotate(180deg); }
+.bloco-tg-resumo {
+  margin-left: auto; text-align: right;
+  font-size: var(--f-micro); color: var(--t3); line-height: 1.5;
+}
+.bloco-tg-dobra[open] .bloco-tg-resumo { display: none; }
+.bloco-tg-dobra > .campo-dica { margin: 9px 0 2px; }
+.bloco-tg-dobra > .grade-form { margin-top: 10px; }
+
+/* O bloco aberto se destaca pela borda: numa lista de onze linhas iguais, é o
+   que diz de relance qual delas está em edição. */
+.bloco-tg:has(.bloco-tg-dobra[open]) { border-color: rgba(240, 165, 0, .45); }
+
+/* Bloco desligado: o nome esmaece e os limiares apagam, porque eles não valem
+   enquanto a caixa estiver desmarcada. */
+.bloco-tg:has(.chave-bloco-tg:not(:checked)) .bloco-tg-nome { color: var(--t3); font-weight: 500; }
+.bloco-tg:has(.chave-bloco-tg:not(:checked)) .bloco-tg-resumo { opacity: .5; }
+.bloco-tg:has(.chave-bloco-tg:not(:checked)) .grade-form { opacity: .45; }
+
+/* Rótulo de um grupo de caixas: mesmo desenho do `.campo label`, mas sem o
+   `for` — um `label for` apontando para um contêiner seria inválido. */
+.rotulo-grupo {
+  font-size: var(--f-micro); color: var(--t3); font-weight: 600;
+  letter-spacing: .5px; text-transform: uppercase;
+}
+
+/* Grade de quatro, e não linha que envolve: sete abreviações de três letras
+   não cabem na largura de uma coluna, e deixá-las envolver sozinhas dava um
+   6 + 1 torto. Em grade sai 4 + 3, com todas as caixas do mesmo tamanho. */
+.dias-semana {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;
+  margin-top: auto;
+}
+.dia-chip {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: 32px; border: 1px solid var(--borda-forte); border-radius: 7px;
+  font-size: var(--f-micro); color: var(--t3); cursor: pointer;
+  user-select: none; transition: color .12s, border-color .12s, background .12s;
+}
+.dia-chip:has(input:checked) {
+  border-color: var(--amber); color: var(--amber); background: rgba(240, 165, 0, .14);
+}
+.dia-chip:has(input:focus-visible) { outline: 2px solid var(--amber); outline-offset: 2px; }
+.dia-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+/* Prévia da mensagem: é HTML do Telegram, então vai como texto puro num
+   monoespaçado — mostrar as tags é o ponto, não escondê-las. */
+.previa-telegram {
+  margin: 14px 0 0; padding: 14px; max-height: 420px; overflow: auto;
+  background: var(--card2); border: 1px solid var(--borda); border-radius: 9px;
+  font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  font-size: var(--f-micro); line-height: 1.65;
+  color: var(--t2); white-space: pre-wrap; word-break: break-word;
+}
+
 /* Linha de teste de conexão — separada do formulário por um traço, com um
    botão de ação secundária que ainda assim se destaca do cinza do btn-fantasma. */
 .linha-teste {

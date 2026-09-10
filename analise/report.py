@@ -1,4 +1,7 @@
-"""Formatação do relatório para terminal e para o Telegram.
+"""Formatação do relatório de terminal.
+
+As mensagens do Telegram moram em `analise.mensagem`; o que os dois formatos
+compartilham está em `analise.formato`.
 
 Estrutura, na ordem em que um relatório de análise é lido:
   1. Sumário executivo
@@ -16,11 +19,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from . import formato, portfolio
-from .formato import LARGURA, data_br, moeda
+from .formato import (
+    LARGURA,
+    SAUDE_ICONE,
+    SAUDE_ROTULO,
+    SEV_ICONE,
+    data_br,
+    leitura_herdada,
+    moeda,
+)
 
-SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
-SAUDE_ROTULO = {"otima": "Ótima", "boa": "Boa", "atencao": "Atenção", "alerta": "Alerta"}
-SEV_ICONE = {"info": "ℹ️", "atencao": "⚠️", "alerta": "🚨"}
 OPP_ICONE = {
     "compra": "🟢",
     "monitorar": "👁",
@@ -31,10 +39,6 @@ OPP_ICONE = {
 }
 TIPO_ROTULO = {"fii": "FII", "acao": "Ação", "cdb": "CDB", "tesouro": "TD"}
 CUPOM_ROTULO = {"mensal": "juros mensais", "semestral": "juros semestrais"}
-
-# Teto de uma mensagem do Telegram, contado por ele em unidades UTF-16.
-LIMITE_TELEGRAM = 4096
-AVISO_CORTE = "<i>… relatório cortado no limite de tamanho do Telegram.</i>"
 
 
 # ─────────────────────────────────────────────
@@ -112,19 +116,6 @@ def _emissores_rf(snapshot: dict) -> list[str]:
             f"  {moeda(e['valor']):>15}  {cobertura}{marcador}"
         )
     return linhas
-
-
-def _leitura_herdada(snapshot: dict, ia: dict | None) -> str:
-    """Data da análise que produziu as fichas, ou "" quando é a desta execução.
-
-    Uma execução sem IA herda a leitura da anterior (ver `runner._reaproveitar_ia`);
-    sem esta marca o relatório apresentaria comentários antigos como se fossem
-    de agora.
-    """
-    gerado_em = ((ia or {}).get("_meta") or {}).get("gerado_em") or ""
-    if not gerado_em or gerado_em[:10] == snapshot["data"]:
-        return ""
-    return datetime.fromisoformat(gerado_em).strftime("%d/%m/%Y às %H:%M")
 
 
 def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
@@ -362,7 +353,7 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         m = ia["_meta"]
         buscas = f" · {m['buscas_web']} buscas web" if m.get("buscas_web") else ""
         out += ["", f"  Análise gerada por {m.get('modelo', '?')} (effort {m.get('effort')}){buscas}."]
-        herdada = _leitura_herdada(snapshot, ia)
+        herdada = leitura_herdada(snapshot["data"], (ia or {}).get("_meta"))
         if herdada:
             out.append(
                 f"  Leitura herdada da análise de {herdada} — esta execução não chamou a IA."
@@ -378,125 +369,3 @@ def texto(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = Non
         "",
     ]
     return "\n".join(out)
-
-
-# ─────────────────────────────────────────────
-# Telegram (HTML)
-# ─────────────────────────────────────────────
-
-def _unidades_utf16(texto: str) -> int:
-    """Comprimento como o Telegram conta: unidades UTF-16, não code points.
-
-    Cada emoji fora do BMP vale 2 — medir em caracteres subestima o tamanho e
-    o relatório, cheio de ícones, estouraria o limite mesmo parecendo caber.
-    """
-    return len(texto.encode("utf-16-le")) // 2
-
-
-def _juntar_no_limite(
-    linhas: list[str], rodape: list[str], limite: int = LIMITE_TELEGRAM
-) -> str:
-    """Junta corpo e rodapé sem passar do limite, descartando linhas do corpo.
-
-    O corte é por linha inteira porque cada linha fecha as próprias tags:
-    cortar no meio deixaria um `<b>` ou `<i>` aberto (ou uma entidade `&amp;`
-    partida) e a API devolveria 400 — "can't parse entities". O rodapé é sempre
-    mantido: é onde vai o aviso de que o material não é recomendação.
-    """
-    inteiro = linhas + rodape
-    if _unidades_utf16("\n".join(inteiro)) <= limite:
-        return "\n".join(inteiro)
-
-    teto = limite - _unidades_utf16("\n".join([AVISO_CORTE] + rodape)) - 2
-    mantidas: list[str] = []
-    total = 0
-    for linha in linhas:
-        custo = _unidades_utf16(linha) + 1
-        if total + custo > teto:
-            break
-        mantidas.append(linha)
-        total += custo
-    return "\n".join(mantidas + ["", AVISO_CORTE] + rodape)
-
-
-def telegram(snapshot: dict, ia: dict | None = None, fundamentos: dict | None = None) -> str:
-    t = snapshot["totais"]
-    saude = snapshot["saude_carteira"]
-    quando = datetime.fromisoformat(snapshot["gerado_em"]).strftime("%d/%m/%Y — %H:%M")
-
-    linhas = [
-        "📊 <b>Relatório de Carteira</b>",
-        f"📅 {quando}",
-        "",
-        f"💰 <b>{moeda(t['valor_atual'])}</b>",
-        f"{formato.marcador(t['resultado'])} {moeda(t['resultado'])} ({formato.pct(t['resultado_pct'])}) acumulado",
-    ]
-    if t["resultado_dia"]:
-        linhas.append(f"{formato.marcador(t['resultado_dia'])} {moeda(t['resultado_dia'])} no dia")
-    linhas += ["", f"{SAUDE_ICONE.get(saude, '')} <b>Saúde: {SAUDE_ROTULO.get(saude, saude)}</b>"]
-
-    if ia and ia.get("resumo"):
-        linhas += ["", f"<i>{formato.escapar_html(ia['resumo'])}</i>"]
-
-    if fundamentos:
-        m = fundamentos["metricas"]
-        indicadores = []
-        if m["p_vp_medio"]:
-            indicadores.append(f"P/VP médio <b>{formato.num(m['p_vp_medio'], 2)}</b>")
-        if m["dy_medio_pct"]:
-            indicadores.append(f"DY médio <b>{formato.pct(m['dy_medio_pct'], 1, sinal=False)}</b>")
-        if indicadores:
-            linhas += ["", "━━━━━━━━━━━━━━━━", "📐 <b>INDICADORES</b>", " · ".join(indicadores)]
-        if m["renda_mensal_estimada"]:
-            linhas.append(f"Renda estimada: <b>{moeda(m['renda_mensal_estimada'])}/mês</b>")
-
-    linhas += ["", "━━━━━━━━━━━━━━━━", "🗂 <b>ALOCAÇÃO</b>"]
-    for classe in snapshot["classes"].values():
-        linhas.append(
-            f"• {classe['rotulo']}: {formato.pct(classe['peso_pct'], 1, sinal=False)} — "
-            f"{moeda(classe['valor_atual'])} ({formato.pct(classe['resultado_pct'], 1)})"
-        )
-
-    if fundamentos and len(fundamentos["por_segmento"]) > 1:
-        linhas += ["", "🏢 <b>POR SEGMENTO</b> <i>(% da renda variável)</i>"]
-        for g in fundamentos["por_segmento"][:5]:
-            linhas.append(
-                f"• {formato.escapar_html(g['nome'])}: {formato.pct(g['peso_pct'], 1, sinal=False)} "
-                f"({formato.escapar_html(', '.join(g['ativos']))})"
-            )
-
-    if snapshot["alertas"]:
-        linhas += ["", "━━━━━━━━━━━━━━━━", "🔔 <b>ALERTAS DA CARTEIRA</b>"]
-        for a in snapshot["alertas"]:
-            linhas.append(f"\n{SEV_ICONE.get(a['severidade'], '•')} <b>{formato.escapar_html(a['titulo'])}</b>")
-            linhas.append(f"<i>{formato.escapar_html(a['descricao'])}</i>")
-
-    if ia and ia.get("riscos"):
-        linhas += ["", "━━━━━━━━━━━━━━━━", "⚠️ <b>RISCOS PRIORIZADOS</b>"]
-        for i, r in enumerate(ia["riscos"][:4], 1):
-            ativos = f" ({formato.escapar_html(', '.join(r['ativos']))})" if r.get("ativos") else ""
-            linhas.append(f"\n{i}. <b>{formato.escapar_html(r['titulo'])}</b>{ativos}")
-            linhas.append(f"<i>{formato.escapar_html(r['descricao'])}</i>")
-
-    if ia and ia.get("fatos"):
-        linhas += ["", "━━━━━━━━━━━━━━━━", "📋 <b>FATOS RECENTES</b>"]
-        for f in ia["fatos"][:4]:
-            icone = SEV_ICONE.get(f.get("severidade"), "ℹ️")
-            linhas.append(f"\n{icone} <b>[{formato.escapar_html(f['ativo'])}]</b> {formato.escapar_html(f['titulo'])}")
-            linhas.append(f"<i>{formato.escapar_html(f['descricao'])}</i>")
-
-    if ia and (ia.get("carteira") or {}).get("conclusao"):
-        linhas += ["", "━━━━━━━━━━━━━━━━", "🎯 <b>CONCLUSÃO</b>", formato.escapar_html(ia["carteira"]["conclusao"])]
-
-    herdada = _leitura_herdada(snapshot, ia)
-    if herdada:
-        linhas += ["", f"<i>🕓 Leitura herdada da análise de {herdada} — "
-                       "esta execução não chamou a IA.</i>"]
-
-    rodape = [
-        "",
-        "<i>⚠️ Valores de renda fixa são estimativas e indicadores foram levantados por IA. "
-        "Material informativo, não é recomendação de investimento.</i>",
-    ]
-
-    return _juntar_no_limite(linhas, rodape)

@@ -67,9 +67,13 @@ function servicosFalsos() {
       if (estado.respostaAnalise) return estado.respostaAnalise();
       return Promise.resolve({ snapshot: snapshotExemplo(), ia: null, fundamentos: null });
     },
-    enviarUltimaAoTelegram() {
-      estado.chamadas.push(["telegram"]);
+    enviarUltimaAoTelegram(opcoes) {
+      estado.chamadas.push(["telegram", opcoes]);
       return Promise.resolve({ ok: true });
+    },
+    previaTelegram(opcoes) {
+      estado.chamadas.push(["telegram-previa", opcoes]);
+      return Promise.resolve({ ok: true, texto: "📊 R$ 1,00", modo: "resumo" });
     },
     testarTelegram() {
       estado.chamadas.push(["telegram-testar"]);
@@ -370,11 +374,22 @@ describe("POST /api/analise", () => {
 });
 
 describe("POST /api/telegram", () => {
-  test("dispara o reenvio da última análise", async () => {
+  test("dispara o reenvio da última análise na mensagem curta", async () => {
     const { status, corpo } = await pedir("/api/telegram", { method: "POST" });
     expect(status).toBe(200);
     expect(corpo).toEqual({ ok: true });
-    expect(servicos.estado.chamadas[0]).toEqual(["telegram"]);
+    expect(servicos.estado.chamadas[0]).toEqual(["telegram", { completo: false }]);
+  });
+
+  test("completo=1 pede o relatório inteiro", async () => {
+    await pedir("/api/telegram?completo=1", { method: "POST" });
+    expect(servicos.estado.chamadas[0]).toEqual(["telegram", { completo: true }]);
+  });
+
+  test("a prévia devolve o texto sem enviar nada", async () => {
+    const { corpo } = await pedir("/api/telegram/previa", { method: "POST" });
+    expect(corpo.texto).toContain("R$ 1,00");
+    expect(servicos.estado.chamadas[0]).toEqual(["telegram-previa", { completo: false }]);
   });
 
   test("testa a conexão com o bot", async () => {

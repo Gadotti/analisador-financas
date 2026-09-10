@@ -8,7 +8,9 @@ interface web como processo filho, sempre produzindo o mesmo resultado.
 Uso:
     python scripts/analisar.py                  # análise completa no terminal
     python scripts/analisar.py --sem-ia         # somente cálculos, sem chamar a API
-    python scripts/analisar.py --telegram       # envia o relatório ao Telegram
+    python scripts/analisar.py --telegram       # envia a mensagem do dia ao Telegram
+    python scripts/analisar.py --telegram --completo   # envia o relatório inteiro
+    python scripts/analisar.py --previa-telegram       # mostra a mensagem, sem enviar
     python scripts/analisar.py --json           # resultado bruto em JSON no stdout
     python scripts/analisar.py --enviar-ultima  # reenvia a última análise salva
     python scripts/analisar.py --testar-telegram
@@ -50,7 +52,48 @@ try:
 except ImportError:
     pass
 
-from analise import ai_insights, notifier, report, runner  # noqa: E402
+from analise import (  # noqa: E402
+    ai_insights,
+    mensagem,
+    notifier,
+    portfolio,
+    relevancia,
+    report,
+    runner,
+)
+
+
+def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
+    """A mensagem a enviar: texto, modo de notificação e se vale enviá-la.
+
+    Por padrão é a mensagem curta, montada pela seleção de
+    `analise.relevancia` sobre a configuração do cadastro. `--completo` devolve
+    o relatório inteiro de sempre, que continua servindo ao envio sob demanda —
+    e esse nunca é silencioso nem descartado, porque foi pedido de propósito.
+    """
+    snapshot, ia = registro["snapshot"], registro.get("ia")
+    fundamentos = registro.get("fundamentos")
+    if completo:
+        return {
+            "texto": mensagem.telegram(snapshot, ia, fundamentos),
+            "silencioso": False,
+            "vale_enviar": True,
+            "modo": "completo",
+        }
+
+    selecao = relevancia.selecionar(
+        snapshot,
+        ia,
+        fundamentos,
+        portfolio.load()["config"],
+        macro_anterior=registro.get("macro_anterior"),
+    )
+    return {
+        "texto": mensagem.telegram_resumo(selecao),
+        "silencioso": selecao["silencioso"],
+        "vale_enviar": selecao["vale_enviar"],
+        "modo": selecao["modo"],
+    }
 
 
 def montar_parser() -> argparse.ArgumentParser:
@@ -59,7 +102,17 @@ def montar_parser() -> argparse.ArgumentParser:
         description="Análise da carteira de investimentos",
     )
     parser.add_argument("--sem-ia", action="store_true", help="Pula a análise por IA")
-    parser.add_argument("--telegram", action="store_true", help="Envia o relatório ao Telegram")
+    parser.add_argument("--telegram", action="store_true", help="Envia a mensagem do dia ao Telegram")
+    parser.add_argument(
+        "--completo",
+        action="store_true",
+        help="Envia o relatório inteiro em vez da mensagem curta do dia",
+    )
+    parser.add_argument(
+        "--previa-telegram",
+        action="store_true",
+        help="Mostra a mensagem que seria enviada hoje, sem enviar nada",
+    )
     parser.add_argument("--json", action="store_true", help="Imprime o resultado em JSON")
     parser.add_argument("--sem-cache", action="store_true", help="Ignora o cache de cotações")
     parser.add_argument("--nao-salvar", action="store_true", help="Não grava no histórico")
@@ -125,25 +178,33 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
         resposta_json(resultado)
         return 0
 
-    if args.enviar_ultima:
+    if args.enviar_ultima or args.previa_telegram:
         ultima = runner.ultima_analise()
         if not ultima:
-            mensagem = "Rode uma análise antes de enviar ao Telegram."
-            log(f"[ERRO] {mensagem}")
-            resposta_json({"erro": mensagem})
+            # Não chame esta variável de `mensagem`: o nome é o do módulo
+            # importado, e sombreá-lo aqui quebraria o envio.
+            motivo = "Rode uma análise antes de enviar ao Telegram."
+            log(f"[ERRO] {motivo}")
+            resposta_json({"erro": motivo})
             return 1
+
+        aviso = mensagem_do_telegram(ultima, completo=args.completo)
+
+        # A prévia é o que torna os limiares calibráveis: o usuário mexe num
+        # número e vê o efeito com a carteira dele, sem gastar um envio.
+        if args.previa_telegram:
+            log(aviso["texto"])
+            resposta_json({"ok": True, **aviso})
+            return 0
+
         try:
-            notifier.enviar(
-                report.telegram(
-                    ultima["snapshot"], ultima.get("ia"), ultima.get("fundamentos")
-                )
-            )
+            notifier.enviar(aviso["texto"], silencioso=aviso["silencioso"])
         except Exception as exc:
             log(f"[ERRO] {exc}")
             resposta_json({"erro": str(exc)})
             return 1
         log("[OK] Última análise enviada ao Telegram.")
-        resposta_json({"ok": True})
+        resposta_json({"ok": True, "modo": aviso["modo"]})
         return 0
 
     inicio = datetime.now()
@@ -177,12 +238,16 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
     codigo = 0
     if args.telegram:
         log("[3/3] Enviando ao Telegram...")
-        try:
-            notifier.enviar(report.telegram(snapshot, ia, fundamentos))
-            log("      [OK] Enviado.")
-        except Exception as exc:
-            log(f"      [ERRO] {exc}")
-            codigo = 1
+        aviso = mensagem_do_telegram(resultado, completo=args.completo)
+        if not aviso["vale_enviar"]:
+            log("      [OK] Nada relevante hoje — envio dispensado (so_se_relevante).")
+        else:
+            try:
+                notifier.enviar(aviso["texto"], silencioso=aviso["silencioso"])
+                log(f"      [OK] Enviado ({aviso['modo']}).")
+            except Exception as exc:
+                log(f"      [ERRO] {exc}")
+                codigo = 1
     else:
         log("[3/3] Envio ao Telegram não solicitado (use --telegram).")
 

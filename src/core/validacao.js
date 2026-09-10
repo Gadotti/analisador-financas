@@ -16,7 +16,11 @@ export class ValidacaoError extends Error {
   }
 }
 
-export function numero(valor, campo, { minimo = null, obrigatorio = true } = {}) {
+export function numero(
+  valor,
+  campo,
+  { minimo = null, maximo = null, obrigatorio = true } = {},
+) {
   if (valor === null || valor === undefined || valor === "") {
     if (!obrigatorio) return null;
     throw new ValidacaoError(`Campo '${campo}' e obrigatorio.`);
@@ -28,7 +32,50 @@ export function numero(valor, campo, { minimo = null, obrigatorio = true } = {})
   if (minimo !== null && n < minimo) {
     throw new ValidacaoError(`Campo '${campo}' deve ser >= ${minimo}.`);
   }
+  if (maximo !== null && n > maximo) {
+    throw new ValidacaoError(`Campo '${campo}' deve ser <= ${maximo}.`);
+  }
   return n;
+}
+
+/**
+ * Booleano de um formulário.
+ *
+ * Aceita o que o HTML entrega de fato: um checkbox marcado vira `true`, mas um
+ * `<select>` ou um campo de texto entregam a string "true"/"false" — e
+ * `Boolean("false")` seria `true`.
+ */
+export function booleano(valor, campo) {
+  if (typeof valor === "boolean") return valor;
+  const txt = String(valor ?? "").trim().toLowerCase();
+  if (["true", "1", "sim", "on"].includes(txt)) return true;
+  if (["false", "0", "nao", "não", "off", ""].includes(txt)) return false;
+  throw new ValidacaoError(`Campo '${campo}' deve ser verdadeiro ou falso, e nao '${valor}'.`);
+}
+
+/**
+ * Lista de inteiros, vinda de um array ou de um texto separado por vírgulas.
+ *
+ * Os marcos de calendário e os dias da semana são digitados como "30, 15, 7"
+ * numa tela e chegam como array em outra; a conversão é a mesma.
+ */
+export function listaDeInteiros(valor, campo, { minimo = 0, maximo = null } = {}) {
+  const bruto = Array.isArray(valor) ? valor : String(valor ?? "").split(",");
+  const numeros = bruto
+    .map((item) => String(item).trim())
+    .filter((item) => item !== "")
+    .map((item) => numero(item, campo, { minimo }));
+
+  for (const n of numeros) {
+    if (!Number.isInteger(n) || (maximo !== null && n > maximo)) {
+      throw new ValidacaoError(
+        `Campo '${campo}' aceita inteiros de ${minimo} a ${maximo ?? "∞"}, e recebeu '${n}'.`,
+      );
+    }
+  }
+  // A ordem digitada é preservada: quem consome trata a lista como conjunto, e
+  // reordenar só faria o campo voltar diferente do que o usuário escreveu.
+  return [...new Set(numeros)];
 }
 
 export function data(valor, campo, { obrigatorio = true } = {}) {

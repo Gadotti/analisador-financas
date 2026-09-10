@@ -9,9 +9,15 @@ porque um campo vazio no relatório é indistinguível de um zero.
 from __future__ import annotations
 
 import textwrap
-from datetime import date
+from datetime import date, datetime
 
 LARGURA = 78
+
+# Rótulos e ícones compartilhados pelos dois formatos de saída — o relatório de
+# terminal (`analise.report`) e as mensagens do Telegram (`analise.mensagem`).
+SAUDE_ICONE = {"otima": "✅", "boa": "👍", "atencao": "⚠️", "alerta": "🚨"}
+SAUDE_ROTULO = {"otima": "Ótima", "boa": "Boa", "atencao": "Atenção", "alerta": "Alerta"}
+SEV_ICONE = {"info": "ℹ️", "atencao": "⚠️", "alerta": "🚨"}
 
 
 def moeda(valor) -> str:
@@ -57,6 +63,20 @@ def quebrar(texto: str, recuo: str = "      ", largura: int = LARGURA) -> str:
 
 def secao(titulo: str) -> list[str]:
     return ["", "─" * LARGURA, f"  {titulo.upper()}", "─" * LARGURA, ""]
+
+
+def leitura_herdada(data_snapshot: str, ia_meta: dict | None) -> str:
+    """Data da análise que produziu as fichas, ou "" quando é a desta execução.
+
+    Uma execução sem IA herda a leitura da anterior (ver `runner._reaproveitar_ia`);
+    sem esta marca, relatório e mensagem apresentariam comentários antigos como
+    se fossem de agora. Recebe o `_meta` solto porque a mensagem curta chega
+    aqui pela seleção de `analise.relevancia`, que não carrega o snapshot.
+    """
+    gerado_em = (ia_meta or {}).get("gerado_em") or ""
+    if not gerado_em or gerado_em[:10] == data_snapshot:
+        return ""
+    return datetime.fromisoformat(gerado_em).strftime("%d/%m/%Y às %H:%M")
 
 
 def escapar_html(txt) -> str:

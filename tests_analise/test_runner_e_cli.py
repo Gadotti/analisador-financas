@@ -482,6 +482,40 @@ def test_cli_nao_salvar(carteira):
     assert list((carteira / "history").glob("*.json")) == []
 
 
+def test_cli_previa_mostra_a_mensagem_sem_enviar(carteira):
+    """A prévia é o que torna os limiares calibráveis, e não gasta um envio."""
+    rodar_cli(["--sem-ia"], carteira)
+
+    proc = rodar_cli(["--previa-telegram", "--json"], carteira)
+
+    assert proc.returncode == 0
+    dados = json.loads(proc.stdout.strip())
+    assert dados["modo"] in ("resumo", "nada_novo")
+    assert dados["texto"].startswith("📊")
+    assert "não é recomendação" in dados["texto"]
+
+
+def test_cli_previa_completa_devolve_o_relatorio_inteiro(carteira):
+    rodar_cli(["--sem-ia"], carteira)
+
+    proc = rodar_cli(["--previa-telegram", "--completo", "--json"], carteira)
+
+    dados = json.loads(proc.stdout.strip())
+    assert dados["modo"] == "completo"
+    assert "ALOCAÇÃO" in dados["texto"]
+    assert dados["silencioso"] is False
+
+
+def test_cli_previa_exige_analise_anterior(dados_temp):
+    cli = importar_cli()
+    out, err = io.StringIO(), io.StringIO()
+
+    codigo = cli.main(["--previa-telegram", "--json"], out=out, err=err)
+
+    assert codigo == 1
+    assert json.loads(out.getvalue())["erro"].startswith("Rode uma análise antes")
+
+
 def test_cli_testar_ia_sem_chave(carteira):
     """--testar-ia segue o mesmo contrato --json de erro que --testar-telegram."""
     proc = rodar_cli(["--testar-ia", "--json"], carteira)

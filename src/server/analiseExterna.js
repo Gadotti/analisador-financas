@@ -125,9 +125,27 @@ export function executarAnalise({ usarIa = true, ...opcoes } = {}) {
   return rodarScript(usarIa ? [] : ["--sem-ia"], opcoes);
 }
 
-/** Reenvia ao Telegram a última análise salva. */
-export function enviarUltimaAoTelegram(opcoes = {}) {
-  return rodarScript(["--enviar-ultima"], opcoes);
+/**
+ * Reenvia ao Telegram a última análise salva.
+ *
+ * Sem `completo`, o script monta a mensagem curta do dia, com os limiares do
+ * cadastro; com ele, manda o relatório inteiro.
+ */
+export function enviarUltimaAoTelegram({ completo = false, ...opcoes } = {}) {
+  return rodarScript(completo ? ["--enviar-ultima", "--completo"] : ["--enviar-ultima"], opcoes);
+}
+
+/**
+ * Devolve a mensagem que seria enviada hoje, sem enviar nada.
+ *
+ * É o que permite calibrar os limiares na tela de Configurações: o usuário
+ * muda um número e vê o efeito com a carteira dele.
+ */
+export function previaTelegram({ completo = false, ...opcoes } = {}) {
+  return rodarScript(
+    completo ? ["--previa-telegram", "--completo"] : ["--previa-telegram"],
+    opcoes,
+  );
 }
 
 /** Testa a conexão com o bot do Telegram. */

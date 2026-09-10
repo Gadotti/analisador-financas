@@ -9,7 +9,7 @@ import { api, toast } from "./js/api.js";
 import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.js";
 import { renderAlocacao } from "./js/alocacao.js";
 import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
-import { coletarConfig, renderConfig } from "./js/configuracoes.js";
+import { coletarConfig, montarTelegram, renderConfig } from "./js/configuracoes.js";
 import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
@@ -184,12 +184,40 @@ async function salvarConfiguracoes(evento) {
   }
 }
 
-async function enviarAoTelegram() {
+/**
+ * Envia ao Telegram a última análise salva.
+ *
+ * Sem `completo`, vai a mensagem curta do dia, com os limiares do cadastro; a
+ * tela de Disparadores é quem oferece o relatório inteiro.
+ */
+async function enviarAoTelegram(completo = false) {
   try {
-    await api("/api/telegram", { method: "POST" });
-    toast("Relatório enviado ao Telegram.", "ok");
+    await api(`/api/telegram${completo ? "?completo=1" : ""}`, { method: "POST" });
+    toast(completo ? "Relatório completo enviado." : "Mensagem enviada ao Telegram.", "ok");
   } catch (erro) {
     toast(erro.message, "erro", 7000);
+  }
+}
+
+/**
+ * Mostra a mensagem que o Telegram receberia hoje, sem enviá-la.
+ *
+ * É o que torna os limiares calibráveis: o texto é montado pelo Python, com a
+ * carteira real, e a tela só o exibe — nenhuma regra de seleção mora aqui.
+ */
+async function previewTelegram() {
+  const status = $("#tg-previa-status");
+  status.textContent = "montando...";
+  status.className = "teste-status";
+  try {
+    const dados = await api("/api/telegram/previa", { method: "POST" });
+    $("#tg-previa").textContent = dados.texto;
+    $("#tg-previa").classList.remove("hidden");
+    status.textContent = `${dados.modo}${dados.vale_enviar ? "" : " · não seria enviada"}`;
+    status.className = "teste-status teste-status-ok";
+  } catch (erro) {
+    status.textContent = erro.message;
+    status.className = "teste-status teste-status-erro";
   }
 }
 
@@ -213,6 +241,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#rodape-aviso").innerHTML = AVISOS.join("<br>");
   $("#rodape-posicoes").textContent = AVISOS[0];
 
+  montarTelegram();
   ligarPainel();
   ligarPosicoes();
   ligarEquivalencia();
@@ -223,7 +252,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#btn-nova").addEventListener("click", () => abrirPainel());
   $("#btn-analise").addEventListener("click", () => rodarAnalise(true));
   $("#btn-cotacoes").addEventListener("click", () => rodarAnalise(false));
-  $("#btn-telegram").addEventListener("click", enviarAoTelegram);
+  $("#btn-telegram").addEventListener("click", () => enviarAoTelegram(false));
+  $("#btn-previa-telegram").addEventListener("click", previewTelegram);
   $("#form-posicao").addEventListener("submit", salvarPosicao);
   $("#form-ambiente").addEventListener("submit", salvarConfiguracoes);
 

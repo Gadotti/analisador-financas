@@ -33,6 +33,7 @@ const TIPOS_MIME = {
 const SERVICOS_PADRAO = {
   executarAnalise: analiseExterna.executarAnalise,
   enviarUltimaAoTelegram: analiseExterna.enviarUltimaAoTelegram,
+  previaTelegram: analiseExterna.previaTelegram,
   testarTelegram: analiseExterna.testarTelegram,
   testarIa: analiseExterna.testarIa,
   statusIa: ambiente.statusIa,
@@ -208,8 +209,16 @@ export function criarServidor(servicos = {}) {
           return;
         }
         if (rota === "/api/telegram") {
-          await svc.enviarUltimaAoTelegram();
-          responderJson(res, { ok: true });
+          const completo = url.searchParams.get("completo") === "1";
+          responderJson(res, {
+            ok: true,
+            ...(await svc.enviarUltimaAoTelegram({ completo })),
+          });
+          return;
+        }
+        if (rota === "/api/telegram/previa") {
+          const completo = url.searchParams.get("completo") === "1";
+          responderJson(res, await svc.previaTelegram({ completo }));
           return;
         }
         if (rota === "/api/telegram/testar") {
