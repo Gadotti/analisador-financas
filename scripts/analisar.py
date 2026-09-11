@@ -64,19 +64,18 @@ from analise import (  # noqa: E402
 
 
 def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
-    """A mensagem a enviar: texto, modo de notificação e se vale enviá-la.
+    """A mensagem a enviar: texto e se vale enviá-la.
 
     Por padrão é a mensagem curta, montada pela seleção de
     `analise.relevancia` sobre a configuração do cadastro. `--completo` devolve
     o relatório inteiro de sempre, que continua servindo ao envio sob demanda —
-    e esse nunca é silencioso nem descartado, porque foi pedido de propósito.
+    e esse nunca é descartado, porque foi pedido de propósito.
     """
     snapshot, ia = registro["snapshot"], registro.get("ia")
     fundamentos = registro.get("fundamentos")
     if completo:
         return {
             "texto": mensagem.telegram(snapshot, ia, fundamentos),
-            "silencioso": False,
             "vale_enviar": True,
             "modo": "completo",
         }
@@ -90,7 +89,6 @@ def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
     )
     return {
         "texto": mensagem.telegram_resumo(selecao),
-        "silencioso": selecao["silencioso"],
         "vale_enviar": selecao["vale_enviar"],
         "modo": selecao["modo"],
     }
@@ -198,7 +196,7 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
             return 0
 
         try:
-            notifier.enviar(aviso["texto"], silencioso=aviso["silencioso"])
+            notifier.enviar(aviso["texto"])
         except Exception as exc:
             log(f"[ERRO] {exc}")
             resposta_json({"erro": str(exc)})
@@ -243,7 +241,7 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
             log("      [OK] Nada relevante hoje — envio dispensado (so_se_relevante).")
         else:
             try:
-                notifier.enviar(aviso["texto"], silencioso=aviso["silencioso"])
+                notifier.enviar(aviso["texto"])
                 log(f"      [OK] Enviado ({aviso['modo']}).")
             except Exception as exc:
                 log(f"      [ERRO] {exc}")

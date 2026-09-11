@@ -332,7 +332,6 @@ export function renderConfig(carteira) {
   const telegram = carteira.config.telegram || {};
   $("#tg-max-itens").value = telegram.max_itens;
   $("#tg-so-relevante").checked = !!telegram.so_se_relevante;
-  $("#tg-silencioso").checked = !!telegram.silencioso_sem_alerta;
 
   for (const bloco of BLOCOS) {
     const atual = telegram[bloco.chave] || {};
@@ -352,7 +351,6 @@ export function coletarConfig() {
   const telegram = {
     max_itens: $("#tg-max-itens").value,
     so_se_relevante: $("#tg-so-relevante").checked,
-    silencioso_sem_alerta: $("#tg-silencioso").checked,
   };
   for (const bloco of BLOCOS) {
     telegram[bloco.chave] = { ativo: $(`#${id(bloco.chave, "ativo")}`).checked };

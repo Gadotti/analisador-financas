@@ -98,7 +98,6 @@ describe("marcação escrita à mão no index.html", () => {
     "tg-blocos",
     "tg-max-itens",
     "tg-so-relevante",
-    "tg-silencioso",
     "tg-previa",
     "tg-previa-status",
     "btn-previa-telegram",

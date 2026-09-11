@@ -208,14 +208,6 @@ def test_alerta_publicado_nao_conta_como_em_curso(snapshot_exemplo):
     assert selecao["alertas_em_curso"] == 0
 
 
-def test_severidade_alerta_desliga_o_envio_silencioso(snapshot_exemplo):
-    grave = copy.deepcopy(snapshot_exemplo)
-    grave["alertas"][0]["severidade"] = "alerta"
-
-    assert selecionar(snapshot_exemplo)["silencioso"] is True
-    assert selecionar(grave)["silencioso"] is False
-
-
 # ─────────────────────────────────────────────
 # Fatos e riscos da IA
 # ─────────────────────────────────────────────

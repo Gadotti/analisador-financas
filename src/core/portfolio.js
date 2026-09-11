@@ -55,7 +55,6 @@ export const PAGAMENTOS_TESOURO = rendaFixa.PAGAMENTOS_TESOURO;
 export const TELEGRAM_PADRAO = Object.freeze({
   max_itens: 6,
   so_se_relevante: false,
-  silencioso_sem_alerta: true,
   variacao_dia: { ativo: true, limiar_pct: 0.5 },
   macro: { ativo: true, limiar_pp: 0.01 },
   movimento: { ativo: true, limiar_pct: 3.0, peso_minimo_pct: 3.0, max: 3 },

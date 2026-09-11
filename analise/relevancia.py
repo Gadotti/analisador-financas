@@ -189,10 +189,5 @@ def selecionar(
         "semanal": _semanal(ctx),
         "data": snapshot["data"],
         "ia_meta": (ia or {}).get("_meta") or {},
-        # O aparelho só toca quando há algo grave: senão a notificação sonora
-        # deixaria de significar qualquer coisa.
-        "silencioso": bool(cfg["silencioso_sem_alerta"]) and not any(
-            i["severidade"] == "alerta" for i in escolhidos
-        ),
         "vale_enviar": bool(escolhidos) or not cfg["so_se_relevante"],
     }

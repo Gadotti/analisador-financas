@@ -46,7 +46,6 @@ EMISSOR_TESOURO = "Tesouro Nacional"
 TELEGRAM_PADRAO = {
     "max_itens": 6,
     "so_se_relevante": False,
-    "silencioso_sem_alerta": True,
     "variacao_dia": {"ativo": True, "limiar_pct": 0.5},
     "macro": {"ativo": True, "limiar_pp": 0.01},
     "movimento": {"ativo": True, "limiar_pct": 3.0, "peso_minimo_pct": 3.0, "max": 3},

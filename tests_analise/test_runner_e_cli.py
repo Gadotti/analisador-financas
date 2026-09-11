@@ -503,7 +503,6 @@ def test_cli_previa_completa_devolve_o_relatorio_inteiro(carteira):
     dados = json.loads(proc.stdout.strip())
     assert dados["modo"] == "completo"
     assert "ALOCAÇÃO" in dados["texto"]
-    assert dados["silencioso"] is False
 
 
 def test_cli_previa_exige_analise_anterior(dados_temp):

@@ -472,8 +472,8 @@ duas funções para uma decisão só.
 
 O princípio é *estado vive na interface, o Telegram carrega evento*. O estado da carteira
 entra em **uma linha** (`_linha_estado`) só para dar escala; o resto da mensagem é o que
-mudou. `notifier.enviar(..., silencioso=True)` usa `disable_notification` nos dias sem
-severidade `alerta`, para que o aparelho tocar continue significando algo.
+mudou. `notifier.enviar` nunca manda `disable_notification: true` — toda mensagem deste
+sistema tem que tocar o aparelho, em qualquer situação.
 
 **Interruptor e gatilho: é o gatilho que faz a mensagem variar.** Cada bloco tem um
 `ativo` no cadastro (pode aparecer?) e um limiar (merece aparecer **hoje**?). Só o
