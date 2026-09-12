@@ -1,6 +1,6 @@
 /** Tela "Configurações": perfil da carteira, limites de alerta e mensagem do Telegram. */
 
-import { $, esc } from "./formato.js";
+import { $, $$, esc } from "./formato.js";
 import { icone } from "./icones.js";
 
 const CAMPOS = {
@@ -261,6 +261,26 @@ export function montarTelegram() {
   // O resumo tem de acompanhar o que está sendo digitado: sem isto, recolher um
   // bloco recém-editado mostraria o valor antigo até salvar e recarregar.
   container.addEventListener("input", pintarResumos);
+}
+
+/**
+ * As abas por tema de cartão da tela de Configurações.
+ *
+ * Puramente visual: troca qual `.aba-painel` fica à mostra. Os campos dos
+ * painéis escondidos continuam no DOM e são lidos normalmente por
+ * `coletarConfig` e por `coletarAmbiente` — o mesmo princípio já usado nos
+ * campos ocultos do cadastro de posição.
+ */
+export function ligarAbasConfig() {
+  const abas = $$("#config-abas .aba");
+  abas.forEach((aba) => {
+    aba.addEventListener("click", () => {
+      abas.forEach((b) => b.setAttribute("aria-selected", String(b === aba)));
+      $$(".aba-painel").forEach((painel) => {
+        painel.classList.toggle("hidden", painel.dataset.abaPainel !== aba.dataset.aba);
+      });
+    });
+  });
 }
 
 // ─────────────────────────────────────────────

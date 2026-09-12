@@ -9,7 +9,7 @@ import { api, toast } from "./js/api.js";
 import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.js";
 import { renderAlocacao } from "./js/alocacao.js";
 import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
-import { coletarConfig, montarTelegram, renderConfig } from "./js/configuracoes.js";
+import { coletarConfig, ligarAbasConfig, montarTelegram, renderConfig } from "./js/configuracoes.js";
 import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
@@ -242,6 +242,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#rodape-posicoes").textContent = AVISOS[0];
 
   montarTelegram();
+  ligarAbasConfig();
   ligarPainel();
   ligarPosicoes();
   ligarEquivalencia();

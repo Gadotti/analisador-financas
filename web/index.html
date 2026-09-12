@@ -453,7 +453,22 @@
 
     <!-- ── Configurações ───────────────── -->
     <main class="pagina hidden" id="pg-configuracoes">
+      <div class="config-barra">
+        <div class="abas" id="config-abas" role="tablist" aria-label="Seções de configuração">
+          <button type="button" class="aba" id="aba-geral" role="tab" aria-selected="true"
+                  aria-controls="painel-geral" data-aba="geral">Perfil e limites</button>
+          <button type="button" class="aba" id="aba-telegram" role="tab" aria-selected="false"
+                  aria-controls="painel-telegram" data-aba="telegram">Telegram</button>
+          <button type="button" class="aba" id="aba-ia" role="tab" aria-selected="false"
+                  aria-controls="painel-ia" data-aba="ia">Provedor de IA</button>
+          <button type="button" class="aba" id="aba-cotacoes" role="tab" aria-selected="false"
+                  aria-controls="painel-cotacoes" data-aba="cotacoes">Cotações</button>
+        </div>
+        <button type="submit" form="form-ambiente" class="btn btn-primario btn-sm">Salvar configurações</button>
+      </div>
+
       <form id="form-ambiente">
+        <div class="aba-painel" data-aba-painel="geral" id="painel-geral" role="tabpanel" aria-labelledby="aba-geral">
         <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Perfil da carteira</span>
@@ -465,7 +480,7 @@
           </div>
         </section>
 
-        <section class="cartao" style="margin-top:16px">
+        <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Limites de alerta</span>
           </div>
@@ -506,8 +521,10 @@
             sai para a nova entrar.
           </p>
         </section>
+        </div>
 
-        <section class="cartao" style="margin-top:16px">
+        <div class="aba-painel hidden" data-aba-painel="telegram" id="painel-telegram" role="tabpanel" aria-labelledby="aba-telegram">
+        <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Mensagem do Telegram</span>
             <span class="cartao-meta">o que entra no envio de cada dia</span>
@@ -541,7 +558,33 @@
           <pre class="previa-telegram hidden" id="tg-previa"></pre>
         </section>
 
-        <section class="cartao" style="margin-top:16px">
+        <section class="cartao">
+          <div class="cartao-topo">
+            <span class="cartao-titulo">Telegram</span>
+            <span class="cartao-meta">envio do relatório</span>
+          </div>
+          <div class="grade-form">
+            <div class="campo campo-largo">
+              <label for="e-telegram-token">Token do bot <span class="chave-selo" id="e-telegram-token-selo"></span></label>
+              <input id="e-telegram-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
+            </div>
+            <div class="campo">
+              <label for="e-telegram-chat">Chat ID</label>
+              <input id="e-telegram-chat" placeholder="123456789" autocomplete="off">
+            </div>
+          </div>
+          <div class="linha-teste">
+            <button type="button" class="btn btn-testar btn-sm" id="btn-testar-telegram">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a10 10 0 0 1 14 0"></path><path d="M5.8 10.6a6 6 0 0 1 8.4 0"></path><path d="M8.6 13.7a2.2 2.2 0 0 1 2.8 0"></path><circle cx="10" cy="16.2" r="1" fill="currentColor" stroke="none"></circle></svg>
+              Testar conexão
+            </button>
+            <span class="teste-status" id="e-telegram-teste-resultado"></span>
+          </div>
+        </section>
+        </div>
+
+        <div class="aba-painel hidden" data-aba-painel="ia" id="painel-ia" role="tabpanel" aria-labelledby="aba-ia">
+        <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Provedor de IA</span>
             <span class="cartao-meta">gravado no .env — a chave nunca aparece na tela</span>
@@ -676,32 +719,10 @@
             </div>
           </div>
         </section>
+        </div>
 
-        <section class="cartao" style="margin-top:16px">
-          <div class="cartao-topo">
-            <span class="cartao-titulo">Telegram</span>
-            <span class="cartao-meta">envio do relatório</span>
-          </div>
-          <div class="grade-form">
-            <div class="campo campo-largo">
-              <label for="e-telegram-token">Token do bot <span class="chave-selo" id="e-telegram-token-selo"></span></label>
-              <input id="e-telegram-token" type="password" placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
-            </div>
-            <div class="campo">
-              <label for="e-telegram-chat">Chat ID</label>
-              <input id="e-telegram-chat" placeholder="123456789" autocomplete="off">
-            </div>
-          </div>
-          <div class="linha-teste">
-            <button type="button" class="btn btn-testar btn-sm" id="btn-testar-telegram">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a10 10 0 0 1 14 0"></path><path d="M5.8 10.6a6 6 0 0 1 8.4 0"></path><path d="M8.6 13.7a2.2 2.2 0 0 1 2.8 0"></path><circle cx="10" cy="16.2" r="1" fill="currentColor" stroke="none"></circle></svg>
-              Testar conexão
-            </button>
-            <span class="teste-status" id="e-telegram-teste-resultado"></span>
-          </div>
-        </section>
-
-        <section class="cartao" style="margin-top:16px">
+        <div class="aba-painel hidden" data-aba-painel="cotacoes" id="painel-cotacoes" role="tabpanel" aria-labelledby="aba-cotacoes">
+        <section class="cartao">
           <div class="cartao-topo">
             <span class="cartao-titulo">Cotações</span>
             <span class="cartao-meta">brapi.dev — alternativa quando o Yahoo Finance falha</span>
@@ -713,9 +734,6 @@
             </div>
           </div>
         </section>
-
-        <div class="acoes-tela">
-          <button type="submit" class="btn btn-primario">Salvar ambiente</button>
         </div>
       </form>
     </main>

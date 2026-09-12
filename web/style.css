@@ -711,6 +711,38 @@ a:hover { color: var(--amber-forte); }
   flex-wrap: wrap; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--borda-forte);
 }
 
+/* Configurações: abas por tema de cartão, e o botão de gravar no topo da
+   tela, não depois de rolar o cartão mais distante. O traço inferior é
+   compartilhado por toda a barra — a única cor sólida é a aba ativa, que
+   "fecha" a linha embaixo dela (`margin-bottom: -1px` faz o traço colorido
+   encostar exatamente no traço cinza do contêiner). Não é `.segmentado`: esse
+   componente supõe rótulos curtos e largura igual (a sigla de uma classe de
+   ativo, no painel estreito de cadastro) — rótulos de tela inteira quebravam
+   linha e ficavam apertados nele. Abas de página pedem o padrão oposto:
+   cada uma do tamanho do próprio texto, numa fileira que só cresce.
+
+   `align-items: center` (e não `flex-end`) é o que evita o botão de salvar
+   encostar no traço — as abas são o item mais alto da linha por causa do
+   próprio padding, então continuam tocando o traço sozinhas; o botão, mais
+   baixo, sobra centralizado no meio da faixa. */
+.config-barra {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--borda);
+}
+.abas { display: flex; gap: 26px; flex-wrap: wrap; }
+.aba {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  margin-bottom: -1px; padding: 10px 1px 12px;
+  color: var(--t2); font-family: inherit; font-size: var(--f-corpo); font-weight: 600;
+  white-space: nowrap; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.aba:hover { color: var(--t1); }
+.aba[aria-selected="true"] { color: var(--t1); border-bottom-color: var(--amber); }
+.aba:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.aba-painel { display: flex; flex-direction: column; gap: 16px; }
+
 .segmentado {
   display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;
   background: var(--card2); border-radius: 9px;
