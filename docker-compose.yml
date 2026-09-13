@@ -1,0 +1,16 @@
+services:
+  analisador-financas:
+    image: ghcr.io/gadotti/analisador-financas:latest
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      - analisador_financas_data:/app/data
+      # IA_PROVEDOR, ANTHROPIC_*, TELEGRAM_* etc. — copie de .env.example.
+      # Precisa ser o arquivo de verdade (não `env_file:`): ORIGEM_CHAVE=arquivo
+      # lê a chave só daqui, e o Python usa o mesmo caminho.
+      - ./.env:/app/.env:ro
+
+volumes:
+  analisador_financas_data:
+    name: analisador_financas_data

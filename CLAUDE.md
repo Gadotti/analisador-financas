@@ -6,8 +6,8 @@ Orientações para o Claude Code trabalhar neste repositório.
 
 Sistema local de análise de carteira de investimentos brasileira (FIIs, ações da B3, renda
 fixa bancária — CDB, LCI e LCA — e títulos do Tesouro Direto).
-Roda inteiramente na máquina do usuário: dados em arquivos JSON, servidor web ouvindo apenas
-em `127.0.0.1`.
+Roda inteiramente na máquina do usuário: dados em arquivos JSON, servidor web ouvindo em
+`127.0.0.1` por padrão (a variável `HOST` muda o endereço, para expor na rede).
 
 **O projeto é bilíngue, e a divisão é deliberada:**
 
@@ -578,9 +578,18 @@ exigiu.
 senão `python` no Windows e `python3` nos demais. Um `ENOENT` no spawn vira uma mensagem
 explicando isso — mantenha esse tratamento.
 
-**Segurança.** O servidor ouve só em `127.0.0.1`; não exponha na rede. `servirArquivo()`
-tem proteção contra travessia de diretório — há teste cobrindo isso; não a remova.
-Credenciais só via `.env`, nunca no código nem em logs.
+**Segurança.** O servidor ouve em `127.0.0.1` por padrão; a variável de ambiente `HOST`
+muda o endereço — é o que o `Dockerfile` usa (`0.0.0.0`, para o `docker-compose.yml`
+publicar a porta). `servirArquivo()` tem proteção contra travessia de diretório — há teste
+cobrindo isso; não a remova. Credenciais só via `.env`, nunca no código nem em logs.
+
+**Docker.** A imagem é publicada em `ghcr.io/gadotti/analisador-financas` pelo workflow
+`.github/workflows/release.yml`, disparado por tag `v*.*.*` — mesmo padrão do
+ShadowRadar: `release.py` empacota o zip de distribuição (lendo a versão de `version.js`)
+e o workflow builda e publica a imagem a partir do mesmo `Dockerfile`. O
+`docker-compose.yml` espera um `.env` de verdade montado em `/app/.env` (não
+`environment:` nem `env_file:`), porque `ORIGEM_CHAVE=arquivo` lê a chave só do arquivo —
+ver a seção de configuração de IA acima.
 
 ## Aviso do domínio
 

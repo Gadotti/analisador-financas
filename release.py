@@ -25,6 +25,9 @@ CAMINHOS_IGNORADOS = {
     'release.py',
     'test',
     'tests_analise',
+    'Dockerfile',
+    'docker-compose.yml',
+    '.dockerignore',
 }
 
 # Arquivos renomeados com o sufixo -SAMPLE no zip, para que a instalação em produção

@@ -6,7 +6,7 @@ Cotações reais da B3, marcação a mercado de renda fixa, alertas automáticos
 diária de mercado gerada por IA com busca web.
 
 Tudo roda na sua máquina: os dados ficam em arquivos JSON locais e o servidor da interface
-escuta apenas em `127.0.0.1`.
+escuta em `127.0.0.1` por padrão (a variável `HOST` muda o endereço, para acessar pela rede).
 
 O projeto tem duas metades, cada uma na linguagem que lhe cai melhor:
 
@@ -110,6 +110,23 @@ o script Python por baixo) e vê o resultado na tela.
 npm start -- --porta 9000        # outra porta
 npm start -- --sem-navegador     # não abre o navegador
 ```
+
+### Docker
+
+Imagem publicada em `ghcr.io/gadotti/analisador-financas`, a cada release marcada com tag
+`v*.*.*` (veja `.github/workflows/release.yml`).
+
+```powershell
+copy .env.example .env
+# edite o .env com o que for usar (IA, Telegram) — veja a seção Instalação
+docker compose up -d
+```
+
+O `docker-compose.yml` monta o `.env` da pasta atual em `/app/.env` (precisa ser o arquivo
+de verdade — `ORIGEM_CHAVE=arquivo` lê a chave só dali) e persiste `data/` num volume
+nomeado. A porta `8765` é publicada em todas as interfaces, acessível por qualquer
+dispositivo da rede; para restringir ao próprio host, troque o mapeamento no compose para
+`"127.0.0.1:8765:8765"`.
 
 ### Testes
 

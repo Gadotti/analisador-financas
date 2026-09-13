@@ -7,7 +7,8 @@
  *   node src/server/index.js --porta 9000
  *   node src/server/index.js --sem-navegador
  *
- * Ouve somente em 127.0.0.1: a interface não fica exposta na rede.
+ * Ouve em 127.0.0.1 por padrão; a variável de ambiente `HOST` muda o
+ * endereço, para expor a interface na rede (é o que o `docker-compose.yml` usa).
  */
 
 import { exec } from "node:child_process";
@@ -20,7 +21,7 @@ import { interpretadorPython } from "./analiseExterna.js";
 import { criarServidor } from "./app.js";
 
 export const PORTA_PADRAO = 8765;
-export const HOST = "127.0.0.1";
+export const HOST = process.env.HOST || "127.0.0.1";
 
 export function parseArgs(argv) {
   const opcoes = { porta: PORTA_PADRAO, semNavegador: false };
