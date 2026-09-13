@@ -582,6 +582,10 @@ explicando isso — mantenha esse tratamento.
 muda o endereço — é o que o `Dockerfile` usa (`0.0.0.0`, para o `docker-compose.yml`
 publicar a porta). `servirArquivo()` tem proteção contra travessia de diretório — há teste
 cobrindo isso; não a remova. Credenciais só via `.env`, nunca no código nem em logs.
+Isso vale também para teste: token, chave ou credencial usada como fixture (ex.:
+`TELEGRAM_BOT_TOKEN` em `test_notifier.py`) é sempre um valor falso e obviamente inválido
+("123456789:TESTE-FAKE-TOKEN"), nunca uma credencial real colada durante o
+desenvolvimento — mesmo que o serviço nunca seja chamado de verdade no teste.
 
 **Docker.** A imagem é publicada em `ghcr.io/gadotti/analisador-financas` pelo workflow
 `.github/workflows/release.yml`, disparado por tag `v*.*.*` — mesmo padrão do
