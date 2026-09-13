@@ -15,6 +15,7 @@ import { exec } from "node:child_process";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
+import { AutenticacaoError, configuracaoAuth } from "../config/authConfig.js";
 import { carregarEnv } from "../util/env.js";
 import * as ambiente from "./ambiente.js";
 import { interpretadorPython } from "./analiseExterna.js";
@@ -58,16 +59,36 @@ export function abrirNavegador(endereco, { executar = exec } = {}) {
   executar(comandoNavegador(endereco), () => {});
 }
 
+/** true se AUTH_USUARIO, AUTH_SENHA_HASH e AUTH_SESSAO_SEGREDO já foram criados. */
+function loginConfigurado() {
+  try {
+    configuracaoAuth();
+    return true;
+  } catch (erro) {
+    if (erro instanceof AutenticacaoError) return false;
+    throw erro;
+  }
+}
+
 export function iniciar(argv = []) {
   carregarEnv();
   const { porta, semNavegador } = parseArgs(argv);
   const endereco = `http://${HOST}:${porta}`;
 
+  // Sem login configurado o servidor sobe do mesmo jeito — cada requisição não
+  // autenticada é tratada como tal (redireciona para /login, ou 401 na API);
+  // só o próprio login falha, com a mensagem de authConfig.js, até alguém
+  // rodar scripts/criarLogin.js.
   const servidor = criarServidor();
 
   servidor.listen(porta, HOST, () => {
     const { ok, motivo } = ambiente.statusIa();
     process.stdout.write(`\n  Analisador de Finanças — ${endereco}\n`);
+    process.stdout.write(
+      `  Login: ${
+        loginConfigurado() ? "configurado" : 'não configurado — rode "node scripts/criarLogin.js"'
+      }\n`,
+    );
     process.stdout.write(
       `  Análise por IA: ${
         ok

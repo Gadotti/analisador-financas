@@ -4,10 +4,20 @@ import { ConfiguracaoIaError } from "../src/config/configIa.js";
 import { execucoesFile, lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
 import * as portfolio from "../src/core/portfolio.js";
 import { criarServidor } from "../src/server/app.js";
+import * as limitadorLogin from "../src/server/limitadorLogin.js";
 import { VERSAO } from "../version.js";
-import { dataDirTemporario, gravarAnalise, snapshotExemplo } from "./helpers/ambiente.js";
+import {
+  authEnvTemporario,
+  credenciaisAuthExemplo,
+  dataDirTemporario,
+  gravarAnalise,
+  snapshotExemplo,
+} from "./helpers/ambiente.js";
 
 let ambiente;
+let authEnv;
+let credenciais;
+let cookieSessao;
 let servidor;
 let base;
 let servicos;
@@ -97,10 +107,15 @@ function servicosFalsos() {
   };
 }
 
-async function pedir(caminho, opcoes = {}) {
+/** Requisição sem cookie de sessão — para os testes de acesso anônimo. */
+async function pedirSemAuth(caminho, opcoes = {}) {
   const resposta = await fetch(`${base}${caminho}`, {
     ...opcoes,
-    headers: opcoes.body ? { "Content-Type": "application/json" } : undefined,
+    redirect: "manual",
+    headers: {
+      ...(opcoes.body ? { "Content-Type": "application/json" } : {}),
+      ...(opcoes.headers || {}),
+    },
   });
   const texto = await resposta.text();
   let corpo = texto;
@@ -109,20 +124,47 @@ async function pedir(caminho, opcoes = {}) {
   } catch {
     // conteúdo estático
   }
-  return { status: resposta.status, corpo, tipo: resposta.headers.get("content-type") };
+  return { status: resposta.status, corpo, tipo: resposta.headers.get("content-type"), resposta };
+}
+
+/** Toda a suíte roda autenticada por padrão — é o comportamento normal do app. */
+async function pedir(caminho, opcoes = {}) {
+  return pedirSemAuth(caminho, {
+    ...opcoes,
+    headers: { Cookie: cookieSessao, ...(opcoes.headers || {}) },
+  });
+}
+
+async function fazerLogin(usuario, senha) {
+  const resposta = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario, senha }),
+  });
+  const corpo = await resposta.json();
+  const setCookie = resposta.headers.get("set-cookie");
+  return { status: resposta.status, corpo, cookie: setCookie ? setCookie.split(";")[0] : null };
 }
 
 beforeAll(async () => {
   ambiente = dataDirTemporario();
+  authEnv = authEnvTemporario();
+  credenciais = credenciaisAuthExemplo();
+  authEnv.escrever(credenciais.variaveis);
+
   servicos = servicosFalsos();
   servidor = criarServidor(servicos);
   await new Promise((resolve) => servidor.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${servidor.address().port}`;
+
+  const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+  cookieSessao = login.cookie;
 });
 
 afterAll(async () => {
   await new Promise((resolve) => servidor.close(resolve));
   ambiente.limpar();
+  authEnv.limpar();
 });
 
 beforeEach(() => {
@@ -135,6 +177,7 @@ beforeEach(() => {
   servicos.estado.ambiente = ambientePainelExemplo();
   servicos.estado.erroSalvarAmbiente = null;
   servicos.estado.erroTestarIa = null;
+  limitadorLogin.reiniciar();
 });
 
 describe("arquivos estáticos", () => {
@@ -162,6 +205,113 @@ describe("arquivos estáticos", () => {
     ["/static/"],
   ])("responde 404 para %s", async (caminho) => {
     expect((await pedir(caminho)).status).toBe(404);
+  });
+});
+
+describe("autenticação", () => {
+  test("GET / sem sessão redireciona para /login", async () => {
+    const { status, resposta } = await pedirSemAuth("/");
+    expect(status).toBe(302);
+    expect(resposta.headers.get("location")).toBe("/login");
+  });
+
+  test("GET /login é público e serve a tela de login", async () => {
+    const { status, tipo, corpo } = await pedirSemAuth("/login");
+    expect(status).toBe(200);
+    expect(tipo).toMatch(/text\/html/);
+    expect(corpo).toMatch(/form-login/);
+  });
+
+  test.each([
+    ["/api/carteira"],
+    ["/api/analise"],
+    ["/api/historico"],
+    ["/api/status"],
+    ["/api/ambiente"],
+  ])("GET %s sem sessão responde 401", async (caminho) => {
+    const { status, corpo } = await pedirSemAuth(caminho);
+    expect(status).toBe(401);
+    expect(corpo.erro).toMatch(/Autenticação necessária/);
+  });
+
+  test("POST /api/config sem sessão responde 401 e não grava nada", async () => {
+    const { status } = await pedirSemAuth("/api/config", {
+      method: "POST",
+      body: JSON.stringify({ perfil: "Invasor" }),
+    });
+    expect(status).toBe(401);
+  });
+
+  test("DELETE /api/posicoes/x sem sessão responde 401", async () => {
+    expect((await pedirSemAuth("/api/posicoes/x", { method: "DELETE" })).status).toBe(401);
+  });
+
+  test("POST /api/auth/login com senha errada responde 401 e não grava cookie", async () => {
+    const login = await fazerLogin(credenciais.usuario, "senha-errada");
+    expect(login.status).toBe(401);
+    expect(login.cookie).toBeNull();
+  });
+
+  test("POST /api/auth/login com usuário errado responde 401", async () => {
+    const login = await fazerLogin("outro-usuario", credenciais.senha);
+    expect(login.status).toBe(401);
+  });
+
+  test("POST /api/auth/login com credenciais corretas grava um cookie HttpOnly", async () => {
+    const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+    expect(login.status).toBe(200);
+    expect(login.corpo).toEqual({ ok: true, usuario: credenciais.usuario });
+    expect(login.cookie).toMatch(/^sessao=/);
+  });
+
+  test("o cookie emitido autentica as chamadas seguintes", async () => {
+    const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+    const { status } = await pedirSemAuth("/api/carteira", { headers: { Cookie: login.cookie } });
+    expect(status).toBe(200);
+  });
+
+  test("bloqueia novas tentativas após MAX_TENTATIVAS falhas", async () => {
+    for (let i = 0; i < limitadorLogin.MAX_TENTATIVAS; i += 1) {
+      await fazerLogin(credenciais.usuario, "senha-errada");
+    }
+    const bloqueado = await fazerLogin(credenciais.usuario, credenciais.senha);
+    expect(bloqueado.status).toBe(429);
+  });
+
+  test("POST /api/auth/logout limpa o cookie e a sessão deixa de valer", async () => {
+    const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+    const logout = await fetch(`${base}/api/auth/logout`, {
+      method: "POST",
+      headers: { Cookie: login.cookie },
+    });
+    expect(logout.status).toBe(200);
+    expect(await logout.json()).toEqual({ ok: true });
+    expect(logout.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+
+    const depoisDoLogout = await pedirSemAuth("/api/carteira", { headers: { Cookie: login.cookie } });
+    expect(depoisDoLogout.status).toBe(200); // o token em si continua válido...
+
+    const semCookieNenhum = await pedirSemAuth("/api/carteira");
+    expect(semCookieNenhum.status).toBe(401); // ...só o navegador não volta a enviá-lo.
+  });
+
+  test("um cookie de sessão adulterado é recusado", async () => {
+    const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+    const adulterado = `${login.cookie}x`;
+    const { status } = await pedirSemAuth("/api/carteira", { headers: { Cookie: adulterado } });
+    expect(status).toBe(401);
+  });
+
+  test("POST /api/auth/login com o login ainda não configurado responde 500", async () => {
+    const arquivoOriginal = fs.readFileSync(authEnv.arquivo, "utf8");
+    fs.writeFileSync(authEnv.arquivo, "", "utf8");
+    try {
+      const login = await fazerLogin(credenciais.usuario, credenciais.senha);
+      expect(login.status).toBe(500);
+      expect(login.corpo.erro).toMatch(/criarLogin\.js/);
+    } finally {
+      fs.writeFileSync(authEnv.arquivo, arquivoOriginal, "utf8");
+    }
   });
 });
 
@@ -281,7 +431,7 @@ describe("CRUD de posições", () => {
   test("recusa corpo que não é JSON com 400", async () => {
     const resposta = await fetch(`${base}/api/posicoes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: cookieSessao },
       body: "isto não é json",
     });
     expect(resposta.status).toBe(400);

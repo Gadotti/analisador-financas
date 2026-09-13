@@ -10,14 +10,18 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
+import { AutenticacaoError, configuracaoAuth } from "../config/authConfig.js";
 import { ConfiguracaoIaError } from "../config/configIa.js";
 import * as envPainel from "../config/envPainel.js";
 import { WEB_DIR } from "../config/paths.js";
+import * as authService from "../core/authService.js";
 import * as portfolio from "../core/portfolio.js";
 import * as storage from "../core/storage.js";
 import { VERSAO } from "../../version.js";
 import * as ambiente from "./ambiente.js";
 import * as analiseExterna from "./analiseExterna.js";
+import { cookieLogout, cookieSessao, tokenDaRequisicao } from "./cookies.js";
+import * as limitadorLogin from "./limitadorLogin.js";
 
 const TIPOS_MIME = {
   ".html": "text/html",
@@ -112,6 +116,64 @@ function servirArquivo(res, nome) {
   res.end(dados);
 }
 
+/** Segredo de sessão configurado, ou null se o login ainda não foi criado. */
+function segredoSessaoOuNulo() {
+  try {
+    return configuracaoAuth().segredoSessao;
+  } catch (erro) {
+    if (erro instanceof AutenticacaoError) return null;
+    throw erro;
+  }
+}
+
+/** true se a requisição carrega um cookie de sessão válido. */
+function sessaoValida(req) {
+  const segredo = segredoSessaoOuNulo();
+  return Boolean(segredo) && authService.tokenValido(tokenDaRequisicao(req), segredo);
+}
+
+/** POST /api/auth/login — única rota que confere usuário e senha. */
+async function tratarLogin(req, res) {
+  const ip = req.socket.remoteAddress || "desconhecido";
+  if (limitadorLogin.bloqueado(ip)) {
+    responderErro(res, "Muitas tentativas de login. Aguarde alguns minutos.", 429);
+    return;
+  }
+
+  const corpo = await lerCorpo(req);
+
+  let config;
+  try {
+    config = configuracaoAuth();
+  } catch (erro) {
+    if (!(erro instanceof AutenticacaoError)) throw erro;
+    // O detalhe (caminho do .env, variável exata) fica só no terminal do
+    // servidor — devolver isso na resposta HTTP exporia estrutura de
+    // diretório e nome de usuário do sistema operacional a quem só está
+    // tentando entrar.
+    process.stderr.write(`\n  ${erro.message}\n\n`);
+    responderErro(res, 'Login ainda não configurado. Peça para rodar "node scripts/criarLogin.js".', 500);
+    return;
+  }
+
+  const credenciaisCorretas =
+    typeof corpo.usuario === "string" &&
+    typeof corpo.senha === "string" &&
+    corpo.usuario === config.usuario &&
+    authService.conferirSenha(corpo.senha, config.senhaHash);
+
+  if (!credenciaisCorretas) {
+    limitadorLogin.registrarFalha(ip);
+    responderErro(res, "Usuário ou senha inválidos.", 401);
+    return;
+  }
+
+  limitadorLogin.limpar(ip);
+  const token = authService.criarToken(config.segredoSessao);
+  res.setHeader("Set-Cookie", cookieSessao(token, authService.SESSAO_MS));
+  responderJson(res, { ok: true, usuario: config.usuario });
+}
+
 /**
  * Cria o servidor HTTP.
  *
@@ -128,13 +190,42 @@ export function criarServidor(servicos = {}) {
     const rota = url.pathname;
 
     try {
-      // ── Arquivos estáticos ──
+      // ── Login (público — só quem já entrou passa daqui pra frente) ──
+      if (req.method === "GET" && rota === "/login") {
+        servirArquivo(res, "login.html");
+        return;
+      }
+      if (req.method === "POST" && rota === "/api/auth/login") {
+        await tratarLogin(req, res);
+        return;
+      }
+      if (req.method === "POST" && rota === "/api/auth/logout") {
+        res.setHeader("Set-Cookie", cookieLogout());
+        responderJson(res, { ok: true });
+        return;
+      }
+
+      // ── Arquivos estáticos: só código, sem dado da carteira — sempre públicos ──
+      if (req.method === "GET" && rota.startsWith("/static/")) {
+        servirArquivo(res, decodeURIComponent(rota.slice("/static/".length)));
+        return;
+      }
+
+      const autenticado = sessaoValida(req);
+
       if (req.method === "GET" && (rota === "/" || rota === "/index.html")) {
+        if (!autenticado) {
+          res.writeHead(302, { Location: "/login" });
+          res.end();
+          return;
+        }
         servirArquivo(res, "index.html");
         return;
       }
-      if (req.method === "GET" && rota.startsWith("/static/")) {
-        servirArquivo(res, decodeURIComponent(rota.slice("/static/".length)));
+
+      // ── Dali em diante, toda rota /api/* exige sessão válida ──
+      if (rota.startsWith("/api/") && !autenticado) {
+        responderErro(res, "Autenticação necessária.", 401);
         return;
       }
 
@@ -255,6 +346,12 @@ export function criarServidor(servicos = {}) {
       }
       if (erro instanceof ConfiguracaoIaError) {
         responderErro(res, erro.message, 422);
+        return;
+      }
+      if (erro instanceof AutenticacaoError) {
+        // Mesmo cuidado de tratarLogin: o detalhe vai só para o terminal.
+        process.stderr.write(`\n  ${erro.message}\n\n`);
+        responderErro(res, 'Login ainda não configurado. Peça para rodar "node scripts/criarLogin.js".', 500);
         return;
       }
       if (erro.message.includes("JSON válido") || erro.message.includes("limite permitido")) {

@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { gerarHashSenha } from "../../src/core/authService.js";
+
 /**
  * Aponta PORTFOLIO_DATA_DIR para um diretório temporário exclusivo do teste
  * e devolve uma função que restaura o ambiente e apaga os arquivos.
@@ -50,6 +52,47 @@ export function envIaTemporario(variaveis = null) {
       if (anterior === undefined) delete process.env.IA_ENV_FILE;
       else process.env.IA_ENV_FILE = anterior;
       fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Isola as credenciais de login num .env temporário, apontado por
+ * AUTH_ENV_FILE — mesmo papel de envIaTemporario() para a configuração de IA.
+ */
+export function authEnvTemporario(variaveis = null) {
+  const anterior = process.env.AUTH_ENV_FILE;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "analisador-auth-"));
+  const arquivo = path.join(dir, "auth.env");
+  process.env.AUTH_ENV_FILE = arquivo;
+
+  function escrever(valores) {
+    const linhas = Object.entries(valores).map(([chave, valor]) => `${chave}=${valor}`);
+    fs.writeFileSync(arquivo, linhas.join(os.EOL), "utf8");
+  }
+
+  if (variaveis) escrever(variaveis);
+
+  return {
+    arquivo,
+    escrever,
+    limpar() {
+      if (anterior === undefined) delete process.env.AUTH_ENV_FILE;
+      else process.env.AUTH_ENV_FILE = anterior;
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/** Usuário e senha de teste prontos, já com o hash que vai no .env temporário. */
+export function credenciaisAuthExemplo(usuario = "teste", senha = "senha-teste-123") {
+  return {
+    usuario,
+    senha,
+    variaveis: {
+      AUTH_USUARIO: usuario,
+      AUTH_SENHA_HASH: gerarHashSenha(senha),
+      AUTH_SESSAO_SEGREDO: "segredo-de-teste-para-assinatura-hmac",
     },
   };
 }

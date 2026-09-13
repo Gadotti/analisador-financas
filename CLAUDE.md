@@ -587,6 +587,31 @@ Isso vale também para teste: token, chave ou credencial usada como fixture (ex.
 ("123456789:TESTE-FAKE-TOKEN"), nunca uma credencial real colada durante o
 desenvolvimento — mesmo que o serviço nunca seja chamado de verdade no teste.
 
+**Login único, sem framework.** A interface web exige autenticação — não há dado nem rota
+anônima, o login só existe para liberar o acesso à ferramenta, e a carteira continua única
+e sem segregação por usuário. Sem dependência de produção nenhuma (nada de bcrypt,
+jsonwebtoken, cookie-parser ou express-rate-limit): `src/core/authService.js` faz o hash da
+senha com `scrypt` e assina o token de sessão com HMAC-SHA256, os dois só com o módulo
+`crypto` nativo do Node — um JWT mínimo, sem estado guardado no servidor.
+`node scripts/criarLogin.js` grava usuário, hash da senha e o segredo de sessão em
+`AUTH_USUARIO`, `AUTH_SENHA_HASH` e `AUTH_SESSAO_SEGREDO` no `.env` (`AUTH_ENV_FILE`
+redireciona o arquivo, mesmo papel de `IA_ENV_FILE` — é como os testes isolam); nunca edite
+essas três à mão. Diferente do fail-fast de outras configurações, **o servidor sobe do
+mesmo jeito sem essas variáveis** — mesmo padrão do ShadowRadar: sem cookie válido, `GET /`
+cai na tela de login e a API responde 401 normalmente; só a tentativa de login em si falha,
+com a mensagem de `authConfig.js` apontando para o script (`iniciar()` imprime "Login: não
+configurado" no terminal, ao lado do status de IA e Telegram, mas não recusa a porta).
+
+Em `src/server/app.js`, a ordem de registro das rotas é o que decide o que é público: login
+(`GET /login`, `POST /api/auth/login`, `POST /api/auth/logout`) e os arquivos estáticos em
+`/static/` (só código, sem dado da carteira) vêm antes do gate; a partir dali, `GET /` sem
+sessão redireciona (302) para `/login`, e qualquer outra rota `/api/*` sem sessão válida
+responde 401. `src/server/limitadorLogin.js` é o freio contra força bruta (10 tentativas por
+IP a cada 15 minutos, só em memória) que um framework daria de graça. O cookie de sessão é
+`HttpOnly`, `SameSite=Strict` e dura 30 dias (`authService.SESSAO_MS`); como o token é
+stateless, o logout só apaga o cookie do navegador — o token em si continua válido até
+expirar, e é assim que o ShadowRadar também faz.
+
 **Docker.** A imagem é publicada em `ghcr.io/gadotti/analisador-financas` pelo workflow
 `.github/workflows/release.yml`, disparado por tag `v*.*.*` — mesmo padrão do
 ShadowRadar: `release.py` empacota o zip de distribuição (lendo a versão de `version.js`)

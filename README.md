@@ -29,11 +29,20 @@ cd e:\Eduardo\Sistemas\analisador-financas
 pip install -r requirements.txt
 npm install
 copy .env.example .env
+node scripts/criarLogin.js
 ```
 
-Edite o `.env` conforme o que pretende usar. **Nada nele é obrigatório** — sem o bloco do
-provedor de IA o sistema continua calculando cotações, rentabilidade, alocação e alertas
-normalmente; só a análise de mercado por IA fica indisponível.
+`criarLogin.js` pede um usuário e uma senha no terminal e grava o hash da senha no `.env`
+— nunca a senha em texto puro. É um login único, só para liberar o acesso à ferramenta —
+não há usuários separados nem dados segregados por conta. Sem ele, o servidor sobe do
+mesmo jeito, mas nenhuma tela ou rota da API responde sem uma sessão válida: qualquer
+acesso cai na tela de login, e o próprio login falha com uma mensagem apontando para este
+script. Rode-o de novo a qualquer momento para trocar a senha.
+
+Edite o restante do `.env` conforme o que mais pretende usar. Fora o login, **nada é
+obrigatório** — sem o bloco do provedor de IA o sistema continua calculando cotações,
+rentabilidade, alocação e alertas normalmente; só a análise de mercado por IA fica
+indisponível.
 
 O `.env` é quem manda: o que estiver nele tem precedência sobre variáveis já definidas no
 ambiente, e **nenhum modelo ou esforço é fixo no código**.
@@ -101,7 +110,9 @@ Para testar imediatamente: `Start-ScheduledTask -TaskName AnalisadorFinancas`
 npm start
 ```
 
-Ou dê duplo clique em **`iniciar_interface.bat`**. O navegador abre em `http://127.0.0.1:8765`.
+Ou dê duplo clique em **`iniciar_interface.bat`**. O navegador abre em `http://127.0.0.1:8765`
+e pede o usuário e a senha criados com `node scripts/criarLogin.js` (veja a seção
+Instalação) antes de mostrar qualquer coisa.
 
 Pela interface você cadastra posições, edita e exclui ativos, dispara a análise (que executa
 o script Python por baixo) e vê o resultado na tela.
@@ -118,7 +129,8 @@ Imagem publicada em `ghcr.io/gadotti/analisador-financas`, a cada release marcad
 
 ```powershell
 copy .env.example .env
-# edite o .env com o que for usar (IA, Telegram) — veja a seção Instalação
+node scripts/criarLogin.js         # cria o login — veja a seção Instalação
+# edite o .env com o que mais for usar (IA, Telegram)
 docker compose up -d
 ```
 

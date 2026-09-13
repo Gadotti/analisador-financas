@@ -8,19 +8,25 @@ import {
   PORTA_PADRAO,
   parseArgs,
 } from "../src/server/index.js";
-import { dataDirTemporario } from "./helpers/ambiente.js";
+import { authEnvTemporario, credenciaisAuthExemplo, dataDirTemporario } from "./helpers/ambiente.js";
 
 let ambiente;
+let authEnv;
 let servidores = [];
 
 beforeAll(() => {
   ambiente = dataDirTemporario();
+  authEnv = authEnvTemporario(credenciaisAuthExemplo().variaveis);
 });
-afterAll(() => ambiente.limpar());
+afterAll(() => {
+  ambiente.limpar();
+  authEnv.limpar();
+});
 
 afterEach(async () => {
-  await Promise.all(servidores.map((s) => new Promise((resolve) => s.close(resolve))));
+  await Promise.all(servidores.filter(Boolean).map((s) => new Promise((resolve) => s.close(resolve))));
   servidores = [];
+  process.exitCode = 0;
 });
 
 const subir = (args) => {
@@ -77,14 +83,50 @@ describe("abrirNavegador", () => {
 });
 
 describe("iniciar", () => {
-  test("sobe em 127.0.0.1 numa porta efêmera e responde à API", async () => {
+  test("sobe normalmente mesmo sem login configurado — só a tela de login aparece", async () => {
+    authEnv.limpar();
+    authEnv = authEnvTemporario(); // AUTH_ENV_FILE aponta para um .env vazio: sem AUTH_USUARIO etc.
+
+    const servidor = subir(["--porta", "0", "--sem-navegador"]);
+    await new Promise((resolve) => servidor.once("listening", resolve));
+    const base = `http://${HOST}:${servidor.address().port}`;
+
+    const semLogin = await fetch(`${base}/`, { redirect: "manual" });
+    expect(semLogin.status).toBe(302);
+    expect(semLogin.headers.get("location")).toBe("/login");
+
+    const tentativa = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: "qualquer", senha: "qualquer" }),
+    });
+    expect(tentativa.status).toBe(500);
+    expect((await tentativa.json()).erro).toMatch(/criarLogin\.js/);
+
+    authEnv.limpar();
+    authEnv = authEnvTemporario(credenciaisAuthExemplo().variaveis);
+  });
+
+  test("sobe em 127.0.0.1 numa porta efêmera e responde à API autenticada", async () => {
     const servidor = subir(["--porta", "0", "--sem-navegador"]);
     await new Promise((resolve) => servidor.once("listening", resolve));
 
     const { address, port } = servidor.address();
     expect(address).toBe(HOST);
+    const base = `http://${HOST}:${port}`;
 
-    const resposta = await fetch(`http://${HOST}:${port}/api/status`);
+    const semSessao = await fetch(`${base}/api/status`);
+    expect(semSessao.status).toBe(401);
+
+    const { usuario, senha } = credenciaisAuthExemplo();
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, senha }),
+    });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    const resposta = await fetch(`${base}/api/status`, { headers: { Cookie: cookie } });
     expect(resposta.status).toBe(200);
 
     const corpo = await resposta.json();

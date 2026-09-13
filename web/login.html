@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — Analisador de carteira</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-pagina">
+
+<main class="cartao login-cartao">
+  <div class="login-simbolo">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#0a1628" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 15V9M8 15V4M13 15v-8M18 15v-4"></path></svg>
+  </div>
+
+  <div class="login-cabecalho">
+    <h1 class="login-titulo">Entrar</h1>
+    <p class="login-subtitulo">Analisador de Finanças — carteira local</p>
+  </div>
+
+  <form id="form-login" class="login-form" novalidate>
+    <div class="campo">
+      <label for="login-usuario">Usuário</label>
+      <input id="login-usuario" name="usuario" autocomplete="username" required autofocus>
+    </div>
+    <div class="campo">
+      <label for="login-senha">Senha</label>
+      <input id="login-senha" name="senha" type="password" autocomplete="current-password" required>
+    </div>
+
+    <div class="login-erro hidden" id="login-erro" role="alert" aria-live="polite"></div>
+
+    <button type="submit" class="btn btn-primario btn-lg" id="login-btn">Entrar</button>
+  </form>
+</main>
+
+<script type="module" src="/static/js/login.js"></script>
+</body>
+</html>

@@ -7,6 +7,12 @@ export async function api(rota, opcoes = {}) {
     headers: { "Content-Type": "application/json" },
     ...opcoes,
   });
+
+  if (resposta.status === 401) {
+    location.href = "/login";
+    throw new Error("Autenticação necessária.");
+  }
+
   const dados = await resposta.json().catch(() => ({}));
   if (!resposta.ok) throw new Error(dados.erro || `Erro ${resposta.status}`);
   return dados;

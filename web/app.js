@@ -221,6 +221,15 @@ async function previewTelegram() {
   }
 }
 
+async function sair() {
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {
+    // mesmo se a chamada falhar, a página de login não exige sessão nenhuma.
+  }
+  location.href = "/login";
+}
+
 /** Botões de IA e Telegram só ficam ativos quando o ambiente permite. */
 async function aplicarStatus() {
   const status = await api("/api/status");
@@ -250,6 +259,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ligarDisparadores({ rodarAnalise, enviarAoTelegram });
   iniciarNavegacao(abrirTela);
 
+  $("#btn-sair").addEventListener("click", sair);
   $("#btn-nova").addEventListener("click", () => abrirPainel());
   $("#btn-analise").addEventListener("click", () => rodarAnalise(true));
   $("#btn-cotacoes").addEventListener("click", () => rodarAnalise(false));
