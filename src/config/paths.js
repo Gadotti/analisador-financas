@@ -40,6 +40,11 @@ export function execucoesFile() {
   return path.join(dataDir(), "execucoes.json");
 }
 
+/** Usuários do login e segredo de sessão — só o Node lê e escreve. */
+export function usuariosFile() {
+  return path.join(dataDir(), "usuarios.json");
+}
+
 /** Cria os diretórios de dados. Chamado antes de qualquer escrita. */
 export function garantirDiretorios() {
   fs.mkdirSync(historyDir(), { recursive: true });

@@ -1,2 +1,2 @@
 /** Versão do produto — atualize aqui a cada release. Exibida no rodapé da interface. */
-export const VERSAO = "0.2.0";
+export const VERSAO = "0.2.1";

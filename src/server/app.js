@@ -10,13 +10,13 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
-import { AutenticacaoError, configuracaoAuth } from "../config/authConfig.js";
 import { ConfiguracaoIaError } from "../config/configIa.js";
 import * as envPainel from "../config/envPainel.js";
 import { WEB_DIR } from "../config/paths.js";
 import * as authService from "../core/authService.js";
 import * as portfolio from "../core/portfolio.js";
 import * as storage from "../core/storage.js";
+import { AutenticacaoError, conferirCredenciais, configuracaoAuth } from "../core/usuarios.js";
 import { VERSAO } from "../../version.js";
 import * as ambiente from "./ambiente.js";
 import * as analiseExterna from "./analiseExterna.js";
@@ -116,10 +116,10 @@ function servirArquivo(res, nome) {
   res.end(dados);
 }
 
-/** Segredo de sessão configurado, ou null se o login ainda não foi criado. */
+/** Segredo de sessão configurado, ou null se ainda não houver usuário cadastrado. */
 function segredoSessaoOuNulo() {
   try {
-    return configuracaoAuth().segredoSessao;
+    return configuracaoAuth().segredo_sessao;
   } catch (erro) {
     if (erro instanceof AutenticacaoError) return null;
     throw erro;
@@ -147,31 +147,26 @@ async function tratarLogin(req, res) {
     config = configuracaoAuth();
   } catch (erro) {
     if (!(erro instanceof AutenticacaoError)) throw erro;
-    // O detalhe (caminho do .env, variável exata) fica só no terminal do
-    // servidor — devolver isso na resposta HTTP exporia estrutura de
-    // diretório e nome de usuário do sistema operacional a quem só está
-    // tentando entrar.
+    // O detalhe (caminho do arquivo) fica só no terminal do servidor —
+    // devolver isso na resposta HTTP exporia estrutura de diretório e nome
+    // de usuário do sistema operacional a quem só está tentando entrar.
     process.stderr.write(`\n  ${erro.message}\n\n`);
     responderErro(res, 'Login ainda não configurado. Peça para rodar "node scripts/criarLogin.js".', 500);
     return;
   }
 
-  const credenciaisCorretas =
-    typeof corpo.usuario === "string" &&
-    typeof corpo.senha === "string" &&
-    corpo.usuario === config.usuario &&
-    authService.conferirSenha(corpo.senha, config.senhaHash);
+  const usuarioAutenticado = conferirCredenciais(config.usuarios, corpo.usuario, corpo.senha);
 
-  if (!credenciaisCorretas) {
+  if (!usuarioAutenticado) {
     limitadorLogin.registrarFalha(ip);
     responderErro(res, "Usuário ou senha inválidos.", 401);
     return;
   }
 
   limitadorLogin.limpar(ip);
-  const token = authService.criarToken(config.segredoSessao);
+  const token = authService.criarToken(config.segredo_sessao);
   res.setHeader("Set-Cookie", cookieSessao(token, authService.SESSAO_MS));
-  responderJson(res, { ok: true, usuario: config.usuario });
+  responderJson(res, { ok: true, usuario: usuarioAutenticado });
 }
 
 /**
@@ -202,6 +197,12 @@ export function criarServidor(servicos = {}) {
       if (req.method === "POST" && rota === "/api/auth/logout") {
         res.setHeader("Set-Cookie", cookieLogout());
         responderJson(res, { ok: true });
+        return;
+      }
+      // Só o número da versão — a tela de login precisa exibi-la antes de
+      // qualquer sessão existir. Sem dado nenhum da carteira.
+      if (req.method === "GET" && rota === "/api/versao") {
+        responderJson(res, { versao: VERSAO });
         return;
       }
 

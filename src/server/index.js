@@ -15,7 +15,7 @@ import { exec } from "node:child_process";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-import { AutenticacaoError, configuracaoAuth } from "../config/authConfig.js";
+import { AutenticacaoError, configuracaoAuth } from "../core/usuarios.js";
 import { carregarEnv } from "../util/env.js";
 import * as ambiente from "./ambiente.js";
 import { interpretadorPython } from "./analiseExterna.js";
@@ -59,7 +59,7 @@ export function abrirNavegador(endereco, { executar = exec } = {}) {
   executar(comandoNavegador(endereco), () => {});
 }
 
-/** true se AUTH_USUARIO, AUTH_SENHA_HASH e AUTH_SESSAO_SEGREDO já foram criados. */
+/** true se já existe pelo menos um usuário cadastrado em data/usuarios.json. */
 function loginConfigurado() {
   try {
     configuracaoAuth();
@@ -75,10 +75,9 @@ export function iniciar(argv = []) {
   const { porta, semNavegador } = parseArgs(argv);
   const endereco = `http://${HOST}:${porta}`;
 
-  // Sem login configurado o servidor sobe do mesmo jeito — cada requisição não
-  // autenticada é tratada como tal (redireciona para /login, ou 401 na API);
-  // só o próprio login falha, com a mensagem de authConfig.js, até alguém
-  // rodar scripts/criarLogin.js.
+  // Sem usuário cadastrado o servidor sobe do mesmo jeito — cada requisição
+  // não autenticada é tratada como tal (redireciona para /login, ou 401 na
+  // API); só o próprio login falha, até alguém rodar scripts/criarLogin.js.
   const servidor = criarServidor();
 
   servidor.listen(porta, HOST, () => {

@@ -965,3 +965,5 @@ code {
   background: rgba(255, 107, 120, .1); border: 1px solid rgba(255, 107, 120, .3);
   border-radius: 7px; padding: 10px 12px;
 }
+
+.login-versao { font-size: var(--f-micro); color: var(--t3); text-align: center; }

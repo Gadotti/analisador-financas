@@ -88,6 +88,7 @@ Uma regra por arquivo, para não haver duas validações divergentes:
 | `data/history/*.json` | Python | Node e Python |
 | `data/execucoes.json` | Python (`analise/runner.py`) | Node e Python |
 | `data/cache.json` | Python (`analise/cache.py`) | Python |
+| `data/usuarios.json` | Node (`scripts/criarLogin.js`, via `src/core/usuarios.js`) | Node |
 
 `history/` e `execucoes.json` respondem a perguntas diferentes e por isso convivem: o
 arquivo do dia guarda o **estado** (é sobrescrito a cada rodada, e o gráfico do histórico
@@ -581,36 +582,50 @@ explicando isso — mantenha esse tratamento.
 **Segurança.** O servidor ouve em `127.0.0.1` por padrão; a variável de ambiente `HOST`
 muda o endereço — é o que o `Dockerfile` usa (`0.0.0.0`, para o `docker-compose.yml`
 publicar a porta). `servirArquivo()` tem proteção contra travessia de diretório — há teste
-cobrindo isso; não a remova. Credenciais só via `.env`, nunca no código nem em logs.
-Isso vale também para teste: token, chave ou credencial usada como fixture (ex.:
+cobrindo isso; não a remova. Credenciais de serviços externos (IA, Telegram, brapi) só via
+`.env`; as do login (hash de senha, segredo de sessão) só via `data/usuarios.json` — nenhuma
+delas no código ou em log. Isso vale também para teste: token, chave ou credencial usada
+como fixture (ex.:
 `TELEGRAM_BOT_TOKEN` em `test_notifier.py`) é sempre um valor falso e obviamente inválido
 ("123456789:TESTE-FAKE-TOKEN"), nunca uma credencial real colada durante o
 desenvolvimento — mesmo que o serviço nunca seja chamado de verdade no teste.
 
-**Login único, sem framework.** A interface web exige autenticação — não há dado nem rota
-anônima, o login só existe para liberar o acesso à ferramenta, e a carteira continua única
-e sem segregação por usuário. Sem dependência de produção nenhuma (nada de bcrypt,
-jsonwebtoken, cookie-parser ou express-rate-limit): `src/core/authService.js` faz o hash da
-senha com `scrypt` e assina o token de sessão com HMAC-SHA256, os dois só com o módulo
-`crypto` nativo do Node — um JWT mínimo, sem estado guardado no servidor.
-`node scripts/criarLogin.js` grava usuário, hash da senha e o segredo de sessão em
-`AUTH_USUARIO`, `AUTH_SENHA_HASH` e `AUTH_SESSAO_SEGREDO` no `.env` (`AUTH_ENV_FILE`
-redireciona o arquivo, mesmo papel de `IA_ENV_FILE` — é como os testes isolam); nunca edite
-essas três à mão. Diferente do fail-fast de outras configurações, **o servidor sobe do
-mesmo jeito sem essas variáveis** — mesmo padrão do ShadowRadar: sem cookie válido, `GET /`
-cai na tela de login e a API responde 401 normalmente; só a tentativa de login em si falha,
-com a mensagem de `authConfig.js` apontando para o script (`iniciar()` imprime "Login: não
-configurado" no terminal, ao lado do status de IA e Telegram, mas não recusa a porta).
+**Login, sem framework, e sem segregação de dados.** A interface web exige autenticação —
+não há dado nem rota anônima —, mas o login só existe para liberar o acesso à ferramenta:
+a carteira continua única, e mais de um usuário pode estar cadastrado ao mesmo tempo, todos
+vendo os mesmos dados. Sem dependência de produção nenhuma (nada de bcrypt, jsonwebtoken,
+cookie-parser ou express-rate-limit): `src/core/authService.js` faz o hash da senha com
+`scrypt` e assina o token de sessão com HMAC-SHA256, os dois só com o módulo `crypto`
+nativo do Node — um JWT mínimo, sem estado guardado no servidor.
+
+`src/core/usuarios.js` lê e grava a lista de usuários e o segredo de sessão em
+`data/usuarios.json` — **não** no `.env`: é dado do cadastro, como a carteira, não
+configuração da máquina. A escolha é de propósito: o volume de dados do Docker
+(`analisador_financas_data:/app/data`) é gravável pelo container, o que o `.env` (montado
+`:ro` no `docker-compose.yml`) não é, e é isso que permite criar ou trocar a senha de um
+usuário com `docker compose exec analisador-financas node scripts/criarLogin.js`, sem
+precisar reconfigurar o compose. Rodar o script com um usuário novo o acrescenta à lista;
+com um usuário já existente, troca só a senha dele — o segredo de sessão é gerado uma vez
+só, na primeira chamada, e preservado depois: trocá-lo derrubaria a sessão de todo mundo,
+não só de quem está mudando a própria senha.
+
+Diferente do fail-fast de outras configurações, **o servidor sobe do mesmo jeito sem
+nenhum usuário cadastrado** — mesmo padrão do ShadowRadar: sem cookie válido, `GET /` cai
+na tela de login e a API responde 401 normalmente; só a tentativa de login em si falha, com
+uma mensagem apontando para o script (`iniciar()` imprime "Login: não configurado" no
+terminal, ao lado do status de IA e Telegram, mas não recusa a porta).
 
 Em `src/server/app.js`, a ordem de registro das rotas é o que decide o que é público: login
-(`GET /login`, `POST /api/auth/login`, `POST /api/auth/logout`) e os arquivos estáticos em
-`/static/` (só código, sem dado da carteira) vêm antes do gate; a partir dali, `GET /` sem
-sessão redireciona (302) para `/login`, e qualquer outra rota `/api/*` sem sessão válida
-responde 401. `src/server/limitadorLogin.js` é o freio contra força bruta (10 tentativas por
-IP a cada 15 minutos, só em memória) que um framework daria de graça. O cookie de sessão é
-`HttpOnly`, `SameSite=Strict` e dura 30 dias (`authService.SESSAO_MS`); como o token é
-stateless, o logout só apaga o cookie do navegador — o token em si continua válido até
-expirar, e é assim que o ShadowRadar também faz.
+(`GET /login`, `POST /api/auth/login`, `POST /api/auth/logout`), `GET /api/versao` (só o
+número da versão, para a tela de login mostrar antes de qualquer sessão existir) e os
+arquivos estáticos em `/static/` (só código, sem dado da carteira) vêm antes do gate; a
+partir dali, `GET /` sem sessão redireciona (302) para `/login`, e qualquer outra rota
+`/api/*` sem sessão válida responde 401. `src/server/limitadorLogin.js` é o freio contra
+força bruta (10 tentativas por IP a cada 15 minutos, só em memória) que um framework daria
+de graça. O cookie de sessão é `HttpOnly`, `SameSite=Strict` e dura 30 dias
+(`authService.SESSAO_MS`); como o token é stateless, o logout só apaga o cookie do
+navegador — o token em si continua válido até expirar, e é assim que o ShadowRadar também
+faz.
 
 **Docker.** A imagem é publicada em `ghcr.io/gadotti/analisador-financas` pelo workflow
 `.github/workflows/release.yml`, disparado por tag `v*.*.*` — mesmo padrão do

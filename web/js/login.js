@@ -21,6 +21,24 @@ export async function login(usuario, senha) {
   return dados;
 }
 
+/** Versão exibida no rodapé — rota pública, não exige sessão nenhuma. */
+export async function buscarVersao() {
+  const resposta = await fetch("/api/versao");
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  const dados = await resposta.json();
+  return dados.versao;
+}
+
+/** Sem versão para mostrar (rede fora, servidor não respondeu), o rodapé só fica em branco. */
+async function mostrarVersao() {
+  const el = $("#login-versao");
+  try {
+    el.textContent = `Versão ${await buscarVersao()}`;
+  } catch {
+    el.textContent = "";
+  }
+}
+
 export function ligarFormulario() {
   const form = $("#form-login");
   const erro = $("#login-erro");
@@ -44,4 +62,5 @@ export function ligarFormulario() {
 
 if (typeof document !== "undefined" && document.getElementById("form-login")) {
   ligarFormulario();
+  mostrarVersao();
 }

@@ -8,9 +8,10 @@
  */
 
 let login;
+let buscarVersao;
 
 beforeAll(async () => {
-  ({ login } = await import("../../web/js/login.js"));
+  ({ login, buscarVersao } = await import("../../web/js/login.js"));
 });
 
 afterEach(() => {
@@ -65,5 +66,23 @@ describe("login", () => {
     });
 
     await expect(login("teste", "errada")).rejects.toThrow("Usuário ou senha inválidos.");
+  });
+});
+
+describe("buscarVersao", () => {
+  test("busca /api/versao sem enviar credencial nenhuma e devolve a versão", async () => {
+    const chamadas = [];
+    global.fetch = async (rota, opcoes) => {
+      chamadas.push([rota, opcoes]);
+      return { ok: true, json: async () => ({ versao: "1.2.3" }) };
+    };
+
+    await expect(buscarVersao()).resolves.toBe("1.2.3");
+    expect(chamadas).toEqual([["/api/versao", undefined]]);
+  });
+
+  test("lança quando a resposta não é ok", async () => {
+    global.fetch = async () => ({ ok: false, status: 500 });
+    await expect(buscarVersao()).rejects.toThrow("Erro 500");
   });
 });

@@ -1,21 +1,24 @@
 import fs from "node:fs";
 
 import { ConfiguracaoIaError } from "../src/config/configIa.js";
-import { execucoesFile, lastAnalysisFile, portfolioFile } from "../src/config/paths.js";
+import {
+  execucoesFile,
+  lastAnalysisFile,
+  portfolioFile,
+  usuariosFile,
+} from "../src/config/paths.js";
 import * as portfolio from "../src/core/portfolio.js";
 import { criarServidor } from "../src/server/app.js";
 import * as limitadorLogin from "../src/server/limitadorLogin.js";
 import { VERSAO } from "../version.js";
 import {
-  authEnvTemporario,
-  credenciaisAuthExemplo,
   dataDirTemporario,
   gravarAnalise,
   snapshotExemplo,
+  usuarioAuthExemplo,
 } from "./helpers/ambiente.js";
 
 let ambiente;
-let authEnv;
 let credenciais;
 let cookieSessao;
 let servidor;
@@ -148,9 +151,7 @@ async function fazerLogin(usuario, senha) {
 
 beforeAll(async () => {
   ambiente = dataDirTemporario();
-  authEnv = authEnvTemporario();
-  credenciais = credenciaisAuthExemplo();
-  authEnv.escrever(credenciais.variaveis);
+  credenciais = usuarioAuthExemplo(ambiente.dir);
 
   servicos = servicosFalsos();
   servidor = criarServidor(servicos);
@@ -164,7 +165,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await new Promise((resolve) => servidor.close(resolve));
   ambiente.limpar();
-  authEnv.limpar();
 });
 
 beforeEach(() => {
@@ -220,6 +220,12 @@ describe("autenticação", () => {
     expect(status).toBe(200);
     expect(tipo).toMatch(/text\/html/);
     expect(corpo).toMatch(/form-login/);
+  });
+
+  test("GET /api/versao é público — a tela de login mostra a versão sem sessão", async () => {
+    const { status, corpo } = await pedirSemAuth("/api/versao");
+    expect(status).toBe(200);
+    expect(corpo).toEqual({ versao: VERSAO });
   });
 
   test.each([
@@ -303,14 +309,14 @@ describe("autenticação", () => {
   });
 
   test("POST /api/auth/login com o login ainda não configurado responde 500", async () => {
-    const arquivoOriginal = fs.readFileSync(authEnv.arquivo, "utf8");
-    fs.writeFileSync(authEnv.arquivo, "", "utf8");
+    const arquivoOriginal = fs.readFileSync(usuariosFile(), "utf8");
+    fs.rmSync(usuariosFile());
     try {
       const login = await fazerLogin(credenciais.usuario, credenciais.senha);
       expect(login.status).toBe(500);
       expect(login.corpo.erro).toMatch(/criarLogin\.js/);
     } finally {
-      fs.writeFileSync(authEnv.arquivo, arquivoOriginal, "utf8");
+      fs.writeFileSync(usuariosFile(), arquivoOriginal, "utf8");
     }
   });
 });

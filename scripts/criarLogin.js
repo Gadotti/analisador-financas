@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 /**
- * Cria (ou troca) o login único da interface web.
+ * Cria um usuário de login (ou troca a senha de um já existente).
  *
  * Uso:
  *   node scripts/criarLogin.js
  *
- * Pede usuário e senha no terminal e grava o hash da senha no .env — nunca a
- * senha em texto puro (veja src/core/authService.js). Na primeira vez também
- * gera o segredo de sessão (AUTH_SESSAO_SEGREDO); rodar de novo para trocar a
- * senha mantém o segredo já existente, para não derrubar sessões abertas por
- * um motivo que não é a troca da senha em si.
+ * Também funciona de dentro do container Docker, porque data/ é um volume
+ * gravável (diferente do .env, montado :ro no docker-compose.yml):
+ *   docker compose exec analisador-financas node scripts/criarLogin.js
+ *
+ * Pede usuário e senha no terminal e grava o hash da senha em
+ * data/usuarios.json — nunca a senha em texto puro (veja
+ * src/core/authService.js). Aceita mais de um usuário: todos autenticam
+ * contra os mesmos dados, sem segregação nenhuma — o login só existe para
+ * liberar o acesso à ferramenta. Rodar de novo com um usuário já existente
+ * troca só a senha dele.
  */
 
-import crypto from "node:crypto";
 import readline from "node:readline";
 
-import { arquivoEnvAuth } from "../src/config/authConfig.js";
-import { gerarHashSenha } from "../src/core/authService.js";
-import { lerArquivoEnv, salvarValoresEnv } from "../src/util/env.js";
+import { usuariosFile } from "../src/config/paths.js";
+import { criarOuAtualizarUsuario } from "../src/core/usuarios.js";
 
 const CODIGO_CTRL_C = 3;
 const CODIGO_BACKSPACE = 8;
@@ -68,9 +71,6 @@ function perguntarSenha(texto) {
 }
 
 async function main() {
-  const arquivo = arquivoEnvAuth();
-  const doArquivo = lerArquivoEnv(arquivo);
-
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const usuario = (await perguntar(rl, "Usuário: ")).trim();
   rl.close();
@@ -94,16 +94,11 @@ async function main() {
     return;
   }
 
-  const alteracoes = {
-    AUTH_USUARIO: usuario,
-    AUTH_SENHA_HASH: gerarHashSenha(senha),
-  };
-  if (!(doArquivo.AUTH_SESSAO_SEGREDO || "").trim()) {
-    alteracoes.AUTH_SESSAO_SEGREDO = crypto.randomBytes(32).toString("hex");
-  }
-
-  salvarValoresEnv(arquivo, alteracoes);
-  process.stdout.write(`\nLogin salvo em ${arquivo}. Rode "npm start" e entre com este usuário e senha.\n`);
+  const { criado } = criarOuAtualizarUsuario(usuario, senha);
+  const acao = criado ? "Usuário criado" : "Senha atualizada";
+  process.stdout.write(
+    `\n${acao} em ${usuariosFile()}. Rode "npm start" e entre com este usuário e senha.\n`,
+  );
 }
 
 main();

@@ -1,5 +1,8 @@
+import fs from "node:fs";
+
 import { jest } from "@jest/globals";
 
+import { usuariosFile } from "../src/config/paths.js";
 import {
   abrirNavegador,
   comandoNavegador,
@@ -8,19 +11,18 @@ import {
   PORTA_PADRAO,
   parseArgs,
 } from "../src/server/index.js";
-import { authEnvTemporario, credenciaisAuthExemplo, dataDirTemporario } from "./helpers/ambiente.js";
+import { dataDirTemporario, usuarioAuthExemplo } from "./helpers/ambiente.js";
 
 let ambiente;
-let authEnv;
+let credenciais;
 let servidores = [];
 
 beforeAll(() => {
   ambiente = dataDirTemporario();
-  authEnv = authEnvTemporario(credenciaisAuthExemplo().variaveis);
+  credenciais = usuarioAuthExemplo(ambiente.dir);
 });
 afterAll(() => {
   ambiente.limpar();
-  authEnv.limpar();
 });
 
 afterEach(async () => {
@@ -83,9 +85,8 @@ describe("abrirNavegador", () => {
 });
 
 describe("iniciar", () => {
-  test("sobe normalmente mesmo sem login configurado — só a tela de login aparece", async () => {
-    authEnv.limpar();
-    authEnv = authEnvTemporario(); // AUTH_ENV_FILE aponta para um .env vazio: sem AUTH_USUARIO etc.
+  test("sobe normalmente mesmo sem usuário cadastrado — só a tela de login aparece", async () => {
+    fs.rmSync(usuariosFile(), { force: true });
 
     const servidor = subir(["--porta", "0", "--sem-navegador"]);
     await new Promise((resolve) => servidor.once("listening", resolve));
@@ -103,8 +104,7 @@ describe("iniciar", () => {
     expect(tentativa.status).toBe(500);
     expect((await tentativa.json()).erro).toMatch(/criarLogin\.js/);
 
-    authEnv.limpar();
-    authEnv = authEnvTemporario(credenciaisAuthExemplo().variaveis);
+    credenciais = usuarioAuthExemplo(ambiente.dir); // restaura para os testes seguintes
   });
 
   test("sobe em 127.0.0.1 numa porta efêmera e responde à API autenticada", async () => {
@@ -118,11 +118,10 @@ describe("iniciar", () => {
     const semSessao = await fetch(`${base}/api/status`);
     expect(semSessao.status).toBe(401);
 
-    const { usuario, senha } = credenciaisAuthExemplo();
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ usuario, senha }),
+      body: JSON.stringify({ usuario: credenciais.usuario, senha: credenciais.senha }),
     });
     const cookie = login.headers.get("set-cookie").split(";")[0];
 

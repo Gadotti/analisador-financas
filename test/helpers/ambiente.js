@@ -57,44 +57,18 @@ export function envIaTemporario(variaveis = null) {
 }
 
 /**
- * Isola as credenciais de login num .env temporário, apontado por
- * AUTH_ENV_FILE — mesmo papel de envIaTemporario() para a configuração de IA.
+ * Grava um usuário de teste em <dir>/usuarios.json — mesmo formato do disco
+ * (veja src/core/usuarios.js). `dir` normalmente é o `.dir` devolvido por
+ * dataDirTemporario(), então some junto quando o teste limpa o ambiente.
  */
-export function authEnvTemporario(variaveis = null) {
-  const anterior = process.env.AUTH_ENV_FILE;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "analisador-auth-"));
-  const arquivo = path.join(dir, "auth.env");
-  process.env.AUTH_ENV_FILE = arquivo;
-
-  function escrever(valores) {
-    const linhas = Object.entries(valores).map(([chave, valor]) => `${chave}=${valor}`);
-    fs.writeFileSync(arquivo, linhas.join(os.EOL), "utf8");
-  }
-
-  if (variaveis) escrever(variaveis);
-
-  return {
-    arquivo,
-    escrever,
-    limpar() {
-      if (anterior === undefined) delete process.env.AUTH_ENV_FILE;
-      else process.env.AUTH_ENV_FILE = anterior;
-      fs.rmSync(dir, { recursive: true, force: true });
-    },
+export function usuarioAuthExemplo(dir, usuario = "teste", senha = "senha-teste-123") {
+  const dados = {
+    segredo_sessao: "segredo-de-teste-para-assinatura-hmac",
+    usuarios: [{ usuario, senha_hash: gerarHashSenha(senha) }],
   };
-}
-
-/** Usuário e senha de teste prontos, já com o hash que vai no .env temporário. */
-export function credenciaisAuthExemplo(usuario = "teste", senha = "senha-teste-123") {
-  return {
-    usuario,
-    senha,
-    variaveis: {
-      AUTH_USUARIO: usuario,
-      AUTH_SENHA_HASH: gerarHashSenha(senha),
-      AUTH_SESSAO_SEGREDO: "segredo-de-teste-para-assinatura-hmac",
-    },
-  };
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "usuarios.json"), JSON.stringify(dados, null, 2), "utf8");
+  return { usuario, senha };
 }
 
 /** Define variáveis de ambiente e devolve um restaurador. */

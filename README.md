@@ -32,12 +32,14 @@ copy .env.example .env
 node scripts/criarLogin.js
 ```
 
-`criarLogin.js` pede um usuário e uma senha no terminal e grava o hash da senha no `.env`
-— nunca a senha em texto puro. É um login único, só para liberar o acesso à ferramenta —
-não há usuários separados nem dados segregados por conta. Sem ele, o servidor sobe do
-mesmo jeito, mas nenhuma tela ou rota da API responde sem uma sessão válida: qualquer
-acesso cai na tela de login, e o próprio login falha com uma mensagem apontando para este
-script. Rode-o de novo a qualquer momento para trocar a senha.
+`criarLogin.js` pede um usuário e uma senha no terminal e grava o hash da senha em
+`data/usuarios.json` — nunca a senha em texto puro, e nunca no `.env`. Aceita mais de um
+usuário (rode o script de novo com outro nome para adicionar; com um nome já existente,
+troca só a senha dele) — todos autenticam contra a mesma carteira, sem segregação nenhuma:
+o login só existe para liberar o acesso à ferramenta. Sem nenhum usuário cadastrado, o
+servidor sobe do mesmo jeito, mas nenhuma tela ou rota da API responde sem uma sessão
+válida: qualquer acesso cai na tela de login, e o próprio login falha com uma mensagem
+apontando para este script.
 
 Edite o restante do `.env` conforme o que mais pretende usar. Fora o login, **nada é
 obrigatório** — sem o bloco do provedor de IA o sistema continua calculando cotações,
@@ -129,16 +131,22 @@ Imagem publicada em `ghcr.io/gadotti/analisador-financas`, a cada release marcad
 
 ```powershell
 copy .env.example .env
-node scripts/criarLogin.js         # cria o login — veja a seção Instalação
-# edite o .env com o que mais for usar (IA, Telegram)
+# edite o .env com o que for usar (IA, Telegram) — veja a seção Instalação
 docker compose up -d
+docker compose exec analisador-financas node scripts/criarLogin.js
 ```
 
-O `docker-compose.yml` monta o `.env` da pasta atual em `/app/.env` (precisa ser o arquivo
-de verdade — `ORIGEM_CHAVE=arquivo` lê a chave só dali) e persiste `data/` num volume
-nomeado. A porta `8765` é publicada em todas as interfaces, acessível por qualquer
-dispositivo da rede; para restringir ao próprio host, troque o mapeamento no compose para
-`"127.0.0.1:8765:8765"`.
+O login é criado **depois** de o container estar de pé, rodando o script de dentro dele —
+funciona porque `data/` (onde `criarLogin.js` grava) é um volume normal, gravável pelo
+container, diferente do `.env` (montado somente leitura logo abaixo). Sem usuário nenhum
+cadastrado o container sobe do mesmo jeito, só a tela de login fica inacessível até rodar
+o comando acima.
+
+O `docker-compose.yml` monta o `.env` da pasta atual em `/app/.env`, somente leitura
+(precisa ser o arquivo de verdade — `ORIGEM_CHAVE=arquivo` lê a chave só dali), e persiste
+`data/` (carteira, histórico e `usuarios.json`) num volume nomeado. A porta `8765` é
+publicada em todas as interfaces, acessível por qualquer dispositivo da rede; para
+restringir ao próprio host, troque o mapeamento no compose para `"127.0.0.1:8765:8765"`.
 
 ### Testes
 
