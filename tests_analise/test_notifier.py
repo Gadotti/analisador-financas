@@ -4,7 +4,7 @@ import pytest
 
 from analise import notifier
 
-TOKEN = "8102029623:AAExu2HPmN3ZYNy5BnYOHHPzEERenK5o3AM"
+TOKEN = "123456789:TESTE-FAKE-TOKEN-NAO-USAR-EM-PRODUCAO"
 
 
 class RespostaTelegram:
