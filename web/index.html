@@ -264,6 +264,17 @@
 
           <div class="disparador-item">
             <div class="disparador-texto">
+              <span class="disparador-titulo">Analisar com IA e enviar ao Telegram</span>
+              <span class="disparador-desc">Aqui na interface isso é sempre dois cliques: “Analisar
+                com IA” acima e, depois de concluída, “Reenviar a mensagem do dia ao Telegram” logo
+                abaixo — não há uma rota que encadeie os dois. Só o terminal e o Agendador de Tarefas
+                fazem isso num comando só, com <code>--telegram</code>.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --telegram</span>
+            </div>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
               <span class="disparador-titulo">Atualizar cotações</span>
               <span class="disparador-desc">Só recalcula preços e marcação a mercado, sem chamar a
                 IA. As fichas por ativo da última leitura são mantidas (<code>ia_reaproveitada_de</code>),
@@ -271,6 +282,18 @@
               <span class="disparador-comando mono">python scripts/analisar.py --sem-ia</span>
             </div>
             <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-cotacoes">Rodar agora</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Atualizar cotações e enviar ao Telegram</span>
+              <span class="disparador-desc">Mesma ressalva do item acima: aqui são dois cliques —
+                “Atualizar cotações” e depois “Reenviar a mensagem do dia ao Telegram” — porque não há
+                rota que encadeie os dois. No script, <code>--telegram</code> não depende de
+                <code>--sem-ia</code>: a mensagem sai com a leitura de IA reaproveitada
+                (<code>ia_reaproveitada_de</code>) mesmo sem recalculá-la.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --sem-ia --telegram</span>
+            </div>
           </div>
 
           <div class="disparador-item">
