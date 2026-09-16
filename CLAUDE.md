@@ -61,11 +61,10 @@ After every code change, run `npm test` and inspect the output. If any test fail
 ### A regra central: a análise é um script Python isolado
 
 `scripts/analisar.py` é o **único ponto do sistema que chama a API de IA e o
-Telegram**. Roda de três formas, sempre com o mesmo resultado:
+Telegram**. Roda de duas formas, sempre com o mesmo resultado:
 
 1. Direto no terminal;
-2. Pelo Agendador de Tarefas do Windows (`agendar_tarefa.ps1`);
-3. Como processo filho do servidor Node, via `src/server/analiseExterna.js`, que faz
+2. Como processo filho do servidor Node, via `src/server/analiseExterna.js`, que faz
    `spawn(python, [script, "--json", ...])` e lê o JSON do stdout.
 
 Para isso funcionar, `--json` escreve **apenas o JSON no stdout**; todo o progresso vai para

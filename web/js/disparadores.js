@@ -2,7 +2,7 @@
  * Tela "Disparadores" — documentação e atalhos para as formas de rodar
  * `scripts/analisar.py`. Os botões de ação reaproveitam as mesmas rotas que
  * o topo da página já usa; os de "Copiar" só levam o comando à área de
- * transferência, para colar no terminal ou no Agendador de Tarefas.
+ * transferência, para colar no terminal.
  */
 
 import { api, toast } from "./api.js";

@@ -240,9 +240,9 @@
     <main class="pagina hidden" id="pg-disparadores">
       <p class="rodape">
         <code>scripts/analisar.py</code> é o único ponto do sistema que calcula a carteira, chama a
-        IA e fala com o Telegram — a interface, o terminal e o Agendador de Tarefas do Windows
-        disparam sempre o mesmo script, só com flags diferentes. Esta página lista as três formas e,
-        onde já existe uma rota preparada, deixa o disparo a um clique.
+        IA e fala com o Telegram — a interface e o terminal disparam sempre o mesmo script, só com
+        flags diferentes. Esta página lista as duas formas e, onde já existe uma rota preparada,
+        deixa o disparo a um clique.
       </p>
 
       <section class="cartao">
@@ -264,17 +264,6 @@
 
           <div class="disparador-item">
             <div class="disparador-texto">
-              <span class="disparador-titulo">Analisar com IA e enviar ao Telegram</span>
-              <span class="disparador-desc">Aqui na interface isso é sempre dois cliques: “Analisar
-                com IA” acima e, depois de concluída, “Reenviar a mensagem do dia ao Telegram” logo
-                abaixo — não há uma rota que encadeie os dois. Só o terminal e o Agendador de Tarefas
-                fazem isso num comando só, com <code>--telegram</code>.</span>
-              <span class="disparador-comando mono">python scripts/analisar.py --telegram</span>
-            </div>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
               <span class="disparador-titulo">Atualizar cotações</span>
               <span class="disparador-desc">Só recalcula preços e marcação a mercado, sem chamar a
                 IA. As fichas por ativo da última leitura são mantidas (<code>ia_reaproveitada_de</code>),
@@ -282,18 +271,6 @@
               <span class="disparador-comando mono">python scripts/analisar.py --sem-ia</span>
             </div>
             <button type="button" class="btn btn-fantasma btn-sm" id="btn-disp-cotacoes">Rodar agora</button>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Atualizar cotações e enviar ao Telegram</span>
-              <span class="disparador-desc">Mesma ressalva do item acima: aqui são dois cliques —
-                “Atualizar cotações” e depois “Reenviar a mensagem do dia ao Telegram” — porque não há
-                rota que encadeie os dois. No script, <code>--telegram</code> não depende de
-                <code>--sem-ia</code>: a mensagem sai com a leitura de IA reaproveitada
-                (<code>ia_reaproveitada_de</code>) mesmo sem recalculá-la.</span>
-              <span class="disparador-comando mono">python scripts/analisar.py --sem-ia --telegram</span>
-            </div>
           </div>
 
           <div class="disparador-item">
@@ -364,12 +341,27 @@
 
           <div class="disparador-item">
             <div class="disparador-texto">
-              <span class="disparador-titulo">Cálculo e envio ao Telegram em um só comando</span>
-              <span class="disparador-desc">A interface separa isso em dois cliques (analisar, depois
-                reenviar); no terminal os dois saem juntos.</span>
+              <span class="disparador-titulo">Analisar com IA e enviar ao Telegram</span>
+              <span class="disparador-desc">Na interface isso é sempre dois cliques: “Analisar com
+                IA” e, depois de concluída, “Reenviar a mensagem do dia ao Telegram” — não há uma
+                rota que encadeie os dois. No terminal, os dois saem juntos com
+                <code>--telegram</code>.</span>
               <span class="disparador-comando mono">python scripts/analisar.py --telegram</span>
             </div>
             <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --telegram">Copiar</button>
+          </div>
+
+          <div class="disparador-item">
+            <div class="disparador-texto">
+              <span class="disparador-titulo">Atualizar cotações e enviar ao Telegram</span>
+              <span class="disparador-desc">Mesma ressalva do item acima: na interface são dois
+                cliques — “Atualizar cotações” e depois “Reenviar a mensagem do dia ao Telegram” —
+                porque não há rota que encadeie os dois. No script, <code>--telegram</code> não
+                depende de <code>--sem-ia</code>: a mensagem sai com a leitura de IA reaproveitada
+                (<code>ia_reaproveitada_de</code>) mesmo sem recalculá-la.</span>
+              <span class="disparador-comando mono">python scripts/analisar.py --sem-ia --telegram</span>
+            </div>
+            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="python scripts/analisar.py --sem-ia --telegram">Copiar</button>
           </div>
 
           <div class="disparador-item">
@@ -416,63 +408,6 @@
         </div>
       </section>
 
-      <section class="cartao">
-        <div class="cartao-topo">
-          <span class="cartao-titulo">Pelo Agendador de Tarefas do Windows</span>
-          <span class="cartao-meta"><code>agendar_tarefa.ps1</code> — registra a rotina de segunda a sexta</span>
-        </div>
-        <div class="disparador-lista">
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Registrar a tarefa padrão</span>
-              <span class="disparador-desc">Análise completa com IA, todo dia útil às 09:00, sem
-                enviar ao Telegram. A saída fica em <code>analise.log</code>.</span>
-              <span class="disparador-comando mono">.\agendar_tarefa.ps1</span>
-            </div>
-            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1">Copiar</button>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Outro horário, com envio ao Telegram</span>
-              <span class="disparador-desc">Troca o horário e liga o envio automático do relatório ao
-                final de cada execução agendada.</span>
-              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -Horario "18:30" -ComTelegram</span>
-            </div>
-            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando='.\agendar_tarefa.ps1 -Horario "18:30" -ComTelegram'>Copiar</button>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Só cálculos, sem IA</span>
-              <span class="disparador-desc">Agenda a versão mais barata e mais rápida da rotina — o
-                equivalente agendado do botão “Atualizar cotações”.</span>
-              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -SemIA</span>
-            </div>
-            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1 -SemIA">Copiar</button>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Rodar a tarefa agendada agora, fora do horário</span>
-              <span class="disparador-desc">Dispara a tarefa já registrada imediatamente, para testar
-                sem esperar o próximo horário.</span>
-              <span class="disparador-comando mono">Start-ScheduledTask -TaskName AnalisadorFinancas</span>
-            </div>
-            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando="Start-ScheduledTask -TaskName AnalisadorFinancas">Copiar</button>
-          </div>
-
-          <div class="disparador-item">
-            <div class="disparador-texto">
-              <span class="disparador-titulo">Remover a tarefa</span>
-              <span class="disparador-desc">Cancela o agendamento registrado — não afeta nenhuma
-                análise já salva.</span>
-              <span class="disparador-comando mono">.\agendar_tarefa.ps1 -Remover</span>
-            </div>
-            <button type="button" class="btn btn-fantasma btn-sm btn-copiar" data-comando=".\agendar_tarefa.ps1 -Remover">Copiar</button>
-          </div>
-        </div>
-      </section>
     </main>
 
     <!-- ── Configurações ───────────────── -->

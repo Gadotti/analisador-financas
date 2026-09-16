@@ -16,7 +16,7 @@ O projeto tem duas metades, cada uma na linguagem que lhe cai melhor:
 | **Aplicação** (`src/` + `web/`) | Node.js | Cadastro da carteira, interface web e API local |
 
 A interface **dispara o script Python** quando você aperta o botão; o mesmo script roda
-sozinho pelo Agendador de Tarefas ou pelo terminal.
+sozinho pelo terminal.
 
 ---
 
@@ -91,30 +91,14 @@ python scripts/analisar.py --testar-telegram
 python scripts/analisar.py --help
 ```
 
-Ou dê duplo clique em **`analisar.bat`**.
-
-### Agendamento diário
-
-```powershell
-.\agendar_tarefa.ps1                              # seg-sex às 09:00
-.\agendar_tarefa.ps1 -Horario "18:30" -ComTelegram
-.\agendar_tarefa.ps1 -Remover
-```
-
-Registra a tarefa no Agendador de Tarefas do Windows, no contexto do seu usuário
-(não exige administrador). A saída de cada execução é gravada em `analise.log`.
-
-Para testar imediatamente: `Start-ScheduledTask -TaskName AnalisadorFinancas`
-
 ### Interface web
 
 ```powershell
 npm start
 ```
 
-Ou dê duplo clique em **`iniciar_interface.bat`**. O navegador abre em `http://127.0.0.1:8765`
-e pede o usuário e a senha criados com `node scripts/criarLogin.js` (veja a seção
-Instalação) antes de mostrar qualquer coisa.
+O navegador abre em `http://127.0.0.1:8765` e pede o usuário e a senha criados com
+`node scripts/criarLogin.js` (veja a seção Instalação) antes de mostrar qualquer coisa.
 
 Pela interface você cadastra posições, edita e exclui ativos, dispara a análise (que executa
 o script Python por baixo) e vê o resultado na tela.
@@ -262,7 +246,6 @@ data/
 
 test/                    testes da aplicação Node (Jest)
 tests_analise/           testes do motor de análise (pytest)
-agendar_tarefa.ps1       registra a tarefa no Agendador do Windows
 ```
 
 O servidor usa apenas os módulos internos do Node: não há Express nem qualquer framework
@@ -272,11 +255,10 @@ web, e o Node não tem dependências de produção. Todas as bibliotecas externa
 ### Por que a análise fica isolada em um script
 
 `scripts/analisar.py` é o **único ponto do sistema que fala com a API da Anthropic e com o
-Telegram**. Ele roda de três formas, sempre com o mesmo resultado:
+Telegram**. Ele roda de duas formas, sempre com o mesmo resultado:
 
 1. Direto no terminal;
-2. Pelo Agendador de Tarefas do Windows;
-3. Como processo filho do servidor web, que lê o JSON do stdout.
+2. Como processo filho do servidor web, que lê o JSON do stdout.
 
 Assim a interface fica livre de credenciais e de chamadas caras, a análise agendada e a
 disparada pelo botão são exatamente a mesma coisa, e o script continua funcionando
