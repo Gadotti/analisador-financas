@@ -17,9 +17,11 @@ import * as authService from "../core/authService.js";
 import * as portfolio from "../core/portfolio.js";
 import * as storage from "../core/storage.js";
 import { AutenticacaoError, conferirCredenciais, configuracaoAuth } from "../core/usuarios.js";
+import { hoje, paraISO } from "../util/datas.js";
 import { VERSAO } from "../../version.js";
 import * as ambiente from "./ambiente.js";
 import * as analiseExterna from "./analiseExterna.js";
+import { criarBackupZip } from "./backup.js";
 import { cookieLogout, cookieSessao, tokenDaRequisicao } from "./cookies.js";
 import * as limitadorLogin from "./limitadorLogin.js";
 
@@ -263,6 +265,17 @@ export function criarServidor(servicos = {}) {
         }
         if (rota === "/api/ambiente") {
           responderJson(res, svc.lerAmbiente());
+          return;
+        }
+        if (rota === "/api/backup") {
+          const conteudo = criarBackupZip();
+          res.writeHead(200, {
+            "Content-Type": "application/zip",
+            "Content-Length": conteudo.length,
+            "Content-Disposition": `attachment; filename="backup-${paraISO(hoje())}.zip"`,
+            "Cache-Control": "no-store",
+          });
+          res.end(conteudo);
           return;
         }
         responderErro(res, "Rota não encontrada.", 404);

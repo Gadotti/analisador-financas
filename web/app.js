@@ -221,6 +221,43 @@ async function previewTelegram() {
   }
 }
 
+/**
+ * Baixa data/ compactada. Não usa `api()`: a resposta é binário, não JSON, e
+ * `Blob` + link sintético é a forma padrão de disparar um download por fetch.
+ */
+async function baixarBackup() {
+  const botao = $("#btn-backup");
+  const original = botao.innerHTML;
+  botao.disabled = true;
+  botao.innerHTML = `<span class="girando"></span><span>Gerando…</span>`;
+  try {
+    const resposta = await fetch("/api/backup");
+    if (resposta.status === 401) {
+      location.href = "/login";
+      return;
+    }
+    if (!resposta.ok) {
+      const corpo = await resposta.json().catch(() => ({}));
+      throw new Error(corpo.erro || `Erro ${resposta.status}`);
+    }
+    const nomeArquivo =
+      /filename="([^"]+)"/.exec(resposta.headers.get("content-disposition") || "")?.[1] ||
+      "backup.zip";
+    const url = URL.createObjectURL(await resposta.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast("Backup baixado.", "ok");
+  } catch (erro) {
+    toast(erro.message, "erro", 7000);
+  } finally {
+    botao.disabled = false;
+    botao.innerHTML = original;
+  }
+}
+
 async function sair() {
   try {
     await api("/api/auth/logout", { method: "POST" });
@@ -260,6 +297,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   iniciarNavegacao(abrirTela);
 
   $("#btn-sair").addEventListener("click", sair);
+  $("#btn-backup").addEventListener("click", baixarBackup);
   $("#btn-nova").addEventListener("click", () => abrirPainel());
   $("#btn-analise").addEventListener("click", () => rodarAnalise(true));
   $("#btn-cotacoes").addEventListener("click", () => rodarAnalise(false));

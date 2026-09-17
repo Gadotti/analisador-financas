@@ -234,6 +234,7 @@ describe("autenticação", () => {
     ["/api/historico"],
     ["/api/status"],
     ["/api/ambiente"],
+    ["/api/backup"],
   ])("GET %s sem sessão responde 401", async (caminho) => {
     const { status, corpo } = await pedirSemAuth(caminho);
     expect(status).toBe(401);
@@ -386,6 +387,21 @@ describe("GET /api", () => {
     const { status, corpo } = await pedir("/api/ambiente");
     expect(status).toBe(200);
     expect(corpo).toEqual(servicos.estado.ambiente);
+  });
+});
+
+describe("GET /api/backup", () => {
+  test("baixa data/ compactada, sem o arquivo de login", async () => {
+    fs.writeFileSync(portfolioFile(), '{"posicoes":[]}', "utf8");
+
+    const resposta = await fetch(`${base}/api/backup`, { headers: { Cookie: cookieSessao } });
+    expect(resposta.status).toBe(200);
+    expect(resposta.headers.get("content-type")).toBe("application/zip");
+    expect(resposta.headers.get("content-disposition")).toMatch(/^attachment; filename="backup-\d{4}-\d{2}-\d{2}\.zip"$/);
+
+    const zip = Buffer.from(await resposta.arrayBuffer());
+    expect(zip.readUInt32LE(0)).toBe(0x04034b50); // assinatura do primeiro cabeçalho local ZIP
+    expect(zip.includes("usuarios.json")).toBe(false);
   });
 });
 
