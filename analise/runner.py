@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import date, datetime
 
-from . import ai_insights, analysis, config_ia, fundamentals, portfolio, relevancia
+from . import ai_insights, analysis, config_ia, fundamentals, gatilhos, portfolio, relevancia
 from .paths import execucoes_file, garantir_diretorios, history_dir, last_analysis_file
 
 # Teto do log de execuções quando o cadastro não o declara. O valor real vem de
@@ -39,6 +39,7 @@ def executar(
     # herança das fichas de IA e a comparação dos indicadores macro.
     anterior = ultima_analise()
     snapshot = analysis.consolidar(carteira, usar_cache=usar_cache)
+    snapshot["macro"] = _com_variacao_diaria(snapshot["macro"], _macro_ontem(datetime.now().date()))
 
     resultado = {
         "snapshot": snapshot,
@@ -93,6 +94,45 @@ def _macro_anterior(anterior: dict | None) -> dict | None:
     """
     macro = ((anterior or {}).get("snapshot") or {}).get("macro")
     return relevancia.macro_comparavel(macro)
+
+
+def _macro_ontem(hoje: date) -> dict | None:
+    """Indicadores macro do último histórico anterior a hoje.
+
+    Diferente de `_macro_anterior` (a execução imediatamente anterior, que
+    pode ser de hoje mesmo), este é sempre o estado de um dia civil passado
+    — o quadro "Posição do mercado" não pode mudar de ideia a cada recarga
+    da página no mesmo dia. Sem histórico de dia anterior (primeira
+    execução, ou uma lacuna), devolve None e a anotação de ontem some.
+    """
+    anteriores = [a for a in history_dir().glob("*.json") if a.stem < hoje.isoformat()]
+    if not anteriores:
+        return None
+    try:
+        with open(max(anteriores), "r", encoding="utf-8") as f:
+            registro = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    return relevancia.macro_comparavel((registro.get("snapshot") or {}).get("macro"))
+
+
+def _com_variacao_diaria(macro: dict, ontem: dict | None) -> dict:
+    """Anota CDI, Selic meta e IPCA 12m com a variação em pontos desde ontem.
+
+    A interface mostra `variacao_ontem_pct` entre parênteses no quadro de
+    mercado ("13,75% a.a. (-0,25%)") — a conta já vem pronta para não
+    calcular nada no front, como o resto da carteira. Indicador sem leitura
+    de ontem válida (primeira execução, ou fonte "padrao" de um lado ou do
+    outro) não ganha a anotação, e nem o indicador que não mudou.
+    """
+    anotado = dict(macro)
+    for chave, _, _ in gatilhos.MACRO_COMPARADO:
+        atual = gatilhos.valor_macro(macro, chave)
+        antes = gatilhos.valor_macro(ontem, chave)
+        if atual is None or antes is None or antes == atual:
+            continue
+        anotado[chave] = {**macro[chave], "variacao_ontem_pct": round(atual - antes, 4)}
+    return anotado
 
 
 def _reaproveitar_ia(resultado: dict, anterior: dict | None) -> None:

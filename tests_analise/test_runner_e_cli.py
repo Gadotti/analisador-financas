@@ -4,6 +4,7 @@ import io
 import json
 import subprocess
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -205,6 +206,54 @@ def test_nao_salvar_deixa_o_historico_intocado(carteira, mercado):
     assert not (carteira / "last_analysis.json").exists()
     assert list((carteira / "history").glob("*.json")) == []
     assert runner.execucoes() == []
+
+
+# ─────────────────────────────────────────────
+# Quadro "Posição do mercado" — leitura de ontem
+# ─────────────────────────────────────────────
+
+
+def _gravar_historico_de_ontem(carteira, **indicadores):
+    ontem = (date.today() - timedelta(days=1)).isoformat()
+    macro = {
+        "cdi_anual_pct": {"valor": 15.0, "data": "31/08/2026", "fonte": "BCB/SGS 4389"},
+        "selic_meta_pct": {"valor": 15.0, "data": "31/08/2026", "fonte": "BCB/SGS 432"},
+        "ipca_12m_pct": {"valor": 0.1, "fonte": "BCB/SGS 433"},
+        **indicadores,
+    }
+    (carteira / "history" / f"{ontem}.json").write_text(
+        json.dumps({"snapshot": {"macro": macro}}), encoding="utf-8"
+    )
+
+
+def test_macro_anota_a_variacao_desde_ontem_quando_o_indicador_mudou(carteira, mercado):
+    """`mercado` fixa CDI e Selic em 15,00% hoje — só o CDI difere de ontem."""
+    _gravar_historico_de_ontem(carteira, cdi_anual_pct={"valor": 14.5, "fonte": "BCB/SGS 4389"})
+
+    resultado = runner.executar(usar_ia=False)
+    macro = resultado["snapshot"]["macro"]
+
+    assert macro["cdi_anual_pct"]["variacao_ontem_pct"] == 0.5
+    assert "variacao_ontem_pct" not in macro["selic_meta_pct"], "Selic não mudou — sem anotação"
+
+
+def test_macro_sem_historico_de_ontem_fica_sem_anotacao(carteira, mercado):
+    resultado = runner.executar(usar_ia=False)
+    macro = resultado["snapshot"]["macro"]
+
+    assert "variacao_ontem_pct" not in macro["cdi_anual_pct"]
+    assert "variacao_ontem_pct" not in macro["selic_meta_pct"]
+    assert "variacao_ontem_pct" not in macro["ipca_12m_pct"]
+
+
+def test_macro_de_ontem_ignora_a_execucao_anterior_do_mesmo_dia(carteira, mercado):
+    """Correr duas vezes hoje não deve se autocomparar — só ontem conta."""
+    _gravar_historico_de_ontem(carteira, cdi_anual_pct={"valor": 14.5, "fonte": "BCB/SGS 4389"})
+
+    runner.executar(usar_ia=False)
+    segunda = runner.executar(usar_ia=False)
+
+    assert segunda["snapshot"]["macro"]["cdi_anual_pct"]["variacao_ontem_pct"] == 0.5
 
 
 # ─────────────────────────────────────────────

@@ -188,11 +188,16 @@ function renderContexto(ia) {
   $("#contexto-mercado").innerHTML = blocos.join("");
 }
 
+/** Variação desde ontem entre parênteses — só existe quando o indicador mudou (ver `runner._com_variacao_diaria`). */
+function variacaoOntem(indicador) {
+  return indicador?.variacao_ontem_pct != null ? ` (${pct(indicador.variacao_ontem_pct)})` : "";
+}
+
 function itensMacro(macro) {
   const itens = [
-    ["CDI", `${num(macro.cdi_anual_pct.valor)}% a.a.`],
-    ["Selic meta", `${num(macro.selic_meta_pct.valor)}% a.a.`],
-    ["IPCA 12m", `${num(macro.ipca_12m_pct.valor)}%`],
+    ["CDI", `${num(macro.cdi_anual_pct.valor)}% a.a.${variacaoOntem(macro.cdi_anual_pct)}`],
+    ["Selic meta", `${num(macro.selic_meta_pct.valor)}% a.a.${variacaoOntem(macro.selic_meta_pct)}`],
+    ["IPCA 12m", `${num(macro.ipca_12m_pct.valor)}%${variacaoOntem(macro.ipca_12m_pct)}`],
   ];
   const ibov = macro.indices?.ibovespa;
   if (ibov) {

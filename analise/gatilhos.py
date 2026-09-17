@@ -124,12 +124,14 @@ def _variacao_dia(ctx: dict) -> list[dict]:
 # Macro — a única comparação com o passado
 # ─────────────────────────────────────────────
 
-def _valor_macro(macro: dict | None, chave: str) -> float | None:
+def valor_macro(macro: dict | None, chave: str) -> float | None:
     """Valor de um indicador macro, ou None quando a fonte falhou.
 
     `market._ultimo_valor` devolve um padrão embutido com `fonte: "padrao"`
-    quando o Banco Central não responde. Comparar esse padrão com a leitura
-    real da execução anterior anunciaria uma mudança que não houve.
+    quando o Banco Central não responde. Comparar esse padrão com uma
+    leitura real anunciaria uma mudança que não houve. Também usado por
+    `runner._com_variacao_diaria`, que compara com o estado de ontem em vez
+    da execução anterior.
     """
     bloco = (macro or {}).get(chave) or {}
     if bloco.get("fonte") == "padrao":
@@ -148,8 +150,8 @@ def _macro(ctx: dict) -> list[dict]:
     limiar = float(cfg["limiar_pp"])
     itens = []
     for chave, rotulo, unidade in MACRO_COMPARADO:
-        atual = _valor_macro(ctx["snapshot"]["macro"], chave)
-        antes = _valor_macro(ctx["macro_anterior"], chave)
+        atual = valor_macro(ctx["snapshot"]["macro"], chave)
+        antes = valor_macro(ctx["macro_anterior"], chave)
         if atual is None or antes is None or abs(atual - antes) < limiar:
             continue
         itens.append(_item_macro(rotulo, unidade, antes, atual))
