@@ -422,6 +422,7 @@ a:hover { color: var(--amber-forte); }
   text-transform: uppercase; font-weight: 600; padding: 8px 10px;
   border-bottom: 1px solid var(--borda-forte); white-space: nowrap;
 }
+.tabela th.num { text-align: right; }
 .tabela td { padding: 10px; border-bottom: 1px solid #1a2f4a; }
 .tabela tr:last-child td { border-bottom: none; }
 .tabela tbody tr:hover td { background: var(--card2); }
