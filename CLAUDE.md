@@ -87,6 +87,7 @@ Uma regra por arquivo, para não haver duas validações divergentes:
 | `data/history/*.json` | Python | Node e Python |
 | `data/execucoes.json` | Python (`analise/runner.py`) | Node e Python |
 | `data/cache.json` | Python (`analise/cache.py`) | Python |
+| `data/telegram_enviados.json` | Python (`scripts/analisar.py`, via `analise/estado_envio.py`) | Python |
 | `data/usuarios.json` | Node (`scripts/criarLogin.js`, via `src/core/usuarios.js`) | Node |
 
 `history/` e `execucoes.json` respondem a perguntas diferentes e por isso convivem: o
@@ -505,9 +506,59 @@ primeiro a sair quando o dia é cheio. `_juntar_no_limite` fica como rede de seg
 não é mais ele que decide o que cabe.
 
 **Alerta em curso é uma linha, não um bloco.** Sem histórico não há como saber se um
-alerta é novo. Os que ficam abaixo de `severidade_minima` (ou que não couberam no
-orçamento) não desaparecem: `_em_curso` os conta, e a mensagem traz "3 alerta(s) em
-curso". Repetir o texto inteiro de todos eles todo dia é justamente o que se quer evitar.
+alerta é novo. Os que ficam abaixo de `severidade_minima`, que não couberam no orçamento
+ou que já foram comunicados sem mudar não desaparecem: `_em_curso` os conta, e a mensagem
+traz "3 alerta(s) em curso". Repetir o texto inteiro de todos eles todo dia é justamente o
+que se quer evitar.
+
+`_em_curso` separa **por que** cada um ficou de fora: `total` é a soma de todo mundo, e
+`pendentes` é só o que **nunca** saiu numa mensagem (não passou por severidade, por `max`
+do bloco, nem pelo orçamento geral — nunca por já ter sido enviado). A maioria dos dias
+`pendentes` é zero: o alerta continua verdadeiro, só não se repete de propósito, e "3
+alerta(s) em curso" já conta a história inteira. Quando `pendentes > 0`,
+`mensagem._linha_em_curso` acrescenta ", N deles ainda não enviado(s)" — sem essa
+distinção, a linha parece sempre uma fila parada que "poderia ter sido enviada e não foi",
+mesmo quando é só a dedução funcionando como projetado.
+
+**Um achado com o mesmo texto de ontem também não se repete — mas isso não é
+histórico.** `analise/estado_envio.py` guarda só o hash do texto de cada alerta, risco ou
+fato que já saiu numa mensagem, por bloco (`alertas`, `riscos_ia`, `fatos_ia`).
+`gatilhos` calcula o hash na origem, sobre o objeto cru, carrega o item com `chave_envio`
+e **filtra pelo estado de envio antes do corte por `max` do próprio bloco** — em
+`_alertas`, `_riscos_ia` e `_fatos_ia`, nunca depois. A ordem importa: se o filtro viesse
+depois do corte, os primeiros itens de cada bloco (sempre os mesmos, por severidade e
+ordem) venceriam a disputa pelo teto para sempre, e o resto nunca teria vez, mesmo sem
+nunca ter sido enviado. Filtrando antes, o item que ficou de fora hoje sobe para a
+mensagem de amanhã assim que o de cima é marcado como enviado — e assim em cascata, uma
+rodada de cada vez, até esgotar o que existe. Um alerta filtrado (por já enviado, por
+severidade ou por `max`) ainda entra em `_em_curso`. Depois de um envio de verdade (nunca
+no `--previa-telegram`, e nunca no relatório `--completo`), `scripts/analisar.py.
+_registrar_envio` grava as chaves enviadas e **poda** as que não estão mais na leitura de
+hoje — é a poda que impede o arquivo de virar um log: ele só guarda o que ainda está na
+tela, não o que já esteve algum dia. Se o texto de um achado mudar (o percentual da queda,
+a redação da IA), o hash muda junto e ele volta a valer como novo. `runner.reanotar_envio`
+usa as mesmas funções de hash para anotar `enviado_telegram` em `snapshot.alertas`,
+`ia.riscos` e `ia.fatos` — é essa anotação que a Visão geral lê para desenhar o selo
+discreto ao lado do título; não recalcule o hash no front.
+
+**O piso de peso de `fatos_ia` só vale para um ativo da carteira.** O campo `ativo` de um
+fato não é obrigatoriamente um ticker — a IA também escreve fatos setoriais ou sobre um
+fundo comparável fora da carteira (ex.: `"Setor de papel (referência de mercado)"`, citando
+um FII que o usuário não tem). Esse `ativo` não está em `ctx["pesos"]`, e um peso ausente
+não é o mesmo que um peso baixo: `gatilhos._fatos_ia` só aplica `peso_minimo_pct` quando o
+`ativo` é de fato uma posição da carteira — sem essa distinção, todo fato sem ticker
+próprio teria peso zero e nunca passaria pelo piso, não importa a severidade.
+
+A anotação de `runner.executar` é calculada **antes** do envio (`persistir` grava o
+resultado; só depois `scripts/analisar.py` fala com o Telegram), então o item que acabou
+de sair ainda apareceria sem o selo se nada mais fosse feito — até a próxima execução
+recalcular por cima. `_registrar_envio` cobre essa lacuna: depois de gravar o estado,
+chama `runner.reanotar_envio` de novo sobre o mesmo `registro` e, quando a chamada não é
+`--nao-salvar`, `runner.regravar_anotacao` regrava `last_analysis.json` e o arquivo do dia
+— sem contar como uma nova execução (não toca `execucoes.json`). É esse arquivo que
+`GET /api/analise` serve; sem essa segunda gravação, o botão "Enviar ao Telegram" da tela
+de Configurações mandaria a mensagem, mas o selo só chegaria na Visão geral na análise
+seguinte.
 
 **Selic, CDI e IPCA são a única comparação com o passado.** Eles mudam poucas vezes por
 ano e a mudança reprecifica a carteira inteira, então a mudança **é** a notícia. O valor

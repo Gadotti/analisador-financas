@@ -239,14 +239,25 @@ def telegram_resumo(selecao: dict) -> str:
     return _juntar_no_limite(linhas, RODAPE_RESUMO)
 
 
+def _linha_em_curso(total: int, pendentes: int) -> str:
+    """Deixa claro se a fila está parada por dedução ou por falta de espaço.
+
+    Sem essa distinção, "N alerta(s) em curso" parece sempre uma fila que
+    poderia ter sido enviada e não foi — na maioria dos dias é só o alerta
+    ainda verdadeiro não se repetindo de propósito. `pendentes` é o que de
+    fato nunca saiu numa mensagem, e tende a diminuir a cada rodada.
+    """
+    complemento = f", {pendentes} deles ainda não enviado(s)" if pendentes else ""
+    return f"⚠️ <i>{total} alerta(s) em curso{complemento} — veja o detalhe na interface.</i>"
+
+
 def _linhas_de_fecho(selecao: dict) -> list[str]:
     """O que vem depois dos itens: alertas em curso, semanal, resumo e herança."""
     linhas = []
     if selecao["alertas_em_curso"]:
         linhas += [
             "",
-            f"⚠️ <i>{selecao['alertas_em_curso']} alerta(s) em curso — "
-            "veja o detalhe na interface.</i>",
+            _linha_em_curso(selecao["alertas_em_curso"], selecao.get("alertas_pendentes", 0)),
         ]
     if selecao.get("semanal"):
         linhas += _linhas_semanal(selecao["semanal"])

@@ -36,6 +36,7 @@ const CAMINHOS = {
     '<path d="M3.5 4.5h13v12h-13z"></path><path d="M3.5 7.8h13M6.8 2.8v3M13.2 2.8v3"></path>',
   copiar:
     '<path d="M7.5 7.5h9v9h-9z"></path><path d="M4.5 12.5h-1v-9h9v1"></path>',
+  enviado: '<path d="M4.2 10.3l3.6 3.6L15.8 5.3"></path>',
 };
 
 /** SVG do ícone, pronto para injetar como HTML. */

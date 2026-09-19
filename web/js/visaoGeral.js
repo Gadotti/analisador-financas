@@ -237,7 +237,7 @@ export function renderRiscos(snapshot, ia) {
     partes.push(
       '<div class="alertas">' +
         snapshot.alertas
-          .map((a) => cartaoAlertaRecolhido(a.severidade, esc(a.titulo), esc(a.descricao)))
+          .map((a) => cartaoAlertaRecolhido(a.severidade, esc(a.titulo), esc(a.descricao), "", a.enviado_telegram))
           .join("") +
         "</div>"
     );
@@ -253,7 +253,8 @@ export function renderRiscos(snapshot, ia) {
               r.severidade,
               `<span class="ordem">${i + 1}</span> ${esc(r.titulo)}`,
               esc(r.descricao),
-              r.ativos?.length ? esc(r.ativos.join(", ")) : ""
+              r.ativos?.length ? esc(r.ativos.join(", ")) : "",
+              r.enviado_telegram
             )
           )
           .join("") +

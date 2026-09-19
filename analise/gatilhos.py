@@ -13,13 +13,21 @@ quem formata é `analise.mensagem`. Aqui não se escreve HTML.
 Nada neste módulo lê disco, rede ou histórico: os itens saem do snapshot desta
 execução e dos limiares do cadastro. A exceção é `_macro`, que compara três
 indicadores com a leitura anterior — ver `relevancia.macro_comparavel`.
+
+Os blocos `alertas`, `riscos_ia` e `fatos_ia` recebem em `ctx["estado_envio"]`
+o que já foi enviado (injetado por `relevancia`, nunca lido do disco aqui) e
+filtram por ele **antes** do corte por `max` do próprio bloco — é o que faz um
+achado que nunca coube no teto subir para a mensagem seguinte assim que o de
+cima é marcado como enviado, em vez de ficar esquecido atrás dele para sempre.
+Cada item carrega `chave_envio`, o hash do texto cru de origem
+(`analise.estado_envio`, puro — sem I/O), usado depois para gravar o que saiu.
 """
 
 from __future__ import annotations
 
 from datetime import date
 
-from . import formato, portfolio
+from . import estado_envio, formato, portfolio
 from .formato import SEV_ICONE, moeda
 
 # Indicadores macro comparados com a execução anterior, na ordem em que saem.
@@ -74,12 +82,16 @@ def _item(
     *,
     severidade: str = "info",
     peso_pct: float = 0.0,
+    chave_envio: str | None = None,
 ) -> dict:
     """Um item da mensagem, ainda sem HTML: quem formata é `analise.mensagem`.
 
     A relevância é multiplicativa de propósito — um fato grave sobre 2% da
     carteira não pesa como o mesmo fato sobre 30%. O peso do bloco entra
     depois, em `pontuar`, para que todos fiquem visíveis numa tabela só.
+
+    `chave_envio` só existe nos blocos deduplicados (`estado_envio.BLOCOS`);
+    nos demais fica `None` e `relevancia` não tenta filtrar por ele.
     """
     return {
         "bloco": bloco,
@@ -88,6 +100,7 @@ def _item(
         "detalhe": detalhe,
         "severidade": severidade,
         "relevancia": PESO_SEVERIDADE.get(severidade, 1.0) * (1 + peso_pct / 100),
+        "chave_envio": chave_envio,
     }
 
 
@@ -276,16 +289,22 @@ def _item_agenda(posicao: dict, icone: str, verbo: str, dias: int, severidade: s
 # ─────────────────────────────────────────────
 
 def _alertas(ctx: dict) -> list[dict]:
-    """Alertas do cálculo que atingem a severidade mínima configurada.
+    """Alertas do cálculo que atingem a severidade mínima e ainda não saíram.
 
-    Os que ficam abaixo do piso não desaparecem: `relevancia._em_curso` os
-    conta numa linha só. Sem histórico não há como saber se um alerta é novo, e
-    repetir o texto inteiro de todos eles todo dia é o que se quer evitar.
+    Os que ficam abaixo do piso, ou fora do teto do bloco, não desaparecem:
+    `relevancia._em_curso` os conta numa linha só. O filtro pelo que já foi
+    enviado acontece **antes** do corte por `max`, de propósito: é o que faz o
+    alerta de baixo, que nunca coube no teto, subir para a mensagem seguinte
+    assim que o de cima é marcado como enviado — sem isso os primeiros da
+    lista venceriam a disputa pelo teto para sempre, e o resto ficaria "em
+    curso" indefinidamente, mesmo sem nunca ter sido mandado.
     """
     cfg = config_do_bloco(ctx["cfg"], "alertas")
+    enviados = set(ctx["estado_envio"].get("alertas") or ())
     escolhidos = [
         a for a in ctx["snapshot"]["alertas"]
         if _passa_severidade(a["severidade"], cfg["severidade_minima"])
+        and estado_envio.hash_alerta(a) not in enviados
     ]
     return [
         _item(
@@ -294,6 +313,7 @@ def _alertas(ctx: dict) -> list[dict]:
             a["titulo"],
             a["descricao"],
             severidade=a["severidade"],
+            chave_envio=estado_envio.hash_alerta(a),
         )
         for a in escolhidos[: int(cfg["max"])]
     ]
@@ -304,15 +324,31 @@ def _alertas(ctx: dict) -> list[dict]:
 # ─────────────────────────────────────────────
 
 def _fatos_ia(ctx: dict) -> list[dict]:
-    """Fatos levantados pela IA, filtrados por severidade e pelo peso do ativo."""
+    """Fatos da IA filtrados por severidade, peso do ativo e o que já foi enviado.
+
+    O piso de peso só vale para um fato sobre um ativo **da carteira**. Um fato
+    setorial ou de mercado comparável (ex.: "Setor de papel", um fundo de fora
+    da carteira citado como referência) não tem peso nenhum a medir — `ativo`
+    nem está em `ctx["pesos"]` — e barrá-lo pelo piso descartaria uma leitura
+    relevante que nunca teve como passar, só porque o campo não é um ticker
+    da carteira.
+
+    O filtro pelo estado de envio acontece antes do corte por `max`, para que
+    um fato ainda não mandado suba na fila assim que o de cima for enviado —
+    ver `_alertas`, que documenta o porquê.
+    """
     cfg = config_do_bloco(ctx["cfg"], "fatos_ia")
     piso = float(cfg["peso_minimo_pct"])
+    enviados = set(ctx["estado_envio"].get("fatos_ia") or ())
     itens = []
     for fato in ctx["ia"].get("fatos") or []:
-        peso = ctx["pesos"].get(fato.get("ativo"), 0.0)
+        ativo = fato.get("ativo")
+        peso = ctx["pesos"].get(ativo, 0.0)
         if not _passa_severidade(fato.get("severidade"), cfg["severidade_minima"]):
             continue
-        if peso < piso:
+        if ativo in ctx["pesos"] and peso < piso:
+            continue
+        if estado_envio.hash_fato(fato) in enviados:
             continue
         itens.append(_item_fato(fato, peso))
     itens.sort(key=lambda i: -i["relevancia"])
@@ -327,15 +363,23 @@ def _item_fato(fato: dict, peso: float) -> dict:
         fato["descricao"],
         severidade=fato.get("severidade", "info"),
         peso_pct=peso,
+        chave_envio=estado_envio.hash_fato(fato),
     )
 
 
 def _riscos_ia(ctx: dict) -> list[dict]:
-    """Riscos da leitura da IA que atingem a severidade mínima configurada."""
+    """Riscos da IA que atingem a severidade mínima e ainda não foram enviados.
+
+    O filtro pelo estado de envio acontece antes do corte por `max` — ver
+    `_alertas`, que documenta o porquê.
+    """
     cfg = config_do_bloco(ctx["cfg"], "riscos_ia")
+    enviados = set(ctx["estado_envio"].get("riscos_ia") or ())
     itens = []
     for risco in ctx["ia"].get("riscos") or []:
         if not _passa_severidade(risco.get("severidade"), cfg["severidade_minima"]):
+            continue
+        if estado_envio.hash_risco(risco) in enviados:
             continue
         ativos = risco.get("ativos") or []
         peso = max((ctx["pesos"].get(a, 0.0) for a in ativos), default=0.0)
@@ -353,6 +397,7 @@ def _item_risco(risco: dict, ativos: list[str], peso: float) -> dict:
         risco["descricao"],
         severidade=risco.get("severidade", "info"),
         peso_pct=peso,
+        chave_envio=estado_envio.hash_risco(risco),
     )
 
 

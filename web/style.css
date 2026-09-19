@@ -398,6 +398,7 @@ a:hover { color: var(--amber-forte); }
 .alerta-recolhivel > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 .alerta-recolhivel[open] > summary { padding-bottom: 4px; }
 .alerta-recolhivel .alerta-titulo { flex: 1; }
+.alerta-enviado { flex-shrink: 0; margin-top: 3px; color: var(--t3); display: flex; }
 .alerta-seta { flex-shrink: 0; margin-top: 2px; color: var(--t3); transition: transform 0.15s ease; }
 .alerta-recolhivel[open] .alerta-seta { transform: rotate(180deg); }
 .alerta-corpo { padding: 0 13px 12px 42px; }

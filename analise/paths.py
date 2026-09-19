@@ -31,6 +31,11 @@ def last_analysis_file() -> Path:
     return data_dir() / "last_analysis.json"
 
 
+def telegram_enviados_file() -> Path:
+    """Estado de deduplicação do Telegram — ver `analise.estado_envio`."""
+    return data_dir() / "telegram_enviados.json"
+
+
 def execucoes_file() -> Path:
     """Log de execuções. Ao contrário do arquivo do dia, nunca é sobrescrito:
     cada rodada acrescenta uma linha, e por isso uma falha continua visível

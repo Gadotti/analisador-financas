@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from analise import gatilhos, mensagem, portfolio, relevancia
+from analise import estado_envio, gatilhos, mensagem, portfolio, relevancia
 
 # 08/09/2026 é uma terça; 11/09/2026 é a sexta da mesma semana.
 TERCA = date(2026, 9, 8)
@@ -222,6 +222,32 @@ def test_fato_de_ativo_leve_nao_passa_o_piso_de_peso(calmo, ia_exemplo):
     assert titulos_de(barrado, "fatos_ia") == []
 
 
+def test_fato_setorial_sem_peso_no_ativo_nao_e_barrado_pelo_piso(calmo, ia_exemplo):
+    """Um fato sobre algo fora da carteira (setor, fundo comparável) não tem
+    peso a medir — barrá-lo pelo piso descartaria uma leitura relevante que
+    nunca teve como passar, só por o campo não ser um ticker da carteira."""
+    ia_exemplo["fatos"][0].update({
+        "ativo": "Setor de papel (referência de mercado)",
+        "severidade": "atencao",
+    })
+
+    selecao = selecionar(calmo, ia=ia_exemplo, config=cfg(fatos_ia={"peso_minimo_pct": 50.0}))
+
+    assert titulos_de(selecao, "fatos_ia") == [
+        "[Setor de papel (referência de mercado)] Distribuição mantida"
+    ]
+
+
+def test_fato_de_ativo_real_com_peso_baixo_continua_barrado(calmo, ia_exemplo):
+    """O piso de peso continua valendo quando o ativo está de fato na carteira."""
+    ia_exemplo["fatos"][0]["severidade"] = "atencao"
+    calmo["posicoes"][0]["peso_pct"] = 1.0
+
+    selecao = selecionar(calmo, ia=ia_exemplo, config=cfg(fatos_ia={"peso_minimo_pct": 5.0}))
+
+    assert titulos_de(selecao, "fatos_ia") == []
+
+
 def test_fato_informativo_nao_passa_o_piso_de_severidade(calmo, ia_exemplo):
     selecao = selecionar(calmo, ia=ia_exemplo, config=cfg(fatos_ia={"severidade_minima": "atencao"}))
 
@@ -232,6 +258,121 @@ def test_risco_entra_com_os_ativos_no_titulo(calmo, ia_exemplo):
     selecao = selecionar(calmo, ia=ia_exemplo, config=cfg(riscos_ia={"severidade_minima": "info"}))
 
     assert titulos_de(selecao, "riscos_ia") == ["Concentração em um único FII (MXRF11)"]
+
+
+# ─────────────────────────────────────────────
+# Deduplicação: não repetir um achado inalterado
+# ─────────────────────────────────────────────
+
+def test_alerta_ja_enviado_some_da_selecao_mas_conta_em_curso(snapshot_exemplo):
+    alerta = snapshot_exemplo["alertas"][0]
+    estado = {"alertas": [estado_envio.hash_alerta(alerta)], "riscos_ia": [], "fatos_ia": []}
+
+    selecao = selecionar(snapshot_exemplo, estado_envio=estado)
+
+    assert titulos_de(selecao, "alertas") == []
+    assert selecao["alertas_em_curso"] == 1
+
+
+def test_alerta_com_texto_novo_volta_a_ser_enviado(snapshot_exemplo):
+    alerta = snapshot_exemplo["alertas"][0]
+    estado = {"alertas": [estado_envio.hash_alerta(alerta)], "riscos_ia": [], "fatos_ia": []}
+    alerta["descricao"] = "A posicao subiu para 60% da carteira."
+
+    selecao = selecionar(snapshot_exemplo, estado_envio=estado)
+
+    assert titulos_de(selecao, "alertas") == [alerta["titulo"]]
+
+
+def test_risco_e_fato_ja_enviados_nao_repetem(calmo, ia_exemplo):
+    estado = {
+        "alertas": [],
+        "riscos_ia": [estado_envio.hash_risco(ia_exemplo["riscos"][0])],
+        "fatos_ia": [estado_envio.hash_fato(ia_exemplo["fatos"][0])],
+    }
+
+    selecao = selecionar(
+        calmo, ia=ia_exemplo, config=cfg(riscos_ia={"severidade_minima": "info"}),
+        estado_envio=estado,
+    )
+
+    assert titulos_de(selecao, "riscos_ia") == []
+    assert titulos_de(selecao, "fatos_ia") == []
+
+
+def test_sem_estado_envio_a_selecao_funciona_como_antes(snapshot_exemplo):
+    """`estado_envio` é opcional — quem não o passa não perde nenhum item."""
+    assert titulos_de(selecionar(snapshot_exemplo), "alertas") != []
+
+
+def test_alerta_fora_do_teto_sobe_quando_o_de_cima_ja_foi_enviado(snapshot_exemplo):
+    """Sem isso o primeiro alerta venceria a disputa pelo teto para sempre, e o
+    segundo ficaria "em curso" mesmo sem nunca ter sido enviado."""
+    primeiro = snapshot_exemplo["alertas"][0]
+    segundo = {**primeiro, "titulo": "Concentracao em CDB Inter: 45.5%",
+               "descricao": "Outra posicao.", "alvo": "CDB Inter"}
+    snapshot_exemplo["alertas"] = [primeiro, segundo]
+    estado = {"alertas": [estado_envio.hash_alerta(primeiro)], "riscos_ia": [], "fatos_ia": []}
+
+    selecao = selecionar(snapshot_exemplo, config=cfg(alertas={"max": 1}), estado_envio=estado)
+
+    assert titulos_de(selecao, "alertas") == [segundo["titulo"]]
+    assert selecao["alertas_em_curso"] == 1
+
+
+def test_risco_fora_do_teto_sobe_quando_o_de_cima_ja_foi_enviado(calmo, ia_exemplo):
+    primeiro = ia_exemplo["riscos"][0]
+    segundo = {**primeiro, "titulo": "Concentração setorial em recebíveis"}
+    ia_exemplo["riscos"] = [primeiro, segundo]
+    estado = {"alertas": [], "riscos_ia": [estado_envio.hash_risco(primeiro)], "fatos_ia": []}
+
+    selecao = selecionar(
+        calmo, ia=ia_exemplo,
+        config=cfg(riscos_ia={"severidade_minima": "info", "max": 1}),
+        estado_envio=estado,
+    )
+
+    assert titulos_de(selecao, "riscos_ia") == [f"{segundo['titulo']} (MXRF11)"]
+
+
+def test_alerta_ja_enviado_nao_conta_como_pendente(snapshot_exemplo):
+    """Sem essa distinção, "1 alerta em curso" parece uma fila parada quando na
+    verdade é só o alerta ainda verdadeiro não se repetindo, de propósito."""
+    alerta = snapshot_exemplo["alertas"][0]
+    estado = {"alertas": [estado_envio.hash_alerta(alerta)], "riscos_ia": [], "fatos_ia": []}
+
+    selecao = selecionar(snapshot_exemplo, estado_envio=estado)
+
+    assert selecao["alertas_em_curso"] == 1
+    assert selecao["alertas_pendentes"] == 0
+    assert "ainda não enviado" not in mensagem.telegram_resumo(selecao)
+
+
+def test_alerta_nunca_enviado_cortado_pelo_orcamento_conta_como_pendente(snapshot_exemplo):
+    segundo = {
+        **snapshot_exemplo["alertas"][0],
+        "titulo": "Concentracao em CDB Inter: 45.5%",
+        "descricao": "Outra posicao.",
+        "alvo": "CDB Inter",
+    }
+    snapshot_exemplo["alertas"].append(segundo)
+
+    selecao = selecionar(snapshot_exemplo, config=cfg(max_itens=0))
+
+    assert selecao["alertas_em_curso"] == 2
+    assert selecao["alertas_pendentes"] == 2
+    assert "2 deles ainda não enviado(s)" in mensagem.telegram_resumo(selecao)
+
+
+def test_fato_fora_do_teto_sobe_quando_o_de_cima_ja_foi_enviado(calmo, ia_exemplo):
+    primeiro = {**ia_exemplo["fatos"][0], "severidade": "atencao"}
+    segundo = {**primeiro, "titulo": "Novo comunicado ao mercado"}
+    ia_exemplo["fatos"] = [primeiro, segundo]
+    estado = {"alertas": [], "riscos_ia": [], "fatos_ia": [estado_envio.hash_fato(primeiro)]}
+
+    selecao = selecionar(calmo, ia=ia_exemplo, config=cfg(fatos_ia={"max": 1}), estado_envio=estado)
+
+    assert titulos_de(selecao, "fatos_ia") == [f"[{segundo['ativo']}] {segundo['titulo']}"]
 
 
 # ─────────────────────────────────────────────

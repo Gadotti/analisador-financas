@@ -23,12 +23,19 @@ export const cartaoAlerta = (severidade, titulo, descricao, fonte = "") => `
     </div>
   </div>`;
 
+/** Selo discreto: este texto já saiu numa mensagem do Telegram, sem mudar desde então. */
+const seloEnviado = (enviado) =>
+  enviado
+    ? `<span class="alerta-enviado" title="Já enviado ao Telegram, sem mudança desde então">${icone("enviado", 13)}</span>`
+    : "";
+
 /** Recolhido por padrão: só o título aparece até o usuário abrir o cartão. */
-export const cartaoAlertaRecolhido = (severidade, titulo, descricao, fonte = "") => `
+export const cartaoAlertaRecolhido = (severidade, titulo, descricao, fonte = "", enviado = false) => `
   <details class="alerta alerta-recolhivel alerta-${severidade || "info"}">
     <summary>
       <span class="alerta-icone">${iconeSeveridade(severidade)}</span>
       <span class="alerta-titulo">${titulo}</span>
+      ${seloEnviado(enviado)}
       <span class="alerta-seta">${icone("seta", 16)}</span>
     </summary>
     <div class="alerta-corpo">${corpo(descricao, fonte)}</div>
@@ -44,7 +51,8 @@ export function listaAlertas(titulo, itens, comAtivo = false) {
         i.severidade,
         comAtivo && i.ativo ? `[${esc(i.ativo)}] ${esc(i.titulo)}` : esc(i.titulo),
         esc(i.descricao),
-        i.fonte ? `Fonte: ${esc(i.fonte)}` : rotuloAtivos(i)
+        i.fonte ? `Fonte: ${esc(i.fonte)}` : rotuloAtivos(i),
+        i.enviado_telegram
       )
     )
     .join("");

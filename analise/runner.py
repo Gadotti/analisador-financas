@@ -11,7 +11,7 @@ import json
 import time
 from datetime import date, datetime
 
-from . import ai_insights, analysis, config_ia, fundamentals, gatilhos, portfolio, relevancia
+from . import ai_insights, analysis, config_ia, estado_envio, fundamentals, gatilhos, portfolio, relevancia
 from .paths import execucoes_file, garantir_diretorios, history_dir, last_analysis_file
 
 # Teto do log de execuções quando o cadastro não o declara. O valor real vem de
@@ -61,6 +61,7 @@ def executar(
 
     # Métricas derivadas das fichas: aritmética local, não estimativa do modelo.
     resultado["fundamentos"] = fundamentals.consolidar(snapshot, resultado["ia"])
+    reanotar_envio(resultado)
     resultado["duracao_s"] = round(time.monotonic() - inicio, 1)
 
     if salvar:
@@ -156,6 +157,43 @@ def _reaproveitar_ia(resultado: dict, anterior: dict | None) -> None:
         return
     resultado["ia"] = ia
     resultado["ia_reaproveitada_de"] = (ia.get("_meta") or {}).get("gerado_em")
+
+
+def reanotar_envio(resultado: dict) -> None:
+    """Anota `enviado_telegram` em alertas, riscos e fatos, para a Visão geral.
+
+    Só leitura do estado de deduplicação: quem o grava é `scripts/analisar.py`,
+    depois de um envio de verdade. `executar` chama isto sempre, mesmo numa
+    execução que nunca fala com o Telegram — é o que mantém a tela em dia.
+
+    `scripts/analisar.py` chama de novo, sobre o mesmo `resultado`, logo depois
+    de um envio bem-sucedido: sem isso, o item que acabou de ser mandado só
+    apareceria marcado na tela na próxima execução, porque a anotação de agora
+    foi calculada *antes* do envio (`executar` grava e só então o script fala
+    com o Telegram).
+    """
+    estado = estado_envio.ler()
+    snapshot, ia = resultado["snapshot"], resultado.get("ia")
+    snapshot["alertas"] = estado_envio.marcar(snapshot["alertas"], "alertas", estado)
+    if ia:
+        ia["riscos"] = estado_envio.marcar(ia.get("riscos") or [], "riscos_ia", estado)
+        ia["fatos"] = estado_envio.marcar(ia.get("fatos") or [], "fatos_ia", estado)
+
+
+def regravar_anotacao(registro: dict) -> None:
+    """Regrava `last_analysis.json` e o arquivo do dia só com a anotação corrigida.
+
+    Não conta como uma nova execução — não toca `execucoes.json`. Único uso:
+    depois de `reanotar_envio`, para o selo "enviado" não esperar a próxima
+    rodada. Não chame isto sob `--nao-salvar`: sobrescreveria com um resultado
+    que o próprio comando pediu para não gravar.
+    """
+    garantir_diretorios()
+    with open(last_analysis_file(), "w", encoding="utf-8") as f:
+        json.dump(registro, f, ensure_ascii=False, indent=2)
+    arquivo = history_dir() / f"{registro['snapshot']['data']}.json"
+    with open(arquivo, "w", encoding="utf-8") as f:
+        json.dump(registro, f, ensure_ascii=False, indent=2)
 
 
 def _identificacao_ia(registro: dict, status: str) -> dict:

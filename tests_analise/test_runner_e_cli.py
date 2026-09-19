@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from analise import ai_insights, portfolio, runner
+from analise import ai_insights, estado_envio, portfolio, runner
 from conftest import chart_yahoo
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -206,6 +206,34 @@ def test_nao_salvar_deixa_o_historico_intocado(carteira, mercado):
     assert not (carteira / "last_analysis.json").exists()
     assert list((carteira / "history").glob("*.json")) == []
     assert runner.execucoes() == []
+
+
+# ─────────────────────────────────────────────
+# Deduplicação do Telegram — anotação para a tela
+# ─────────────────────────────────────────────
+
+
+def test_alerta_novo_nao_esta_marcado_como_enviado(carteira, mercado):
+    resultado = runner.executar(usar_ia=False)
+
+    assert resultado["snapshot"]["alertas"][0]["enviado_telegram"] is False
+
+
+def test_alerta_ja_no_estado_de_envio_e_marcado_para_a_tela(carteira, mercado):
+    resultado = runner.executar(usar_ia=False)
+    alerta = resultado["snapshot"]["alertas"][0]
+    estado_envio.gravar({"alertas": [estado_envio.hash_alerta(alerta)], "riscos_ia": [], "fatos_ia": []})
+
+    de_novo = runner.executar(usar_ia=False)
+
+    assert de_novo["snapshot"]["alertas"][0]["enviado_telegram"] is True
+
+
+def test_riscos_e_fatos_da_ia_tambem_recebem_a_anotacao(carteira, mercado, ia_exemplo):
+    resultado = runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+
+    assert resultado["ia"]["riscos"][0]["enviado_telegram"] is False
+    assert resultado["ia"]["fatos"][0]["enviado_telegram"] is False
 
 
 # ─────────────────────────────────────────────
@@ -430,6 +458,150 @@ def test_enviar_ultima_exige_analise_anterior(dados_temp):
     assert codigo == 1
     assert json.loads(out.getvalue())["erro"].startswith("Rode uma análise antes")
     assert "[ERRO]" in err.getvalue()
+
+
+# ─────────────────────────────────────────────
+# Deduplicação: um alerta enviado não se repete no próximo envio
+# ─────────────────────────────────────────────
+
+
+def test_registrar_envio_evita_repetir_o_mesmo_alerta(carteira, mercado):
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+
+    primeiro = cli.mensagem_do_telegram(resultado, completo=False)
+    assert any(i["bloco"] == "alertas" for i in primeiro["itens"])
+
+    cli._registrar_envio(resultado, primeiro["itens"])
+    segundo = cli.mensagem_do_telegram(resultado, completo=False)
+
+    assert not any(i["bloco"] == "alertas" for i in segundo["itens"])
+
+
+def test_alerta_com_texto_novo_volta_a_valer_como_novo(carteira, mercado):
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+    primeiro = cli.mensagem_do_telegram(resultado, completo=False)
+    cli._registrar_envio(resultado, primeiro["itens"])
+
+    resultado["snapshot"]["alertas"][0]["descricao"] = "A posicao subiu para 60% da carteira."
+
+    terceiro = cli.mensagem_do_telegram(resultado, completo=False)
+
+    assert any(i["bloco"] == "alertas" for i in terceiro["itens"])
+
+
+def test_registrar_envio_poda_o_que_sumiu_da_leitura(carteira, mercado):
+    """Sem a poda o arquivo viraria um histórico — nunca é o que se quer."""
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+    primeiro = cli.mensagem_do_telegram(resultado, completo=False)
+    cli._registrar_envio(resultado, primeiro["itens"])
+    assert estado_envio.ler()["alertas"]
+
+    resultado["snapshot"]["alertas"] = []
+    cli._registrar_envio(resultado, [])
+
+    assert estado_envio.ler()["alertas"] == []
+
+
+def test_estado_de_envio_nao_cresce_a_cada_mudanca_de_texto(carteira, mercado):
+    """Um alerta cujo texto muda todo dia não pode acumular um hash por dia —
+    isso transformaria o arquivo num histórico, que é exatamente o que a poda
+    existe para evitar."""
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+
+    for pct in range(30, 60):
+        resultado["snapshot"]["alertas"][0]["titulo"] = f"Concentracao em MXRF11: {pct}.0%"
+        resultado["snapshot"]["alertas"][0]["descricao"] = f"A posicao representa {pct}.0%."
+        aviso = cli.mensagem_do_telegram(resultado, completo=False)
+        cli._registrar_envio(resultado, aviso["itens"])
+
+    assert len(estado_envio.ler()["alertas"]) == 1
+
+
+def test_selo_aparece_no_mesmo_resultado_sem_esperar_a_proxima_execucao(carteira, mercado):
+    """Sem `reanotar_envio`, o selo só apareceria na próxima execução: a
+    anotação de `runner.executar` é calculada antes deste envio acontecer."""
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+    assert resultado["snapshot"]["alertas"][0]["enviado_telegram"] is False
+
+    aviso = cli.mensagem_do_telegram(resultado, completo=False)
+    cli._registrar_envio(resultado, aviso["itens"])
+
+    assert resultado["snapshot"]["alertas"][0]["enviado_telegram"] is True
+
+
+def titulos_alertas(aviso: dict) -> list[str]:
+    return [i["titulo"] for i in aviso["itens"] if i["bloco"] == "alertas"]
+
+
+def test_alerta_em_curso_e_enviado_na_rodada_seguinte_em_cascata(carteira, mercado):
+    """Um alerta que ficou de fora pelo teto do bloco (não por duplicidade) tem
+    que subir para a mensagem seguinte assim que o de cima é enviado — rodada
+    a rodada, até esgotar o que existe, sem nunca repetir o que já saiu."""
+    (carteira / "portfolio.json").write_text(
+        json.dumps({**CARTEIRA_UM_FII, "config": {"telegram": {"alertas": {"max": 1}}}}),
+        encoding="utf-8",
+    )
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+    primeiro_alerta = resultado["snapshot"]["alertas"][0]
+    segundo_alerta = {
+        **primeiro_alerta,
+        "titulo": "Concentracao em CDB Inter: 45.5%",
+        "descricao": "Outra posicao.",
+        "alvo": "CDB Inter",
+    }
+    resultado["snapshot"]["alertas"].append(segundo_alerta)
+
+    primeira = cli.mensagem_do_telegram(resultado, completo=False)
+    assert titulos_alertas(primeira) == [primeiro_alerta["titulo"]]
+    cli._registrar_envio(resultado, primeira["itens"])
+
+    segunda = cli.mensagem_do_telegram(resultado, completo=False)
+    assert titulos_alertas(segunda) == [segundo_alerta["titulo"]]
+    cli._registrar_envio(resultado, segunda["itens"])
+
+    terceira = cli.mensagem_do_telegram(resultado, completo=False)
+    assert titulos_alertas(terceira) == []
+
+
+def test_selo_e_regravado_no_last_analysis_apos_o_envio(carteira, mercado):
+    """A Visão geral lê o arquivo, não o processo em memória — sem regravar,
+    ela só veria o selo depois da próxima análise."""
+    cli = importar_cli()
+    resultado = runner.executar(usar_ia=False)
+    aviso = cli.mensagem_do_telegram(resultado, completo=False)
+
+    cli._registrar_envio(resultado, aviso["itens"])
+
+    persistido = runner.ultima_analise()
+    assert persistido["snapshot"]["alertas"][0]["enviado_telegram"] is True
+
+
+def test_registrar_envio_com_nao_salvar_nao_toca_o_arquivo_persistido(carteira, mercado):
+    """`--nao-salvar` não pode ser burlado por um envio bem-sucedido."""
+    runner.executar(usar_ia=False)  # persiste normalmente
+    persistido_antes = runner.ultima_analise()
+
+    cli = importar_cli()
+    aviso = cli.mensagem_do_telegram(persistido_antes, completo=False)
+    cli._registrar_envio(persistido_antes, aviso["itens"], persistir=False)
+
+    assert runner.ultima_analise()["snapshot"]["alertas"][0]["enviado_telegram"] is False
+
+
+def test_relatorio_completo_nao_participa_da_deduplicacao(carteira, mercado, ia_exemplo):
+    cli = importar_cli()
+    resultado = runner.executar(analisar_com_ia=lambda *_: ia_exemplo)
+
+    aviso = cli.mensagem_do_telegram(resultado, completo=True)
+
+    assert aviso["itens"] == []
+    assert aviso["modo"] == "completo"
 
 
 # ─────────────────────────────────────────────

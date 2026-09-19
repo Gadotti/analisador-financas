@@ -54,6 +54,7 @@ except ImportError:
 
 from analise import (  # noqa: E402
     ai_insights,
+    estado_envio,
     mensagem,
     notifier,
     portfolio,
@@ -67,9 +68,11 @@ def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
     """A mensagem a enviar: texto e se vale enviá-la.
 
     Por padrão é a mensagem curta, montada pela seleção de
-    `analise.relevancia` sobre a configuração do cadastro. `--completo` devolve
-    o relatório inteiro de sempre, que continua servindo ao envio sob demanda —
-    e esse nunca é descartado, porque foi pedido de propósito.
+    `analise.relevancia` sobre a configuração do cadastro e sobre o que já foi
+    enviado antes (`analise.estado_envio`), para não repetir um achado
+    inalterado. `--completo` devolve o relatório inteiro de sempre, que
+    continua servindo ao envio sob demanda, fora da deduplicação — e esse
+    nunca é descartado, porque foi pedido de propósito.
     """
     snapshot, ia = registro["snapshot"], registro.get("ia")
     fundamentos = registro.get("fundamentos")
@@ -78,6 +81,7 @@ def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
             "texto": mensagem.telegram(snapshot, ia, fundamentos),
             "vale_enviar": True,
             "modo": "completo",
+            "itens": [],
         }
 
     selecao = relevancia.selecionar(
@@ -86,12 +90,45 @@ def mensagem_do_telegram(registro: dict, *, completo: bool) -> dict:
         fundamentos,
         portfolio.load()["config"],
         macro_anterior=registro.get("macro_anterior"),
+        estado_envio=estado_envio.ler(),
     )
     return {
         "texto": mensagem.telegram_resumo(selecao),
         "vale_enviar": selecao["vale_enviar"],
         "modo": selecao["modo"],
+        "itens": selecao["itens"],
     }
+
+
+def _registrar_envio(registro: dict, itens_enviados: list[dict], *, persistir: bool = True) -> None:
+    """Poda o estado de deduplicação e registra o que acabou de sair.
+
+    Só é chamada depois de `notifier.enviar` ter sucesso na mensagem curta —
+    o relatório completo (`--completo`) não participa da deduplicação.
+
+    Também atualiza `enviado_telegram` no `registro` e, quando `persistir` (o
+    inverso de `--nao-salvar`), regrava os arquivos já persistidos — sem essa
+    segunda gravação, o selo do que acabou de ser enviado só apareceria na
+    Visão geral depois da próxima execução, porque `runner.executar` anota
+    *antes* deste envio acontecer.
+    """
+    snapshot, ia = registro["snapshot"], registro.get("ia") or {}
+    pool = {
+        "alertas": snapshot["alertas"],
+        "riscos_ia": ia.get("riscos") or [],
+        "fatos_ia": ia.get("fatos") or [],
+    }
+    estado = estado_envio.podar(estado_envio.ler(), pool)
+    chaves_por_bloco: dict[str, list[str]] = {}
+    for item in itens_enviados:
+        chave = item.get("chave_envio")
+        if chave:
+            chaves_por_bloco.setdefault(item["bloco"], []).append(chave)
+    estado_envio.gravar(estado_envio.registrar_envio(estado, chaves_por_bloco))
+
+    runner.reanotar_envio(registro)
+    if persistir:
+        runner.regravar_anotacao(registro)
 
 
 def montar_parser() -> argparse.ArgumentParser:
@@ -201,6 +238,8 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
             log(f"[ERRO] {exc}")
             resposta_json({"erro": str(exc)})
             return 1
+        if aviso["modo"] != "completo":
+            _registrar_envio(ultima, aviso["itens"])
         log("[OK] Última análise enviada ao Telegram.")
         resposta_json({"ok": True, "modo": aviso["modo"]})
         return 0
@@ -246,6 +285,9 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
             except Exception as exc:
                 log(f"      [ERRO] {exc}")
                 codigo = 1
+            else:
+                if aviso["modo"] != "completo":
+                    _registrar_envio(resultado, aviso["itens"], persistir=not args.nao_salvar)
     else:
         log("[3/3] Envio ao Telegram não solicitado (use --telegram).")
 

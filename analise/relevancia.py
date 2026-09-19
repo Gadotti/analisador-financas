@@ -15,6 +15,14 @@ A única comparação com o passado é a dos indicadores macro, pedida
 explicitamente: CDI, Selic meta e IPCA 12m mudam raramente e a mudança é a
 notícia. O valor anterior vem de `runner`, que já abre a análise anterior por
 outro motivo — nenhum arquivo novo, nenhuma leitura a mais.
+
+A segunda exceção é `estado_envio`, injetado como argumento — nunca lido do
+disco por este módulo. É o que impede um alerta, risco ou fato de se repetir
+palavra por palavra de um dia para o outro: cada bloco deduplicado filtra por
+ele antes do próprio corte por `max` (ver `gatilhos._alertas`), o que faz um
+achado que nunca coube no teto subir para a mensagem seguinte assim que o de
+cima é marcado como enviado — em vez de ficar represado atrás dele para
+sempre.
 """
 
 from __future__ import annotations
@@ -22,6 +30,7 @@ from __future__ import annotations
 from datetime import date
 
 from . import gatilhos, portfolio
+from .estado_envio import hash_alerta
 from .gatilhos import BLOCOS, MACRO_COMPARADO, ORDEM_BLOCO, config_do_bloco
 
 DIA_SEMANA = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
@@ -48,10 +57,23 @@ def _estado(snapshot: dict) -> dict:
     }
 
 
-def _em_curso(snapshot: dict, escolhidos: list[dict]) -> int:
-    """Alertas que existem mas não entraram — nem por severidade, nem por espaço."""
-    publicados = sum(1 for i in escolhidos if i["bloco"] == "alertas")
-    return max(len(snapshot["alertas"]) - publicados, 0)
+def _em_curso(snapshot: dict, escolhidos: list[dict], estado_envio: dict) -> dict:
+    """Alertas que existem mas não entraram, separados em duas razões.
+
+    `total` é o que a mensagem sempre mostrou: quantos alertas não couberam,
+    nem por severidade, nem por espaço, nem por já terem sido comunicados sem
+    mudar — a maioria dos dias é esse último caso, porque o alerta continua
+    verdadeiro mas não se repete de propósito. `pendentes` é o subconjunto que
+    **nunca** saiu numa mensagem: o que `gatilhos._alertas` promove para a
+    próxima rodada assim que houver espaço. Separar os dois evita que "3
+    alerta(s) em curso" pareça uma fila parada quando na verdade só está
+    represada pela dedução, não pelo teto.
+    """
+    publicados = {i["chave_envio"] for i in escolhidos if i["bloco"] == "alertas"}
+    fora = [a for a in snapshot["alertas"] if hash_alerta(a) not in publicados]
+    ja_enviados = set(estado_envio.get("alertas") or ())
+    pendentes = sum(1 for a in fora if hash_alerta(a) not in ja_enviados)
+    return {"total": len(fora), "pendentes": pendentes}
 
 
 def _resumo_ia(ctx: dict) -> str | None:
@@ -143,7 +165,7 @@ def _no_orcamento(itens: list[dict], max_itens: int) -> list[dict]:
     return escolhidos
 
 
-def _contexto(snapshot, ia, fundamentos, config, hoje, macro_anterior) -> dict:
+def _contexto(snapshot, ia, fundamentos, config, hoje, macro_anterior, estado_envio) -> dict:
     """O que todo bloco precisa ver, montado uma vez por execução."""
     return {
         "snapshot": snapshot,
@@ -152,6 +174,7 @@ def _contexto(snapshot, ia, fundamentos, config, hoje, macro_anterior) -> dict:
         "cfg": portfolio.telegram_do_cadastro((config or {}).get("telegram")),
         "hoje": hoje or date.today(),
         "macro_anterior": macro_anterior or {},
+        "estado_envio": estado_envio or {},
         # Peso de cada ticker, para ponderar o que a IA escreveu sobre ele.
         "pesos": {p["ticker"]: p["peso_pct"] for p in snapshot["posicoes"] if p.get("ticker")},
     }
@@ -174,17 +197,20 @@ def selecionar(
     *,
     hoje: date | None = None,
     macro_anterior: dict | None = None,
+    estado_envio: dict | None = None,
 ) -> dict:
-    """Monta a seleção do dia. `hoje` é injetável para os testes."""
-    ctx = _contexto(snapshot, ia, fundamentos, config, hoje, macro_anterior)
+    """Monta a seleção do dia. `hoje` e `estado_envio` são injetáveis para os testes."""
+    ctx = _contexto(snapshot, ia, fundamentos, config, hoje, macro_anterior, estado_envio)
     cfg = ctx["cfg"]
     escolhidos = _no_orcamento(_itens_dos_blocos(ctx), int(cfg["max_itens"]))
+    em_curso = _em_curso(snapshot, escolhidos, ctx["estado_envio"])
 
     return {
         "modo": "nada_novo" if not escolhidos else "resumo",
         "itens": escolhidos,
         "estado": _estado(snapshot),
-        "alertas_em_curso": _em_curso(snapshot, escolhidos),
+        "alertas_em_curso": em_curso["total"],
+        "alertas_pendentes": em_curso["pendentes"],
         "resumo_ia": _resumo_ia(ctx),
         "semanal": _semanal(ctx),
         "data": snapshot["data"],
