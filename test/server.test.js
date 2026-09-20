@@ -107,6 +107,19 @@ function servicosFalsos() {
       if (estado.erroSalvarAmbiente) throw estado.erroSalvarAmbiente;
       return estado.ambiente;
     },
+    verificarAtualizacao() {
+      estado.chamadas.push(["verificar-atualizacao"]);
+      return Promise.resolve(
+        estado.atualizacao || {
+          versao_atual: VERSAO,
+          versao_disponivel: VERSAO,
+          disponivel: false,
+          url: null,
+          publicado_em: null,
+          erro: null,
+        }
+      );
+    },
   };
 }
 
@@ -177,6 +190,7 @@ beforeEach(() => {
   servicos.estado.ambiente = ambientePainelExemplo();
   servicos.estado.erroSalvarAmbiente = null;
   servicos.estado.erroTestarIa = null;
+  servicos.estado.atualizacao = null;
   limitadorLogin.reiniciar();
 });
 
@@ -234,6 +248,7 @@ describe("autenticação", () => {
     ["/api/historico"],
     ["/api/status"],
     ["/api/ambiente"],
+    ["/api/atualizacao"],
     ["/api/backup"],
   ])("GET %s sem sessão responde 401", async (caminho) => {
     const { status, corpo } = await pedirSemAuth(caminho);
@@ -375,6 +390,19 @@ describe("GET /api", () => {
       provedor: "anthropic",
       versao: VERSAO,
     });
+  });
+
+  test("informa quando há uma versão nova publicada", async () => {
+    servicos.estado.atualizacao = {
+      versao_atual: VERSAO,
+      versao_disponivel: "99.0.0",
+      disponivel: true,
+      url: "https://github.com/Gadotti/analisador-financas/releases/tag/v99.0.0",
+      publicado_em: "2026-09-01T00:00:00Z",
+      erro: null,
+    };
+    const { corpo } = await pedir("/api/atualizacao");
+    expect(corpo).toEqual(servicos.estado.atualizacao);
   });
 
   test("responde 404 em rota desconhecida", async () => {

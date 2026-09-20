@@ -133,6 +133,15 @@ a:hover { color: var(--amber-forte); }
   border-top: 1px solid var(--borda);
 }
 
+/* ── Aviso de nova versão ──────────────── */
+
+.banner-versao {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 32px; background: var(--card2); border-bottom: 1px solid var(--borda-forte);
+  border-left: 3px solid var(--amber); font-size: var(--f-apoio); color: var(--t2);
+}
+.banner-versao a { font-weight: 600; }
+
 /* ── Cabeçalho da página ───────────────── */
 
 .topo {

@@ -10,6 +10,7 @@ import { renderAnaliseVazia, renderFichas, renderLeitura } from "./js/analiseIa.
 import { renderAlocacao } from "./js/alocacao.js";
 import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
 import { coletarConfig, ligarAbasConfig, montarTelegram, renderConfig } from "./js/configuracoes.js";
+import { renderAtualizacao } from "./js/atualizacao.js";
 import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
@@ -281,6 +282,15 @@ async function aplicarStatus() {
   }
 }
 
+/** Barra de aviso de nova versão; uma falha aqui nunca deve travar a tela. */
+async function verificarAtualizacao() {
+  try {
+    renderAtualizacao(await api("/api/atualizacao"));
+  } catch {
+    // a checagem de atualização não é crítica: a interface segue normalmente.
+  }
+}
+
 // ── Inicialização ──────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -313,4 +323,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (erro) {
     toast("Falha ao carregar: " + erro.message, "erro", 9000);
   }
+  await verificarAtualizacao();
 });

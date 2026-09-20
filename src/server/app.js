@@ -21,6 +21,7 @@ import { hoje, paraISO } from "../util/datas.js";
 import { VERSAO } from "../../version.js";
 import * as ambiente from "./ambiente.js";
 import * as analiseExterna from "./analiseExterna.js";
+import * as atualizacao from "./atualizacao.js";
 import { criarBackupZip } from "./backup.js";
 import { cookieLogout, cookieSessao, tokenDaRequisicao } from "./cookies.js";
 import * as limitadorLogin from "./limitadorLogin.js";
@@ -48,6 +49,7 @@ const SERVICOS_PADRAO = {
   provedorIa: ambiente.provedorIa,
   lerAmbiente: envPainel.lerPainelEnv,
   salvarAmbiente: envPainel.salvarPainelEnv,
+  verificarAtualizacao: atualizacao.consultarAtualizacao,
 };
 
 function responderJson(res, dados, status = 200) {
@@ -265,6 +267,10 @@ export function criarServidor(servicos = {}) {
         }
         if (rota === "/api/ambiente") {
           responderJson(res, svc.lerAmbiente());
+          return;
+        }
+        if (rota === "/api/atualizacao") {
+          responderJson(res, await svc.verificarAtualizacao());
           return;
         }
         if (rota === "/api/backup") {
