@@ -24,6 +24,14 @@ import * as analiseExterna from "./analiseExterna.js";
 import * as atualizacao from "./atualizacao.js";
 import { criarBackupZip } from "./backup.js";
 import { cookieLogout, cookieSessao, tokenDaRequisicao } from "./cookies.js";
+import {
+  atualizarFase,
+  criarEstadoAnalise,
+  finalizarComErro,
+  finalizarComSucesso,
+  iniciar as iniciarEstadoAnalise,
+  paraApi as estadoAnaliseParaApi,
+} from "./estadoAnalise.js";
 import * as limitadorLogin from "./limitadorLogin.js";
 
 const TIPOS_MIME = {
@@ -182,7 +190,7 @@ export function criarServidor(servicos = {}) {
   const svc = { ...SERVICOS_PADRAO, ...servicos };
 
   // Uma análise por vez: a chamada à IA é cara e demorada.
-  let analiseEmAndamento = false;
+  const estadoAnalise = criarEstadoAnalise();
 
   const servidor = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
@@ -253,6 +261,10 @@ export function criarServidor(servicos = {}) {
           });
           return;
         }
+        if (rota === "/api/analise/status") {
+          responderJson(res, estadoAnaliseParaApi(estadoAnalise));
+          return;
+        }
         if (rota === "/api/status") {
           const { ok, motivo } = svc.statusIa();
           responderJson(res, {
@@ -292,15 +304,21 @@ export function criarServidor(servicos = {}) {
       if (req.method === "POST") {
         if (rota === "/api/analise") {
           const usarIa = url.searchParams.get("ia") !== "0";
-          if (analiseEmAndamento) {
+          if (estadoAnalise.emAndamento) {
             responderErro(res, "Já existe uma análise em andamento.", 409);
             return;
           }
-          analiseEmAndamento = true;
+          iniciarEstadoAnalise(estadoAnalise, { comIa: usarIa });
           try {
-            responderJson(res, await svc.executarAnalise({ usarIa }));
-          } finally {
-            analiseEmAndamento = false;
+            const resultado = await svc.executarAnalise({
+              usarIa,
+              aoRegistrar: (linha) => atualizarFase(estadoAnalise, linha),
+            });
+            finalizarComSucesso(estadoAnalise);
+            responderJson(res, resultado);
+          } catch (erro) {
+            finalizarComErro(estadoAnalise, erro.message);
+            throw erro;
           }
           return;
         }

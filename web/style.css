@@ -142,6 +142,19 @@ a:hover { color: var(--amber-forte); }
 }
 .banner-versao a { font-weight: 600; }
 
+/* ── Andamento da análise (tela Histórico) ─ */
+
+.andamento-analise {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; margin-bottom: 16px; border-radius: 8px;
+  background: var(--card2); border: 1px solid var(--borda-forte);
+  border-left: 3px solid var(--azul); font-size: var(--f-apoio); color: var(--t2);
+}
+.andamento-analise-erro {
+  border-left-color: var(--vermelho);
+}
+.andamento-analise-erro .girando { display: none; }
+
 /* ── Cabeçalho da página ───────────────── */
 
 .topo {

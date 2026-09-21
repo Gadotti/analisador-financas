@@ -246,6 +246,8 @@ def main(argv: list[str] | None = None, *, out=None, err=None) -> int:
 
     inicio = datetime.now()
     log("\n[1/3] Carregando carteira e cotações...")
+    if not args.sem_ia:
+        log("[2/3] Consultando a IA — pode levar alguns minutos...")
 
     resultado = runner.executar(
         usar_ia=not args.sem_ia,

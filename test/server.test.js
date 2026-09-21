@@ -77,7 +77,7 @@ function servicosFalsos() {
     executarAnalise(opcoes) {
       estado.chamadas.push(["analise", opcoes]);
       if (estado.erroAnalise) return Promise.reject(estado.erroAnalise);
-      if (estado.respostaAnalise) return estado.respostaAnalise();
+      if (estado.respostaAnalise) return estado.respostaAnalise(opcoes);
       return Promise.resolve({ snapshot: snapshotExemplo(), ia: null, fundamentos: null });
     },
     enviarUltimaAoTelegram(opcoes) {
@@ -539,12 +539,14 @@ describe("POST /api/analise", () => {
     const { status, corpo } = await pedir("/api/analise", { method: "POST" });
     expect(status).toBe(200);
     expect(corpo.snapshot.data).toBe("2026-09-01");
-    expect(servicos.estado.chamadas[0]).toEqual(["analise", { usarIa: true }]);
+    expect(servicos.estado.chamadas[0][0]).toBe("analise");
+    expect(servicos.estado.chamadas[0][1]).toMatchObject({ usarIa: true });
+    expect(servicos.estado.chamadas[0][1].aoRegistrar).toBeInstanceOf(Function);
   });
 
   test("pula a IA quando ia=0", async () => {
     await pedir("/api/analise?ia=0", { method: "POST" });
-    expect(servicos.estado.chamadas[0]).toEqual(["analise", { usarIa: false }]);
+    expect(servicos.estado.chamadas[0][1]).toMatchObject({ usarIa: false });
   });
 
   test("converte falha do script em 500 com mensagem", async () => {
@@ -570,6 +572,47 @@ describe("POST /api/analise", () => {
 
     liberar();
     expect((await primeira).status).toBe(200);
+  });
+});
+
+describe("GET /api/analise/status", () => {
+  test("mostra em_andamento e a fase relatada pelo stderr do script durante a execução", async () => {
+    let liberar;
+    let aoRegistrar;
+    servicos.estado.respostaAnalise = (opcoes) => {
+      aoRegistrar = opcoes.aoRegistrar;
+      return new Promise((resolve) => {
+        liberar = () => resolve({ snapshot: snapshotExemplo() });
+      });
+    };
+
+    const emAndamento = pedir("/api/analise", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 30));
+    aoRegistrar("[1/3] Carregando carteira e cotações...");
+
+    const { corpo } = await pedir("/api/analise/status");
+    expect(corpo.em_andamento).toBe(true);
+    expect(corpo.com_ia).toBe(true);
+    expect(corpo.fase).toBe("[1/3] Carregando carteira e cotações...");
+    expect(corpo.iniciada_em).not.toBeNull();
+
+    liberar();
+    await emAndamento;
+  });
+
+  test("guarda o erro de uma tentativa que quebrou, até a próxima começar", async () => {
+    servicos.estado.erroAnalise = new Error("A análise excedeu o tempo limite.");
+    await pedir("/api/analise", { method: "POST" });
+
+    const { corpo } = await pedir("/api/analise/status");
+    expect(corpo.em_andamento).toBe(false);
+    expect(corpo.ultimo_erro).toMatch(/tempo limite/);
+    expect(corpo.ultimo_erro_em).not.toBeNull();
+
+    servicos.estado.erroAnalise = null;
+    await pedir("/api/analise", { method: "POST" });
+    const depois = await pedir("/api/analise/status");
+    expect(depois.corpo.ultimo_erro).toBeNull();
   });
 });
 

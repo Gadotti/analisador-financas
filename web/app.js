@@ -14,7 +14,7 @@ import { renderAtualizacao } from "./js/atualizacao.js";
 import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
 import { $, $$ } from "./js/formato.js";
-import { renderHistorico } from "./js/historico.js";
+import { renderAndamentoAnalise, renderHistorico } from "./js/historico.js";
 import { definirContagem, iniciarNavegacao } from "./js/navegacao.js";
 import {
   abrirPainel,
@@ -32,6 +32,57 @@ const AVISOS = [
 ];
 
 const estado = { carteira: null, analise: null, historico: null };
+
+// ── Andamento da análise (feedback de "está rodando"/"quebrou no meio") ──
+
+let intervaloAndamento = null;
+
+function pararMonitorAndamento() {
+  if (intervaloAndamento) clearInterval(intervaloAndamento);
+  intervaloAndamento = null;
+}
+
+/** Consulta GET /api/analise/status e pinta o banner da tela de Histórico. */
+async function atualizarAndamentoAnalise() {
+  let status = null;
+  try {
+    status = await api("/api/analise/status");
+  } catch {
+    // uma falha aqui não é crítica: o banner só fica sem atualizar por um ciclo.
+  }
+  renderAndamentoAnalise(status);
+  return status;
+}
+
+/**
+ * Repete a consulta a cada 2s enquanto a análise roda, para o tempo decorrido
+ * e a fase avançarem sozinhos. Ao perceber que terminou, recarrega o
+ * histórico se ele já estava na tela — é a única forma de saber que uma
+ * execução quebrou no meio, já que isso não vira linha em `execucoes.json`.
+ */
+function monitorarAndamentoAnalise(aoAtualizar) {
+  pararMonitorAndamento();
+  const passo = async () => {
+    const status = await atualizarAndamentoAnalise();
+    aoAtualizar?.(status);
+    if (status && !status.em_andamento) {
+      pararMonitorAndamento();
+      if (estado.historico) {
+        estado.historico = null;
+        await carregarHistorico();
+      }
+    }
+  };
+  intervaloAndamento = setInterval(passo, 2000);
+  passo();
+}
+
+/** Tempo decorrido no rótulo do botão, enquanto a análise dispara pelo topo. */
+function rotularBotaoAnalise(botao, rotulo, status) {
+  if (!status?.em_andamento) return;
+  const decorridos = Math.max(0, Math.round((Date.now() - Date.parse(status.iniciada_em)) / 1000));
+  botao.innerHTML = `<span class="girando"></span>${rotulo}… ${decorridos}s`;
+}
 
 /**
  * A régua única: o limite que o usuário configurou agora, não o que valia na
@@ -81,8 +132,7 @@ function renderAnalise() {
   definirContagem("visao-geral", snapshot.alertas.length || "");
 }
 
-async function abrirTela(id) {
-  if (id !== "historico" || estado.historico) return;
+async function carregarHistorico() {
   try {
     const { serie, execucoes } = await api("/api/historico");
     estado.historico = serie;
@@ -91,6 +141,17 @@ async function abrirTela(id) {
   } catch (erro) {
     toast("Falha ao ler o histórico: " + erro.message, "erro");
   }
+}
+
+async function abrirTela(id) {
+  if (id !== "historico") {
+    pararMonitorAndamento();
+    return;
+  }
+  const status = await atualizarAndamentoAnalise();
+  if (status?.em_andamento) monitorarAndamentoAnalise();
+  if (estado.historico) return;
+  await carregarHistorico();
 }
 
 // ── Ações ──────────────────────────────────
@@ -123,9 +184,12 @@ async function carregarCarteira() {
 async function rodarAnalise(comIa) {
   const botao = comIa ? $("#btn-analise") : $("#btn-cotacoes");
   const original = botao.innerHTML;
+  const rotulo = comIa ? "Analisando" : "Atualizando";
   $$(".topo-acoes .btn").forEach((b) => (b.disabled = true));
-  botao.innerHTML = `<span class="girando"></span>${comIa ? "Analisando…" : "Atualizando…"}`;
+  botao.innerHTML = `<span class="girando"></span>${rotulo}…`;
   if (comIa) toast("A análise consulta fontes na web e leva algum tempo.", "info", 9000);
+
+  monitorarAndamentoAnalise((status) => rotularBotaoAnalise(botao, rotulo, status));
 
   try {
     estado.analise = await api(`/api/analise?ia=${comIa ? 1 : 0}`, { method: "POST" });
@@ -137,6 +201,7 @@ async function rodarAnalise(comIa) {
   } catch (erro) {
     toast(erro.message, "erro", 9000);
   } finally {
+    pararMonitorAndamento();
     $$(".topo-acoes .btn").forEach((b) => (b.disabled = false));
     botao.innerHTML = original;
   }

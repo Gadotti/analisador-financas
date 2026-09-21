@@ -234,6 +234,37 @@ function renderExecucoes(execucoes) {
     </div>`;
 }
 
+/** Texto do banner de andamento, com o tempo decorrido e a fase que o script relatou por último. */
+function textoAndamento(status) {
+  const decorridos = Math.max(0, (Date.now() - Date.parse(status.iniciada_em)) / 1000);
+  const alvo = status.com_ia ? "Analisando com IA" : "Atualizando cotações";
+  const fase = status.fase ? ` — ${status.fase.replace(/^\[\d\/3\]\s*/, "")}` : "";
+  return `${alvo} há ${duracaoBR(decorridos)}${fase}`;
+}
+
+/**
+ * Banner de `GET /api/analise/status`: mostra que uma análise está rodando
+ * agora (com o tempo decorrido) ou que a última tentativa quebrou antes de
+ * terminar — o único jeito de saber disso, já que uma queda no meio não vira
+ * linha em `execucoes.json` (só o Python grava, e só ao concluir).
+ */
+export function renderAndamentoAnalise(status) {
+  const banner = $("#andamento-analise");
+  if (status?.em_andamento) {
+    banner.classList.remove("hidden", "andamento-analise-erro");
+    $("#andamento-analise-texto").textContent = textoAndamento(status);
+    return;
+  }
+  if (status?.ultimo_erro) {
+    banner.classList.remove("hidden");
+    banner.classList.add("andamento-analise-erro");
+    $("#andamento-analise-texto").textContent =
+      `Última tentativa de análise falhou às ${dataHoraBR(status.ultimo_erro_em)}: ${status.ultimo_erro}`;
+    return;
+  }
+  banner.classList.add("hidden");
+}
+
 /**
  * Desenha as duas seções de /api/historico: o gráfico vem da série diária (um
  * ponto por dia) e a tabela, do log de execuções (uma linha por rodada).
