@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { execucoesFile, historyDir, lastAnalysisFile } from "../src/config/paths.js";
-import { execucoes, historico, ultimaAnalise } from "../src/core/storage.js";
+import { execucoes, historico, ultimaAnalise, versaoAnalise } from "../src/core/storage.js";
 import { dataDirTemporario, gravarAnalise, snapshotExemplo } from "./helpers/ambiente.js";
 
 let ambiente;
@@ -43,6 +43,40 @@ describe("ultimaAnalise", () => {
   test("devolve null quando o arquivo está corrompido", () => {
     fs.writeFileSync(lastAnalysisFile(), "{{{");
     expect(ultimaAnalise()).toBeNull();
+  });
+});
+
+describe("versaoAnalise", () => {
+  test("devolve versão nula quando não há análise salva", () => {
+    expect(versaoAnalise()).toEqual({ versao: null, atualizada_em: null });
+  });
+
+  test("devolve a mesma versão enquanto o arquivo não muda", () => {
+    gravar("2026-09-01");
+    const primeira = versaoAnalise();
+    expect(primeira.versao).toEqual(expect.any(String));
+    expect(Date.parse(primeira.atualizada_em)).not.toBeNaN();
+    expect(versaoAnalise()).toEqual(primeira);
+  });
+
+  test("muda quando o script regrava a análise, mesmo com a data de modificação igual", () => {
+    gravar("2026-09-01", 1000);
+    const antes = fs.statSync(lastAnalysisFile());
+    const primeira = versaoAnalise().versao;
+
+    gravar("2026-09-01", 123456789);
+    fs.utimesSync(lastAnalysisFile(), antes.atime, antes.mtime);
+
+    expect(versaoAnalise().versao).not.toBe(primeira);
+  });
+
+  test("muda quando a data de modificação muda", () => {
+    gravar("2026-09-01");
+    const primeira = versaoAnalise().versao;
+    const futuro = new Date(Date.now() + 60_000);
+    fs.utimesSync(lastAnalysisFile(), futuro, futuro);
+
+    expect(versaoAnalise().versao).not.toBe(primeira);
   });
 });
 

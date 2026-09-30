@@ -11,16 +11,20 @@ import { renderAlocacao } from "./js/alocacao.js";
 import { coletarAmbiente, ligarAmbiente, renderAmbiente } from "./js/ambiente.js";
 import { coletarConfig, ligarAbasConfig, montarTelegram, renderConfig } from "./js/configuracoes.js";
 import { renderAtualizacao } from "./js/atualizacao.js";
+import { horaDaAtualizacao, renderAvisoAnalise } from "./js/avisoAnalise.js";
 import { aplicarStatusDisparadores, ligarDisparadores } from "./js/disparadores.js";
 import { ligarEquivalencia, renderEquivalencia } from "./js/equivalencia.js";
+import { digitandoEmCampo, preservandoDobras } from "./js/estadoVisual.js";
 import { $, $$ } from "./js/formato.js";
 import { renderAndamentoAnalise, renderHistorico } from "./js/historico.js";
+import { criarMonitorAnalise, iniciarVigia } from "./js/monitorAnalise.js";
 import { definirContagem, iniciarNavegacao } from "./js/navegacao.js";
 import {
   abrirPainel,
   coletarPainel,
   fecharPainel,
   ligarPainel,
+  painelAberto,
 } from "./js/painelPosicao.js";
 import { ligarPosicoes, renderPosicoes } from "./js/posicoes.js";
 import { renderFatos, renderMacro, renderResumo, renderRiscos } from "./js/visaoGeral.js";
@@ -31,7 +35,7 @@ const AVISOS = [
   "Este material é informativo e não constitui recomendação de investimento.",
 ];
 
-const estado = { carteira: null, analise: null, historico: null };
+const estado = { carteira: null, analise: null, historico: null, rodandoAnalise: false };
 
 // ── Andamento da análise (feedback de "está rodando"/"quebrou no meio") ──
 
@@ -181,6 +185,34 @@ async function carregarCarteira() {
   renderAnalise();
 }
 
+// ── Análise gravada fora da interface (tarefa agendada, terminal) ──
+
+/**
+ * Busca a análise do disco e redesenha só as telas dela. Não passa por
+ * `carregarCarteira`: `renderConfig` reescreveria o formulário de Configurações
+ * por cima do que o usuário estivesse editando, e a carteira só muda pelo Node.
+ */
+async function recarregarAnaliseDoDisco() {
+  estado.analise = await api("/api/analise");
+  estado.historico = null;
+  preservandoDobras(renderAnalise);
+  await abrirTela(location.hash.replace("#", ""));
+}
+
+/** A tela só atualiza sozinha quando o usuário não está no meio de algo. */
+const usuarioOcupado = () => estado.rodandoAnalise || painelAberto() || digitandoEmCampo();
+
+const monitorAnalise = criarMonitorAnalise({
+  consultarVersao: () => api("/api/analise/versao"),
+  aplicar: recarregarAnaliseDoDisco,
+  ocupado: usuarioOcupado,
+  avisar: renderAvisoAnalise,
+  aoAplicarSozinho: (info) => {
+    const hora = horaDaAtualizacao(info.atualizada_em);
+    toast(hora ? `Dados atualizados às ${hora}.` : "Dados atualizados.", "info");
+  },
+});
+
 async function rodarAnalise(comIa) {
   const botao = comIa ? $("#btn-analise") : $("#btn-cotacoes");
   const original = botao.innerHTML;
@@ -190,9 +222,11 @@ async function rodarAnalise(comIa) {
   if (comIa) toast("A análise consulta fontes na web e leva algum tempo.", "info", 9000);
 
   monitorarAndamentoAnalise((status) => rotularBotaoAnalise(botao, rotulo, status));
+  estado.rodandoAnalise = true;
 
   try {
     estado.analise = await api(`/api/analise?ia=${comIa ? 1 : 0}`, { method: "POST" });
+    await monitorAnalise.registrar();
     estado.historico = null;
     renderAnalise();
     await abrirTela(location.hash.replace("#", ""));
@@ -201,6 +235,7 @@ async function rodarAnalise(comIa) {
   } catch (erro) {
     toast(erro.message, "erro", 9000);
   } finally {
+    estado.rodandoAnalise = false;
     pararMonitorAndamento();
     $$(".topo-acoes .btn").forEach((b) => (b.disabled = false));
     botao.innerHTML = original;
@@ -377,16 +412,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#btn-analise").addEventListener("click", () => rodarAnalise(true));
   $("#btn-cotacoes").addEventListener("click", () => rodarAnalise(false));
   $("#btn-telegram").addEventListener("click", () => enviarAoTelegram(false));
+  $("#pilula-analise").addEventListener("click", () =>
+    monitorAnalise.aplicarPendente().catch((erro) => toast(erro.message, "erro"))
+  );
   $("#btn-previa-telegram").addEventListener("click", previewTelegram);
   $("#form-posicao").addEventListener("submit", salvarPosicao);
   $("#form-ambiente").addEventListener("submit", salvarConfiguracoes);
 
   try {
     await aplicarStatus();
+    // Antes de ler a análise: uma gravação no meio do caminho vira "versão nova" e é aplicada.
+    await monitorAnalise.registrar();
     await carregarCarteira();
     renderAmbiente(await api("/api/ambiente"));
   } catch (erro) {
     toast("Falha ao carregar: " + erro.message, "erro", 9000);
   }
   await verificarAtualizacao();
+  iniciarVigia(monitorAnalise);
 });

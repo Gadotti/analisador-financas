@@ -18,6 +18,24 @@ export function ultimaAnalise() {
   }
 }
 
+/**
+ * Impressão digital da última análise, sem ler o conteúdo.
+ *
+ * O script Python roda também fora do servidor (tarefa agendada, terminal),
+ * então o Node não tem como saber em memória que o arquivo mudou: só o disco
+ * conta. A interface compara este valor a cada consulta e só busca a análise
+ * inteira quando ele muda. Data de modificação e tamanho juntos, para que duas
+ * gravações na mesma marca de tempo ainda se distingam.
+ */
+export function versaoAnalise() {
+  try {
+    const { mtimeMs, mtime, size } = fs.statSync(lastAnalysisFile());
+    return { versao: `${mtimeMs}-${size}`, atualizada_em: mtime.toISOString() };
+  } catch {
+    return { versao: null, atualizada_em: null };
+  }
+}
+
 /** Série histórica do valor da carteira, da data mais antiga para a mais recente. */
 export function historico(limite = 60) {
   let arquivos;

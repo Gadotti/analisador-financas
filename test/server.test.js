@@ -245,6 +245,7 @@ describe("autenticação", () => {
   test.each([
     ["/api/carteira"],
     ["/api/analise"],
+    ["/api/analise/versao"],
     ["/api/historico"],
     ["/api/status"],
     ["/api/ambiente"],
@@ -352,6 +353,26 @@ describe("GET /api", () => {
   test("devolve a última análise gravada pelo script", async () => {
     gravarAnalise(ambiente.dir, snapshotExemplo());
     expect((await pedir("/api/analise")).corpo.snapshot.data).toBe("2026-09-01");
+  });
+
+  test("GET /api/analise/versao devolve versão nula quando não há análise", async () => {
+    const { status, corpo } = await pedir("/api/analise/versao");
+    expect(status).toBe(200);
+    expect(corpo).toEqual({ versao: null, atualizada_em: null });
+  });
+
+  test("GET /api/analise/versao muda quando o script grava outra análise, sem trazer o conteúdo", async () => {
+    gravarAnalise(ambiente.dir, snapshotExemplo());
+    const primeira = (await pedir("/api/analise/versao")).corpo;
+    expect(primeira.versao).toEqual(expect.any(String));
+    expect(primeira).not.toHaveProperty("snapshot");
+
+    gravarAnalise(ambiente.dir, snapshotExemplo({ perfil: "Outro perfil." }));
+    const futuro = new Date(Date.now() + 60_000);
+    fs.utimesSync(lastAnalysisFile(), futuro, futuro);
+
+    const segunda = (await pedir("/api/analise/versao")).corpo;
+    expect(segunda.versao).not.toBe(primeira.versao);
   });
 
   test("devolve a série histórica respeitando o limite", async () => {

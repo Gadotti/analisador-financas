@@ -35,7 +35,7 @@ const SENTIDOS = {
 // é ofertada. É só o ponto de partida — a escolha é do usuário.
 const FAIXA_PADRAO = 2;
 
-const estado = { sentido: "isento", faixa: FAIXA_PADRAO, cdi: null, faixas: [] };
+const estado = { sentido: "isento", faixa: null, cdi: null, faixas: [] };
 
 const unidade = () => $("#equivalencia-unidade").value;
 const emCdi = (anual) => (estado.cdi ? (anual / estado.cdi) * 100 : null);
@@ -147,7 +147,11 @@ export function renderEquivalencia(snapshot) {
   mostrar("#equivalencia-vazio", !pronto);
   if (!pronto) return;
 
-  estado.faixa = Math.min(FAIXA_PADRAO, estado.faixas.length - 1);
+  // Uma leitura nova (atualização em segundo plano) não desfaz o prazo que o
+  // usuário já escolheu; só a primeira vez, ou uma tabela menor, volta ao padrão.
+  if (estado.faixa == null || estado.faixa >= estado.faixas.length) {
+    estado.faixa = Math.min(FAIXA_PADRAO, estado.faixas.length - 1);
+  }
   $("#equivalencia-base").textContent = estado.cdi
     ? `CDI de referência ${num(estado.cdi)}% a.a.`
     : "CDI do dia indisponível";

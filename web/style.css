@@ -169,6 +169,14 @@ a:hover { color: var(--amber-forte); }
 .topo-sub { font-size: var(--f-apoio); color: var(--t3); }
 .topo-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+/* Aviso de leitura mais nova, quando a tela estava ocupada demais para atualizar sozinha. */
+.pilula-analise {
+  margin-top: 4px; padding: 3px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: var(--f-apoio); font-weight: 600; color: var(--t1);
+  background: var(--card2); border: 1px solid var(--amber);
+}
+.pilula-analise:hover { background: var(--card); }
+
 /* ── Botões ────────────────────────────── */
 
 .btn {

@@ -420,6 +420,26 @@ alcançaria. O alerta de concentração por posição (`analysis._gerar_alertas`
 o mesmo limite sobre a carteira — são leituras diferentes da mesma régua, e é por isso que
 a tela declara a base. Não reintroduza um limite fixo no front.
 
+**A tela acompanha a análise gravada fora dela, sem recarregar.** O script Python roda
+também por tarefa agendada ou terminal, e o servidor não vê essas execuções — só o disco
+muda. `GET /api/analise/versao` (`storage.versaoAnalise`) devolve a impressão digital do
+`last_analysis.json` (data de modificação + tamanho), sem ler o conteúdo; `web/js/monitorAnalise.js`
+a consulta a cada 60s com a aba à vista e ao voltar a ela (`visibilitychange`, `focus`), e só
+busca `/api/analise` quando a versão muda. A decisão de **mostrar** é separada da de
+**descobrir**: com a tela livre aplica em silêncio (e um toast diz a hora); com o painel de
+cadastro aberto, uma execução em curso pela interface ou o foco num campo (`ocupado`), só
+acende a pílula "Nova leitura das HH:MM — atualizar" (`avisoAnalise.js`). Três cuidados:
+
+- A atualização **não** passa por `carregarCarteira`: `renderConfig` reescreveria o
+  formulário de Configurações por cima do que estiver sendo editado, e a carteira só muda
+  pelo Node. `recarregarAnaliseDoDisco` redesenha apenas as telas da análise.
+- O redesenho é por `innerHTML`; `estadoVisual.preservandoDobras` reabre os `<details>` que
+  estavam abertos (pelo texto do `summary`) e `renderEquivalencia` mantém o prazo escolhido.
+- `registrar()` anota a versão **antes** de ler a análise no carregamento inicial e logo
+  depois do `POST /api/analise` da própria interface, para a tela não "descobrir" e aplicar
+  de novo o que ela mesma acabou de gravar. Uma gravação no meio do caminho vira versão
+  nova no ciclo seguinte — redesenho a mais, nunca dado perdido.
+
 **A tela de equivalência é a única conta do front.** `web/js/equivalencia.js` converte a taxa
 que o usuário digita — uma LCI ofertada em taxa líquida contra um CDB em taxa bruta — e por
 isso responde a cada tecla, sem ida ao Python. A regra de negócio que ela usa não mora lá: as
