@@ -382,6 +382,11 @@ async function aplicarStatus() {
   }
 }
 
+// O servidor guarda a resposta do GitHub por uma hora, então perguntar mais
+// seguido que isso não descobriria nada; quem deixa a aba aberta o dia todo
+// ainda vê o banner sem recarregar a página.
+const INTERVALO_VERIFICAR_VERSAO_MS = 30 * 60 * 1000;
+
 /** Barra de aviso de nova versão; uma falha aqui nunca deve travar a tela. */
 async function verificarAtualizacao() {
   try {
@@ -430,4 +435,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   await verificarAtualizacao();
   iniciarVigia(monitorAnalise);
+  setInterval(() => {
+    if (!document.hidden) verificarAtualizacao();
+  }, INTERVALO_VERIFICAR_VERSAO_MS);
 });

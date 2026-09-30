@@ -17,8 +17,13 @@ const REPOSITORIO = "Gadotti/analisador-financas";
 const URL_ULTIMA_RELEASE = `https://api.github.com/repos/${REPOSITORIO}/releases/latest`;
 
 // Suficiente para não bater na API do GitHub a cada carregamento da tela —
-// o limite sem autenticação é 60 chamadas/hora por IP.
-const VALIDADE_CACHE_MS = 6 * 60 * 60 * 1000;
+// o limite sem autenticação é 60 chamadas/hora por IP. Curto o bastante para que
+// uma release recém-publicada apareça em até uma hora, sem reiniciar o servidor.
+const VALIDADE_CACHE_MS = 60 * 60 * 1000;
+
+// Uma falha (rede, rate limit, 5xx) é passageira: guardá-la pelo mesmo tempo de
+// um acerto esconderia a atualização por horas por causa de um soluço.
+const VALIDADE_CACHE_ERRO_MS = 5 * 60 * 1000;
 
 let cache = null;
 
@@ -73,7 +78,8 @@ export async function consultarAtualizacao({ buscar = fetch, agora = Date.now(),
   if (!forcar && cache && cache.expiraEm > agora) return cache.resultado;
 
   const resultado = await buscarResultado(buscar);
-  cache = { expiraEm: agora + VALIDADE_CACHE_MS, resultado };
+  const validade = resultado.erro ? VALIDADE_CACHE_ERRO_MS : VALIDADE_CACHE_MS;
+  cache = { expiraEm: agora + validade, resultado };
   return resultado;
 }
 

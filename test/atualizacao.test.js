@@ -98,8 +98,25 @@ describe("consultarAtualizacao", () => {
     const agora = Date.now();
 
     await consultarAtualizacao({ buscar, agora });
-    await consultarAtualizacao({ buscar, agora: agora + 7 * 60 * 60 * 1000 });
+    await consultarAtualizacao({ buscar, agora: agora + 61 * 60 * 1000 });
 
+    expect(chamadas).toBe(2);
+  });
+
+  test("uma falha expira em minutos, não na validade de um acerto", async () => {
+    let chamadas = 0;
+    const buscar = async () => {
+      chamadas += 1;
+      if (chamadas === 1) return { ok: false, status: 403 };
+      return releaseRespondendo("v99.0.0")();
+    };
+    const agora = Date.now();
+
+    const falha = await consultarAtualizacao({ buscar, agora });
+    const acerto = await consultarAtualizacao({ buscar, agora: agora + 6 * 60 * 1000 });
+
+    expect(falha.erro).toMatch(/403/);
+    expect(acerto.disponivel).toBe(true);
     expect(chamadas).toBe(2);
   });
 });
