@@ -587,8 +587,13 @@ que `executar` já fazia para herdar as fichas de IA — **nenhum arquivo novo e
 leitura a mais**; `relevancia.macro_comparavel` guarda só os três indicadores no registro,
 não o `macro` inteiro. Duas armadilhas travadas por teste:
 
-- `market._ultimo_valor` devolve um **padrão embutido** com `fonte: "padrao"` quando o BCB
-  não responde. `_valor_macro` recusa esse padrão dos dois lados da comparação — sem isso,
+- Quando o BCB não responde, `market._ultimo_valor` devolve a **última leitura do BCB**
+  guardada no cache, mesmo vencida, com a `data` dela e o `erro` da tentativa
+  (`_valor_de_reserva`), mais o `consultado_em` da gravação no cache — é o que
+  `visaoGeral.avisoIndicador` mostra em âmbar sob o indicador ("BCB indisponível · leitura
+  de …"). Só sem leitura nenhuma no cache entra o **padrão embutido**, com
+  `fonte: "padrao"` — um número fixo que envelhece no código e já anunciou Selic de 15%
+  com a meta em 13,75%. `_valor_macro` recusa esse padrão dos dois lados da comparação — sem isso,
   uma falha de rede anunciaria uma mudança que não houve.
 - Numa execução intradiária o "anterior" é a rodada anterior de **hoje**, e é essa a
   leitura desejada: a mudança é anunciada uma vez, na rodada em que apareceu.

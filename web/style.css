@@ -233,8 +233,10 @@ a:hover { color: var(--amber-forte); }
 /* ── Contexto macro ────────────────────── */
 
 .macro { display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline; }
-.macro-item { display: flex; align-items: baseline; gap: 8px; }
+.macro-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
 .macro-v { font-size: var(--f-dado); font-weight: 600; }
+/* Indicador que não é desta execução: linha própria, sob rótulo e valor. */
+.macro-aviso { flex-basis: 100%; font-size: var(--f-micro); color: var(--amber); }
 
 /* ── Equivalência isento × tributado ─── */
 

@@ -43,6 +43,14 @@ def obter(chave: str, ttl: float):
     return None
 
 
+def ultima_gravacao(chave: str) -> tuple[object, float] | None:
+    """Último valor gravado para `chave`, vencido ou não, e o instante da gravação."""
+    entrada = ler().get(chave)
+    if not entrada:
+        return None
+    return entrada.get("valor"), entrada.get("ts", 0)
+
+
 def definir(chave: str, valor) -> None:
     cache = ler()
     cache[chave] = {"ts": time.time(), "valor": valor}

@@ -169,7 +169,24 @@ def _ultimo_valor(serie: int, chave: str, padrao: float) -> dict:
         cache.definir(chave, valor)
         return valor
     except Exception as exc:
-        return {"valor": padrao, "data": None, "fonte": "padrao", "erro": str(exc)}
+        return _valor_de_reserva(chave, padrao, exc)
+
+
+def _valor_de_reserva(chave: str, padrao: float, exc: Exception) -> dict:
+    """O que vale para o indicador quando o BCB não responde.
+
+    A última leitura do BCB, mesmo com o cache vencido, fica mais perto da
+    realidade que qualquer número fixo — Selic e CDI mudam poucas vezes por
+    ano. Ela segue com a própria `data`, com o `consultado_em` da gravação
+    (é ele que a tela mostra) e com o `erro` desta tentativa. O padrão
+    embutido só entra quando nunca houve consulta bem-sucedida.
+    """
+    gravada = cache.ultima_gravacao(chave)
+    if gravada and gravada[0]:
+        valor, instante = gravada
+        consultado_em = datetime.fromtimestamp(instante).isoformat(timespec="seconds")
+        return {**valor, "consultado_em": consultado_em, "erro": str(exc)}
+    return {"valor": padrao, "data": None, "fonte": "padrao", "erro": str(exc)}
 
 
 def cdi_anual() -> dict:

@@ -141,7 +141,8 @@ def valor_macro(macro: dict | None, chave: str) -> float | None:
     """Valor de um indicador macro, ou None quando a fonte falhou.
 
     `market._ultimo_valor` devolve um padrão embutido com `fonte: "padrao"`
-    quando o Banco Central não responde. Comparar esse padrão com uma
+    quando o Banco Central não responde e não há leitura anterior no cache
+    (a leitura vencida, se houver, vale como real). Comparar esse padrão com uma
     leitura real anunciaria uma mudança que não houve. Também usado por
     `runner._com_variacao_diaria`, que compara com o estado de ontem em vez
     da execução anterior.

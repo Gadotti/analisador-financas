@@ -193,21 +193,46 @@ function variacaoOntem(indicador) {
   return indicador?.variacao_ontem_pct != null ? ` (${pct(indicador.variacao_ontem_pct)})` : "";
 }
 
+/**
+ * Aviso de indicador que não é desta execução: o BCB não respondeu e
+ * `market._valor_de_reserva` devolveu a última leitura guardada — ou, sem
+ * nenhuma, o padrão fixo do código. Vazio quando a consulta de agora deu certo.
+ */
+export function avisoIndicador(indicador) {
+  if (!indicador?.erro) return "";
+  if (indicador.fonte === "padrao") return "BCB indisponível · valor fixo, não é de hoje";
+  if (indicador.valor == null) return "BCB indisponível";
+  if (!indicador.consultado_em) return "BCB indisponível · leitura anterior";
+  return `BCB indisponível · leitura de ${dataHoraBR(indicador.consultado_em)}`;
+}
+
+const indicadorMacro = (rotulo, indicador, unidade) => [
+  rotulo,
+  `${num(indicador.valor)}%${unidade}${variacaoOntem(indicador)}`,
+  avisoIndicador(indicador),
+];
+
 function itensMacro(macro) {
   const itens = [
-    ["CDI", `${num(macro.cdi_anual_pct.valor)}% a.a.${variacaoOntem(macro.cdi_anual_pct)}`],
-    ["Selic meta", `${num(macro.selic_meta_pct.valor)}% a.a.${variacaoOntem(macro.selic_meta_pct)}`],
-    ["IPCA 12m", `${num(macro.ipca_12m_pct.valor)}%${variacaoOntem(macro.ipca_12m_pct)}`],
+    indicadorMacro("CDI", macro.cdi_anual_pct, " a.a."),
+    indicadorMacro("Selic meta", macro.selic_meta_pct, " a.a."),
+    indicadorMacro("IPCA 12m", macro.ipca_12m_pct, ""),
   ];
   const ibov = macro.indices?.ibovespa;
   if (ibov) {
     itens.push([
       "Ibovespa",
       `${Math.round(ibov.valor).toLocaleString("pt-BR")} pts (${pct(ibov.variacao_dia_pct)})`,
+      "",
     ]);
   }
   return itens;
 }
+
+const itemMacro = ([rotulo, valor, aviso]) =>
+  `<div class="macro-item"><span class="microrotulo">${rotulo}</span><span class="macro-v mono">${valor}</span>` +
+  (aviso ? `<span class="macro-aviso">${esc(aviso)}</span>` : "") +
+  "</div>";
 
 /**
  * O mesmo quadro aparece na visão geral e na tela de equivalência, onde o CDI
@@ -216,12 +241,7 @@ function itensMacro(macro) {
 export function renderMacro(snapshot) {
   const macro = snapshot.macro;
   const consultadoEm = macro.consultado_em || snapshot.gerado_em;
-  const html = itensMacro(macro)
-    .map(
-      ([k, v]) =>
-        `<div class="macro-item"><span class="microrotulo">${k}</span><span class="macro-v mono">${v}</span></div>`
-    )
-    .join("");
+  const html = itensMacro(macro).map(itemMacro).join("");
 
   $$("[data-macro-quando]").forEach((el) => {
     el.textContent = consultadoEm ? "atualizado em " + dataHoraBR(consultadoEm) : "";

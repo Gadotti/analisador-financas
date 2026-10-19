@@ -1,8 +1,8 @@
 """Cotações, indicadores do Banco Central e cache em disco."""
 
-from datetime import date
+from datetime import date, datetime
 
-from analise import market
+from analise import cache, market
 from conftest import RespostaFalsa, chart_yahoo
 
 
@@ -107,6 +107,26 @@ def test_indicador_cai_no_padrao_quando_bcb_falha(dados_temp, rede):
     assert selic["valor"] == 15.0
     assert selic["fonte"] == "padrao"
     assert "rede fora" in selic["erro"]
+
+
+def test_indicador_usa_a_ultima_leitura_do_bcb_com_cache_vencido(dados_temp, rede):
+    rede.rotas["bcdata.sgs.432"] = RespostaFalsa([{"data": "04/11/2026", "valor": "13.75"}])
+    market.selic_meta()
+    leitura = cache.ler()
+    leitura["selic_meta"]["ts"] -= market.TTL_INDICADOR + 1
+    cache.gravar(leitura)
+    rede.rotas["bcdata.sgs.432"] = RuntimeError("rede fora")
+
+    selic = market.selic_meta()
+
+    assert selic["valor"] == 13.75
+    assert selic["data"] == "04/11/2026"
+    assert selic["fonte"] == "BCB/SGS 432"
+    assert "rede fora" in selic["erro"]
+    assert selic["consultado_em"] == datetime.fromtimestamp(leitura["selic_meta"]["ts"]).isoformat(
+        timespec="seconds"
+    )
+    assert len(rede.chamadas) == 2
 
 
 def test_ipca_acumulado_compoe_o_periodo(dados_temp, rede):
