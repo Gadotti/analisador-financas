@@ -99,6 +99,16 @@ arquivo do dia por cima. Quem monta a linha é `runner._registro_execucao`; a te
 Histórico lista o log e o `_status_execucao` classifica cada rodada em `sucesso`,
 `sem_ia`, `erro` ou `erro_recuperado` (falhou, mas a leitura anterior foi mantida).
 
+Há um quinto status, `falha`, que não passa por `_status_execucao`: é a execução que
+quebrou antes de produzir resultado (rede, carteira corrompida, bug). `runner.executar`
+captura a exceção, grava a linha com `erro` e `detalhe` (o **fim** do traceback, onde está
+a causa) via `_registrar_falha` e relança — o script continua saindo com erro, mas agora a
+tela de Histórico mostra o motivo mesmo para quem rodou por tarefa agendada ou `docker exec`.
+Gravar o log nunca mascara a exceção original, e `--nao-salvar` não grava nada. A falha de
+leitura do Tesouro Transparente, em especial, **não** chega a esse ponto: `_fluxo` converte
+o erro de rede — também o que estoura no meio do download em streaming — em
+`TesouroIndisponivel`, e a posição entra pelo valor aplicado com `erro_cotacao`.
+
 O log é uma janela deslizante: `config["max_execucoes"]` (30 por padrão, editável em
 Configurações) é o teto, e `_anexar_execucao` descarta as linhas mais antigas ao gravar a
 nova. O corte é do lado de quem **escreve** — o Node só lê o arquivo já cortado.

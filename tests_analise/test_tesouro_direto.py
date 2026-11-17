@@ -1,9 +1,10 @@
 """Leitura das taxas e preços do Tesouro Transparente."""
 
 import pytest
+import requests
 
 from analise import cache, tesouro_direto as td
-from conftest import RespostaFalsa, csv_tesouro
+from conftest import CABECALHO_TESOURO, RespostaFalsa, csv_tesouro
 
 # Dois pregões, do mais novo para o mais antigo, como o arquivo oficial vem.
 # 02/01/2025 é uma quinta; 04/01/2025, um sábado sem pregão.
@@ -110,6 +111,30 @@ def test_cotacoes_sobrevivem_a_queda_da_fonte(tesouro):
     tesouro.rotas["precotaxatesourodireto"] = RespostaFalsa(texto="", status=503)
 
     assert "erro" in td.cotacoes(usar_cache=False)
+
+
+class RespostaQueTravaNoMeio(RespostaFalsa):
+    """Entrega algumas linhas e estoura o tempo de leitura, como o servidor real."""
+
+    def iter_lines(self, decode_unicode=False):
+        yield CABECALHO_TESOURO
+        raise requests.ConnectionError("Read timed out.")
+
+
+def test_queda_no_meio_do_download_vira_indisponibilidade(tesouro):
+    """Regressão: o timeout vinha da leitura em streaming, depois do `get`, e
+    escapava como ConnectionError derrubando a análise inteira."""
+    tesouro.rotas["precotaxatesourodireto"] = RespostaQueTravaNoMeio()
+
+    assert "interrompeu o download" in td.cotacoes(usar_cache=False)["erro"]
+
+
+def test_queda_no_meio_do_download_nao_derruba_a_busca_da_compra(tesouro):
+    resposta = RespostaQueTravaNoMeio()
+    tesouro.rotas["precotaxatesourodireto"] = resposta
+
+    assert td.taxas_na_compra([SELIC_2029], usar_cache=False) == {}
+    assert resposta.fechada, "a conexão precisa ser fechada mesmo na falha"
 
 
 def test_cotacoes_vao_para_o_cache(tesouro):

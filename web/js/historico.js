@@ -20,9 +20,10 @@ const STATUS_IA = {
   sem_ia: { rotulo: "Sem IA", classe: "boa" },
   erro_recuperado: { rotulo: "Erro · leitura mantida", classe: "atencao" },
   erro: { rotulo: "Erro", classe: "alerta" },
+  falha: { rotulo: "Falhou", classe: "alerta" },
 };
 
-const FALHOU = new Set(["erro", "erro_recuperado"]);
+const FALHOU = new Set(["erro", "erro_recuperado", "falha"]);
 
 const x0 = AREA.esq;
 const x1 = AREA.largura - AREA.dir;
@@ -171,6 +172,18 @@ function duracaoBR(segundos) {
   return `${minutos}min ${Math.round(segundos - minutos * 60)}s`;
 }
 
+/**
+ * Falha que derrubou a execução inteira: o motivo numa linha e, recolhido, o
+ * fim do traceback gravado pelo Python — o que permite investigar sem abrir o
+ * terminal do servidor.
+ */
+function apoioFalha(execucao) {
+  const motivo = `<div class="apoio-erro" title="${esc(execucao.erro)}">${esc(execucao.erro)}</div>`;
+  if (!execucao.detalhe) return motivo;
+  return `${motivo}<details class="detalhe-falha">
+    <summary>ver detalhes</summary><pre>${esc(execucao.detalhe)}</pre></details>`;
+}
+
 /** O selo do status e, abaixo dele, o motivo — que é o que se procura numa falha. */
 function celulaStatus(execucao) {
   const status = STATUS_IA[execucao.status_ia] || {
@@ -178,6 +191,7 @@ function celulaStatus(execucao) {
     classe: "boa",
   };
   const selo = `<span class="selo selo-${status.classe}">${status.rotulo}</span>`;
+  if (execucao.erro) return `${selo}${apoioFalha(execucao)}`;
   if (execucao.ia_erro) {
     // Erro inteiro no title: a linha da tabela mostra o começo e não estica.
     return `${selo}<div class="apoio-erro" title="${esc(execucao.ia_erro)}">${esc(execucao.ia_erro)}</div>`;

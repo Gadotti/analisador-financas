@@ -325,6 +325,57 @@ def test_execucao_com_falha_registra_motivo_e_modelo_tentado(carteira, mercado, 
     assert execucao["duracao_s"] >= 0
 
 
+def test_falha_fatal_fica_no_log_e_a_excecao_continua_subindo(carteira, mercado, monkeypatch):
+    """Antes, uma queda antes do snapshot só existia no stderr do processo."""
+    def quebrar(*_, **__):
+        raise ConnectionError("Read timed out.")
+
+    monkeypatch.setattr(runner.analysis, "consolidar", quebrar)
+
+    with pytest.raises(ConnectionError):
+        runner.executar(usar_ia=False)
+
+    execucao = runner.execucoes()[-1]
+    assert execucao["status_ia"] == "falha"
+    assert execucao["erro"] == "ConnectionError: Read timed out."
+    assert "quebrar" in execucao["detalhe"], "o traceback inclui onde estourou"
+    assert execucao["valor_atual"] is None
+    assert not (carteira / "last_analysis.json").exists(), "a falha não grava análise"
+
+
+def test_falha_com_nao_salvar_nao_toca_o_log(carteira, mercado, monkeypatch):
+    monkeypatch.setattr(runner.analysis, "consolidar", lambda *_, **__: 1 / 0)
+
+    with pytest.raises(ZeroDivisionError):
+        runner.executar(usar_ia=False, salvar=False)
+
+    assert runner.execucoes() == []
+
+
+def test_falha_no_log_nao_mascara_o_erro_original(carteira, mercado, monkeypatch):
+    def quebrar(*_, **__):
+        raise ValueError("erro de verdade")
+
+    def sem_permissao(*_, **__):
+        raise PermissionError("disco somente leitura")
+
+    monkeypatch.setattr(runner.analysis, "consolidar", quebrar)
+    monkeypatch.setattr(runner, "_anexar_execucao", sem_permissao)
+
+    with pytest.raises(ValueError, match="erro de verdade"):
+        runner.executar(usar_ia=False)
+
+
+def test_detalhe_da_falha_guarda_o_fim_do_traceback():
+    try:
+        raise RuntimeError("x" * 10_000 + "CAUSA")
+    except RuntimeError as exc:
+        linha = runner._registro_falha(exc, 1.0)
+
+    assert len(linha["detalhe"]) == runner.TAMANHO_MAX_DETALHE
+    assert linha["detalhe"].rstrip().endswith("CAUSA")
+
+
 def test_execucao_bem_sucedida_registra_o_meta_da_resposta(carteira, mercado, ia_exemplo):
     ia_exemplo["_meta"] = {
         "provedor": "anthropic",

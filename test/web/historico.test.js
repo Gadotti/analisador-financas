@@ -9,6 +9,7 @@ function elemento() {
   const classes = new Set();
   return {
     textContent: "",
+    innerHTML: "",
     classList: {
       add: (...cs) => cs.forEach((c) => classes.add(c)),
       remove: (...cs) => cs.forEach((c) => classes.delete(c)),
@@ -18,16 +19,21 @@ function elemento() {
 }
 
 let renderAndamentoAnalise;
+let renderHistorico;
 let tela;
 
 beforeAll(async () => {
-  ({ renderAndamentoAnalise } = await import("../../web/js/historico.js"));
+  ({ renderAndamentoAnalise, renderHistorico } = await import("../../web/js/historico.js"));
 });
 
 beforeEach(() => {
   tela = {
     "#andamento-analise": elemento(),
     "#andamento-analise-texto": elemento(),
+    "#historico-periodo": elemento(),
+    "#grafico-historico": elemento(),
+    "#execucoes-meta": elemento(),
+    "#tabela-historico": elemento(),
   };
   global.document = { querySelector: (seletor) => tela[seletor] };
 });
@@ -100,5 +106,41 @@ describe("renderAndamentoAnalise", () => {
     expect(tela["#andamento-analise-texto"].textContent).toMatch(
       /A análise excedeu o tempo limite e foi interrompida\.$/
     );
+  });
+});
+
+describe("renderHistorico — execução que falhou antes de produzir resultado", () => {
+  const falha = {
+    gerado_em: "2026-11-13T14:00:00",
+    status_ia: "falha",
+    erro: "ConnectionError: Read timed out. <tesouro>",
+    detalhe: "Traceback (most recent call last):\n  File \"x.py\"\nConnectionError: Read timed out.",
+    valor_atual: null,
+    resultado_pct: null,
+    duracao_s: 61.2,
+  };
+
+  test("mostra o selo, o motivo e o traceback recolhido, com o HTML escapado", () => {
+    renderHistorico([], [falha]);
+    const html = tela["#tabela-historico"].innerHTML;
+
+    expect(html).toContain("Falhou");
+    expect(html).toContain("ConnectionError: Read timed out. &lt;tesouro&gt;");
+    expect(html).toContain('<details class="detalhe-falha">');
+    expect(html).toContain("Traceback (most recent call last)");
+    expect(html).not.toContain("<tesouro>");
+  });
+
+  test("conta a falha no resumo e não quebra com os números da carteira nulos", () => {
+    renderHistorico([], [falha]);
+
+    expect(tela["#execucoes-meta"].textContent).toBe("1 execução(ões) · 1 com falha");
+    expect(tela["#tabela-historico"].innerHTML).toContain("—");
+  });
+
+  test("sem detalhe, mostra só o motivo", () => {
+    renderHistorico([], [{ ...falha, detalhe: undefined }]);
+
+    expect(tela["#tabela-historico"].innerHTML).not.toContain("detalhe-falha");
   });
 });

@@ -99,6 +99,12 @@ def _fluxo():
 
     Fechar cedo importa: é assim que `_linhas_do_ultimo_pregao` evita puxar os
     14 MB inteiros. Sair do `with` derruba o socket e o resto não desce.
+
+    O erro de rede pode vir em dois momentos: ao abrir a conexão e no meio do
+    download (o arquivo de 14 MB chega em pedaços, e o servidor pode travar
+    entre um e outro). Os dois viram `TesouroIndisponivel` — o segundo é
+    levantado dentro do corpo do `with`, por quem percorre as linhas, e por
+    isso é capturado em torno do `yield`.
     """
     try:
         resposta = requests.get(CSV_URL, headers=UA, timeout=TIMEOUT, stream=True)
@@ -108,6 +114,10 @@ def _fluxo():
         raise TesouroIndisponivel(f"Tesouro Transparente indisponivel: {exc}") from None
     try:
         yield resposta.iter_lines(decode_unicode=True)
+    except requests.RequestException as exc:
+        raise TesouroIndisponivel(
+            f"Tesouro Transparente interrompeu o download do arquivo: {exc}"
+        ) from None
     finally:
         resposta.close()
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+import traceback
 from datetime import date, datetime
 
 from . import ai_insights, analysis, config_ia, estado_envio, fundamentals, gatilhos, portfolio, relevancia
@@ -32,8 +33,22 @@ def executar(
     falhar, o resultado ainda é devolvido com o campo `ia_erro` preenchido.
     Sem leitura nova, as fichas da última análise salva são herdadas — ver
     `_reaproveitar_ia`.
+
+    Uma falha que derruba a execução inteira (rede, carteira corrompida, bug)
+    deixa uma linha `falha` no log de execuções e só então é relançada — sem
+    isso o erro existia apenas no stderr do processo, e quem rodou por tarefa
+    agendada ou `docker exec` não tinha como investigá-lo pela interface.
     """
     inicio = time.monotonic()
+    try:
+        return _executar(inicio, usar_ia, usar_cache, salvar, analisar_com_ia)
+    except Exception as exc:
+        if salvar:
+            _registrar_falha(exc, round(time.monotonic() - inicio, 1))
+        raise
+
+
+def _executar(inicio: float, usar_ia: bool, usar_cache: bool, salvar: bool, analisar_com_ia) -> dict:
     carteira = portfolio.load()
     # Uma leitura só da análise anterior, aproveitada por dois consumidores: a
     # herança das fichas de IA e a comparação dos indicadores macro.
@@ -248,10 +263,62 @@ def _limite_execucoes(config: dict | None) -> int:
     return max(1, limite)
 
 
-def _anexar_execucao(registro: dict, limite: int) -> None:
-    """Acrescenta esta execução ao log, descartando as mais antigas além do teto."""
+TAMANHO_MAX_DETALHE = 4000
+
+
+def _registro_falha(exc: Exception, duracao_s: float) -> dict:
+    """Linha do log para uma execução que quebrou antes de produzir resultado.
+
+    Tem as mesmas chaves de `_registro_execucao`, com os números da carteira
+    vazios (não houve snapshot), mais `erro` e `detalhe`. O `detalhe` guarda o
+    fim do traceback, e não o começo: é embaixo que está a causa.
+    """
+    agora = datetime.now()
+    rastro = "".join(traceback.format_exception(exc))
+    return {
+        "gerado_em": agora.isoformat(timespec="seconds"),
+        "data": agora.date().isoformat(),
+        "duracao_s": duracao_s,
+        "status_ia": "falha",
+        "ia_erro": None,
+        "ia_reaproveitada_de": None,
+        "provedor": None,
+        "modelo": None,
+        "effort": None,
+        "buscas_web": None,
+        "valor_atual": None,
+        "resultado_pct": None,
+        "posicoes": None,
+        "erro": f"{type(exc).__name__}: {exc}",
+        "detalhe": rastro[-TAMANHO_MAX_DETALHE:],
+    }
+
+
+def _config_para_o_log() -> dict | None:
+    """Config do cadastro, ou None se ele nem puder ser lido (carteira corrompida)."""
+    try:
+        return portfolio.load()["config"]
+    except Exception:
+        return None
+
+
+def _registrar_falha(exc: Exception, duracao_s: float) -> None:
+    """Grava a falha no log sem nunca mascarar a exceção original.
+
+    Se o próprio log não puder ser escrito (disco cheio, sem permissão), a
+    exceção que importa continua sendo a que quebrou a análise.
+    """
+    try:
+        garantir_diretorios()
+        _anexar_execucao(_registro_falha(exc, duracao_s), _limite_execucoes(_config_para_o_log()))
+    except OSError:
+        pass
+
+
+def _anexar_execucao(linha: dict, limite: int) -> None:
+    """Acrescenta uma linha ao log, descartando as mais antigas além do teto."""
     log = execucoes(limite=limite - 1) if limite > 1 else []
-    log.append(_registro_execucao(registro))
+    log.append(linha)
     with open(execucoes_file(), "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
 
@@ -269,7 +336,7 @@ def persistir(resultado: dict, config: dict | None = None) -> dict:
     with open(arquivo, "w", encoding="utf-8") as f:
         json.dump(registro, f, ensure_ascii=False, indent=2)
 
-    _anexar_execucao(registro, _limite_execucoes(config))
+    _anexar_execucao(_registro_execucao(registro), _limite_execucoes(config))
     return registro
 
 
